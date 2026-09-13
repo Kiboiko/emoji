@@ -57,10 +57,27 @@ def validate_telegram_webapp_data(init_data: str) -> dict:
             hashlib.sha256
         ).hexdigest()
         
-        # Verify hash
-        if calculated_hash != received_hash:
+        # Verify hash (сравнение постоянного времени — защита от timing-атак)
+        if not hmac.compare_digest(calculated_hash, received_hash):
             raise ValueError("Invalid hash")
-        
+
+        # Проверка срока годности initData. Без неё перехваченный initData
+        # остаётся валидным бессрочно и позволяет войти за пользователя.
+        raw_auth_date = parsed_data.get('auth_date', [''])[0]
+        if not raw_auth_date:
+            raise ValueError("auth_date not found in initData")
+        try:
+            auth_date = int(raw_auth_date)
+        except ValueError:
+            raise ValueError("auth_date is not a valid timestamp")
+
+        age_seconds = datetime.now(timezone.utc).timestamp() - auth_date
+        if age_seconds > settings.INITDATA_MAX_AGE_SECONDS:
+            raise ValueError("initData expired")
+        # Небольшой допуск на расхождение часов между сервером и клиентом
+        if age_seconds < -300:
+            raise ValueError("initData auth_date is in the future")
+
         # Parse user data
         import json
         user_data = json.loads(parsed_data.get('user', ['{}'])[0])

@@ -3,12 +3,14 @@ import uuid
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from config import settings
-from models.product import Product
-from models.category import Category
+from models import Product, Category  # реестр моделей: нужен полный импорт
 
-# Use 127.0.0.1 for local connection
-DATABASE_URL = settings.DATABASE_URL.replace("postgres", "127.0.0.1") if "postgres" in settings.DATABASE_URL and "@postgres" in settings.DATABASE_URL else settings.DATABASE_URL
-# Or just rely on what is in config if we fixed it to 127.0.0.1
+# Раньше здесь было settings.DATABASE_URL.replace("postgres", "127.0.0.1"),
+# что ломало URL: подстрока "postgres" встречается и в схеме "postgresql+asyncpg://",
+# и адрес превращался в "127.0.0.1ql+asyncpg://..." — скрипт падал на разборе URL.
+# Берём адрес как есть: внутри docker хост "postgres" резолвится сам,
+# снаружи достаточно подставить нужный DATABASE_URL в окружении.
+DATABASE_URL = settings.DATABASE_URL
 
 engine = create_async_engine(DATABASE_URL)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

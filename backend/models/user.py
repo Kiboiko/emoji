@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, BigInteger, Boolean, DateTime, ForeignKey, Integer
+from sqlalchemy import String, BigInteger, Boolean, DateTime, ForeignKey, Integer, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -18,6 +18,13 @@ class User(Base):
     # Admin
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     hashed_password: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Moderation. Колонка существует в БД с первой миграции, но отсутствовала в модели —
+    # из-за этого INSERT не заполнял её и регистрация новых пользователей падала
+    # с NotNullViolationError. server_default нужен для уже существующих строк.
+    is_blocked: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
     
     # Referral system
     referrer_id: Mapped[uuid.UUID | None] = mapped_column(

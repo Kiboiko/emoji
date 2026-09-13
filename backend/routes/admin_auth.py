@@ -7,17 +7,46 @@ from utils.auth import create_access_token, create_refresh_token, decode_refresh
 from schemas.auth import AdminLogin, TokenResponse
 from config import settings
 from datetime import timedelta
+from collections import defaultdict
+import hmac
+import logging
+import time
 import uuid
+
+logger = logging.getLogger(__name__)
 
 # Define router with /api/admin/auth prefix
 router = APIRouter(prefix="/api/admin/auth", tags=["Admin Auth"])
 
+
+# Простейший in-memory лимитер попыток входа: {ip: [timestamp, ...]}.
+# Достаточно для одного инстанса; при масштабировании вынести в Redis.
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_login_rate_limit(client_ip: str) -> None:
+    now = time.time()
+    window = settings.LOGIN_ATTEMPT_WINDOW_SECONDS
+    attempts = [t for t in _login_attempts[client_ip] if now - t < window]
+    _login_attempts[client_ip] = attempts
+    if len(attempts) >= settings.LOGIN_MAX_ATTEMPTS:
+        logger.warning("[ADMIN AUTH] Превышен лимит попыток входа с IP %s", client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts, try again later",
+        )
+    _login_attempts[client_ip].append(now)
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(
     login_data: AdminLogin,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db)
 ):
+    _check_login_rate_limit(request.client.host if request.client else "unknown")
+
     # Find user by username
     result = await db.execute(select(User).where(User.username == login_data.username))
     user = result.scalars().first()
@@ -27,9 +56,13 @@ async def login(
         pass # Auth successful, user is set
     
     # 2. Try Env-based Authentication (Bootstrap/Recovery)
-    elif (login_data.username == settings.ADMIN_USERNAME and 
-          login_data.password == settings.ADMIN_PASSWORD):
-        
+    # Сравнение постоянного времени — обычный == по паролю утекает информацию
+    # через тайминги и позволяет подбирать пароль посимвольно.
+    elif (
+        hmac.compare_digest(login_data.username, settings.ADMIN_USERNAME)
+        and hmac.compare_digest(login_data.password, settings.ADMIN_PASSWORD)
+    ):
+
         # Admin credentials from environment match. 
         # Ensure we have a valid user record in DB.
         
@@ -94,7 +127,7 @@ async def login(
         key="admin_refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=True,  # Production is HTTPS
+        secure=settings.COOKIE_SECURE,  # False для локальной разработки по HTTP
         samesite="lax",
         path="/",
         max_age=7 * 24 * 60 * 60,  # 7 days
@@ -111,8 +144,7 @@ async def refresh_token(
 ):
     refresh_token = request.cookies.get("admin_refresh_token")
     if not refresh_token:
-        # Debug print
-        print("DEBUG: Refresh token cookie is MISSING in request")
+        logger.info("[ADMIN AUTH] Запрос refresh без cookie")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token missing in cookie"
@@ -124,10 +156,10 @@ async def refresh_token(
         if not user_id:
             raise ValueError("Invalid payload: no user_id")
     except Exception as e:
-        print(f"DEBUG: Refresh token invalid: {e}")
+        logger.warning("[ADMIN AUTH] Невалидный refresh-токен: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid refresh token: {str(e)}"
+            detail="Invalid refresh token"
         )
 
     # Check if user still exists and is admin

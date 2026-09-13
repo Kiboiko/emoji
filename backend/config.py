@@ -25,8 +25,28 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "Marketplace 2.0"
     SITE_URL: str = "http://localhost:3000"
-    DEBUG: bool = True
-    
+
+    # ВНИМАНИЕ: DEBUG=True регистрирует служебный эндпоинт POST /api/auth/dev,
+    # который выдаёт админский токен без пароля. Дефолт обязан быть False,
+    # чтобы забытая переменная в .env не открывала админку наружу.
+    DEBUG: bool = False
+
+    # Вывод всех SQL-запросов в лог. Отделён от DEBUG: включать точечно при
+    # отладке запросов, иначе логи прода забиваются и туда утекают данные.
+    SQL_ECHO: bool = False
+
+    # Максимальный возраст Telegram initData. Без этой проверки перехваченный
+    # initData работает бессрочно.
+    INITDATA_MAX_AGE_SECONDS: int = 86400  # 24 часа
+
+    # Флаг Secure у cookie с refresh-токеном админки. На проде (HTTPS) — True.
+    # Локально по HTTP браузер Secure-cookie не сохранит и вход не заработает.
+    COOKIE_SECURE: bool = True
+
+    # Простой лимит попыток входа в админку (защита от перебора пароля)
+    LOGIN_MAX_ATTEMPTS: int = 10
+    LOGIN_ATTEMPT_WINDOW_SECONDS: int = 300
+
     # Admin Credentials
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "change_me"

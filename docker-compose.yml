@@ -99,7 +99,10 @@ services:
     networks:
       - marketplace-network
     healthcheck:
-      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health" ]
+      # Именно 127.0.0.1, а не localhost: внутри контейнера localhost резолвится
+      # в ::1, а nginx слушает только IPv4 — healthcheck всегда падал с
+      # "Connection refused", хотя сам сервис работал.
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health" ]
       interval: 30s
       timeout: 10s
       retries: 3

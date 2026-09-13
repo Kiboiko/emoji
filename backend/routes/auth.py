@@ -72,17 +72,17 @@ async def authenticate_admin(
         "user": UserResponse.model_validate(user)
     }
 
-@router.post("/dev", response_model=dict)
-async def authenticate_dev(
-    db: AsyncSession = Depends(get_db)
-):
+async def _authenticate_dev_impl(db: AsyncSession):
     """
-    Development authentication endpoint
-    Only available when DEBUG=True
+    Служебная авторизация для локальной разработки: выдаёт админский токен
+    без пароля.
+
+    Роут регистрируется ТОЛЬКО при DEBUG=True (см. регистрацию ниже). Раньше
+    проверка делалась внутри обработчика, а DEBUG по умолчанию был True и в
+    .env не задавался — из-за чего на проде любой мог получить админский токен
+    запросом POST /api/auth/dev. Теперь при DEBUG=False эндпоинта не существует
+    вовсе и он отдаёт 404.
     """
-    if not settings.DEBUG:
-        raise HTTPException(status_code=403, detail="Development mode not enabled")
-    
     # Create or get dev user
     stmt = select(User).where(User.telegram_id == 123456789)
     result = await db.execute(stmt)
@@ -114,6 +114,15 @@ async def authenticate_dev(
         "token_type": "bearer",
         "user": UserResponse.model_validate(user)
     }
+
+
+if settings.DEBUG:
+    # Регистрируем dev-вход только в режиме разработки.
+    @router.post("/dev", response_model=dict)
+    async def authenticate_dev(db: AsyncSession = Depends(get_db)):
+        """Development authentication endpoint. Доступен только при DEBUG=True."""
+        return await _authenticate_dev_impl(db)
+
 
 @router.post("/telegram", response_model=dict)
 async def authenticate_telegram(

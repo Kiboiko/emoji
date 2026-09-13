@@ -1,8 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import hashlib
+import hmac
+import json
+import logging
 import uuid
 
+from config import settings
 from database import get_db
 from models.user import User
 from models.order import Order
@@ -15,7 +20,34 @@ from routes.orders import complete_order
 # Removed local wrapper as logic is now in routes/orders.py
 from services.payment_service import cryptobot_service
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/webhook", tags=["Payments"])
+
+
+def _verify_cryptobot_signature(raw_body: bytes, received_signature: str | None) -> bool:
+    """
+    Проверка подлинности вебхука CryptoBot.
+
+    Схема из документации Crypto Pay API:
+        secret    = sha256(api_token)
+        signature = hmac_sha256(secret, raw_request_body).hexdigest()
+    и сравнивается с заголовком crypto-pay-api-signature.
+
+    Раньше проверки не было вовсе (комментарий "aiocryptopay handles this" не
+    соответствовал коду) — любой мог отправить сюда чужой order_id и получить
+    товар бесплатно.
+    """
+    if not received_signature:
+        return False
+    if not settings.CRYPTOBOT_API_TOKEN:
+        # Без токена проверить подпись невозможно — считаем запрос неподтверждённым.
+        logger.error("[WEBHOOK] CRYPTOBOT_API_TOKEN не задан, проверка подписи невозможна")
+        return False
+
+    secret = hashlib.sha256(settings.CRYPTOBOT_API_TOKEN.encode()).digest()
+    expected = hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, received_signature)
 
 
 @router.post("/crypto")
@@ -25,59 +57,70 @@ async def cryptobot_webhook(
 ):
     """Handle CryptoBot payment webhook"""
     try:
-        body = await request.json()
-        print(f"[WEBHOOK] Received webhook from CryptoBot: {body}")
-        
-        # Verify webhook (aiocryptopay handles this)
+        raw_body = await request.body()
+
+        if not _verify_cryptobot_signature(
+            raw_body, request.headers.get("crypto-pay-api-signature")
+        ):
+            logger.warning("[WEBHOOK] Отклонён вебхук с неверной подписью")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+
+        body = json.loads(raw_body)
+        logger.info("[WEBHOOK] Получен подписанный вебхук от CryptoBot")
+
         update_type = body.get("update_type")
-        payload = body.get("payload")
-        print(f"[WEBHOOK] update_type: {update_type}, payload: {payload}")
-        
+        payload = body.get("payload") or {}
+        logger.info("[WEBHOOK] update_type=%s", update_type)
+
         if update_type == "invoice_paid":
             invoice_id = payload.get("invoice_id")
             order_payload = payload.get("payload")  # Our order_id
-            print(f"[WEBHOOK] Invoice paid - invoice_id: {invoice_id}, order_id: {order_payload}")
-            
+            logger.info(
+                "[WEBHOOK] Invoice paid — invoice_id=%s order_id=%s", invoice_id, order_payload
+            )
+
             if order_payload:
                 # Find order with row locking to prevent race conditions
                 stmt = select(Order).where(Order.id == uuid.UUID(order_payload)).with_for_update()
                 result = await db.execute(stmt)
                 order = result.scalar_one_or_none()
-                
+
                 if order:
-                    print(f"[WEBHOOK] Order found: {order.id}, status={order.status.value}")
                     if order.status.value == "pending":
-                        print(f"[WEBHOOK] Completing order {order.id}")
+                        logger.info("[WEBHOOK] Завершаем заказ %s", order.id)
                         # Complete order
                         await complete_order(order, db)
-                        
+
                         # Clear cart for this user after successful payment
                         stmt = select(CartItem).where(CartItem.user_id == order.user_id)
                         result = await db.execute(stmt)
                         cart_items = result.scalars().all()
-                        print(f"[WEBHOOK] Clearing {len(cart_items)} cart items")
-                        
+
                         for cart_item in cart_items:
                             await db.delete(cart_item)
-                        
+
                         await db.commit()
-                        print(f"[WEBHOOK] Order {order.id} completed successfully")
+                        logger.info("[WEBHOOK] Заказ %s успешно завершён", order.id)
                     else:
-                        print(f"[WEBHOOK] Order already in status {order.status.value}, skipping")
+                        logger.info(
+                            "[WEBHOOK] Заказ %s уже в статусе %s, пропускаем",
+                            order.id, order.status.value
+                        )
                 else:
-                    print(f"[WEBHOOK] ERROR: Order {order_payload} not found!")
+                    logger.error("[WEBHOOK] Заказ %s не найден", order_payload)
             else:
-                print(f"[WEBHOOK] ERROR: No order_payload in webhook!")
+                logger.error("[WEBHOOK] В вебхуке нет order_payload")
         else:
-            print(f"[WEBHOOK] Ignoring update_type: {update_type}")
-        
+            logger.info("[WEBHOOK] Игнорируем update_type=%s", update_type)
+
         return {"status": "ok"}
-    
+
+    except HTTPException:
+        # Не заворачивать 401 от проверки подписи в 400
+        raise
     except Exception as e:
-        print(f"[WEBHOOK] ERROR: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=f"Webhook error: {str(e)}")
+        logger.exception("[WEBHOOK] Ошибка обработки вебхука: %s", e)
+        raise HTTPException(status_code=400, detail="Webhook error")
 
 
 @router.get("/check/{order_id}", response_model=PaymentStatusResponse)
