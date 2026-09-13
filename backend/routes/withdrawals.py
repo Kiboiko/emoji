@@ -5,16 +5,35 @@ from sqlalchemy.orm import selectinload
 import uuid
 from uuid import UUID
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 from database import get_db
+from models.finance import Account, LedgerEntryType, LedgerRefType
 from models.user import User
 from models.withdrawal import Withdrawal, WithdrawalStatus
 from schemas.withdrawal import WithdrawalCreate, WithdrawalUpdate, WithdrawalResponse
 from utils.auth import get_current_user, require_admin
+from services import finance_service
+from services.money import from_minor, to_minor
 from services.telegram_service import telegram_service
 
 router = APIRouter(prefix="/api/withdrawals", tags=["Withdrawals"])
+
+# Реферальные балансы номинированы в USD (см. миграцию d9e3f4a5b6c7).
+WITHDRAWAL_CURRENCY = "USD"
+
+
+def _sync_balance_cache(user: User, account: Account) -> None:
+    """
+    users.referral_earnings — денормализованный кеш для существующего API и
+    фронта. Держим в нём ДОСТУПНУЮ сумму (баланс минус заморозка), чтобы
+    поведение совпадало с прежним: заявка на вывод сразу уменьшает
+    показываемый баланс.
+    """
+    user.referral_earnings = float(
+        from_minor(account.available_minor, WITHDRAWAL_CURRENCY)
+    )
 
 
 @router.post("", response_model=WithdrawalResponse)
@@ -23,31 +42,57 @@ async def request_withdrawal(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Request a referral balance withdrawal"""
-    # Validate amount
-    if withdrawal_data.amount <= 0:
+    """
+    Заявка на вывод реферального баланса.
+
+    Раньше сумма просто вычиталась из users.referral_earnings. Если заявку не
+    подтверждали, деньги нигде не числились: с баланса ушли, на вывод не
+    отправились, следа операции не осталось.
+
+    Теперь сумма замораживается на счёте: баланс остаётся, но становится
+    недоступен к повторной заявке. Списание происходит в момент подтверждения
+    вывода админом, и каждый шаг попадает в журнал.
+    """
+    account = await finance_service.user_account(db, user.id, WITHDRAWAL_CURRENCY)
+    amount_minor = to_minor(withdrawal_data.amount, WITHDRAWAL_CURRENCY)
+
+    if amount_minor <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-        
-    if withdrawal_data.amount > user.referral_earnings:
-        raise HTTPException(status_code=400, detail="Insufficient referral balance")
-        
-    # Create withdrawal request
+
+    if amount_minor > account.available_minor:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Insufficient referral balance: доступно "
+                f"{from_minor(account.available_minor, WITHDRAWAL_CURRENCY)}"
+            ),
+        )
+
     withdrawal = Withdrawal(
         id=uuid.uuid4(),
         user_id=user.id,
-        amount=withdrawal_data.amount,
+        amount=float(withdrawal_data.amount),
         wallet=withdrawal_data.wallet,
         status=WithdrawalStatus.PENDING
     )
-    
-    # Deduct from user balance immediately to "reserve" it
-    user.referral_earnings -= withdrawal_data.amount
-    
     db.add(withdrawal)
+    await db.flush()  # нужен id заявки для ссылки в проводке
+
+    await finance_service.hold(
+        db,
+        account=account,
+        amount_minor=amount_minor,
+        entry_type=LedgerEntryType.WITHDRAWAL_RESERVE,
+        ref_type=LedgerRefType.WITHDRAWAL,
+        ref_id=withdrawal.id,
+        comment=f"Резерв под заявку на вывод на {withdrawal.wallet}",
+    )
+
+    _sync_balance_cache(user, account)
     db.add(user)
     await db.commit()
     await db.refresh(withdrawal)
-    
+
     # Notify admin
     try:
         user_id_display = f"@{user.username}" if user.username else str(user.telegram_id)
@@ -135,7 +180,24 @@ async def update_withdrawal_status(
     withdrawal.status = update_data.status
     if update_data.status == WithdrawalStatus.COMPLETED:
         withdrawal.completed_at = datetime.utcnow()
-        
+
+        # Фактическое списание: снимаем заморозку и уводим сумму на внешний
+        # счёт. Идемпотентно по ключу заявки — повторное подтверждение
+        # (двойной клик, ретрай) не спишет деньги дважды.
+        account = await finance_service.user_account(
+            db, withdrawal.user_id, WITHDRAWAL_CURRENCY
+        )
+        await finance_service.withdraw_to_external(
+            db,
+            account=account,
+            amount_minor=to_minor(Decimal(str(withdrawal.amount)), WITHDRAWAL_CURRENCY),
+            ref_type=LedgerRefType.WITHDRAWAL,
+            ref_id=withdrawal.id,
+            comment=f"Вывод на {withdrawal.wallet}",
+        )
+        _sync_balance_cache(withdrawal.user, account)
+        db.add(withdrawal.user)
+
         # Notify user via Telegram
         try:
             message = (

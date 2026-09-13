@@ -38,6 +38,15 @@ docker compose up -d
 
 Демо-данные: `docker compose exec backend python seed.py`
 
+### Тесты
+
+```bash
+docker compose exec postgres psql -U marketplace_user -d postgres -c "CREATE DATABASE marketplace_test;"
+docker compose exec backend python -m pytest -q
+```
+
+Тесты работают с отдельной базой (`<имя_базы>_test`), схема создаётся из моделей. Переопределяется переменной `TEST_DATABASE_URL`.
+
 Сервис `bot` требует `TELEGRAM_BOT_TOKEN` и без него не поднимается. Для локальной работы заведите **отдельного тестового бота** — боевой и локальный не могут читать апдейты одновременно.
 
 Витрина открывается только внутри Telegram: без `initData` она показывает «Откройте через Telegram». Админка работает в обычном браузере.
@@ -100,6 +109,7 @@ docker compose -f docker-compose.yml up -d
 | `ESTIMATE.md` | Аудит доставшегося кода, карта архитектуры, риски |
 | `docs/STAGE-0-REPORT.md` | Фиксы безопасности, аудит роутов |
 | `docs/STAGE-1-REPORT.md` | Приведение миграций в порядок |
+| `docs/STAGE-2-REPORT.md` | Финансовый слой: счета, журнал, сверка, настройки |
 | `docs/db/` | Дампы схемы: до и после этапа 1 |
 
 ---
@@ -113,7 +123,9 @@ backend/
   models/          SQLAlchemy-модели (полный реестр в __init__.py)
   schemas/         Pydantic-схемы
   routes/          эндпоинты
-  services/        платежи, Telegram, рефералы, планировщик
+  services/        деньги (money, finance), настройки, платежи, Telegram,
+                   рефералы, планировщик
+  tests/           pytest: денежная арифметика и финансовый слой
   utils/           JWT, валидация Telegram initData, WebSocket-менеджер
   alembic/         миграции
 frontend/          витрина

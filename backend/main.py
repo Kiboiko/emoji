@@ -14,7 +14,7 @@ from database import engine
 from models import *
 
 # Import routers
-from routes import auth, products, categories, cart, orders, payments, reviews, users, admin_auth, admin_stats, admin_orders, withdrawals
+from routes import auth, products, categories, cart, orders, payments, reviews, users, admin_auth, admin_stats, admin_orders, admin_finance, withdrawals
 
 
 from services.scheduler import start_scheduler, shutdown_scheduler
@@ -147,6 +147,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
 # Include routers
 app.include_router(admin_auth.router)
 app.include_router(admin_stats.router)
+app.include_router(admin_finance.router)
 app.include_router(admin_orders.router)
 app.include_router(auth.router)
 app.include_router(products.router)

@@ -84,12 +84,56 @@ async def cleanup_reservations():
             logger.error(f"[SCHEDULER] Error in cleanup_reservations: {e}")
             await db.rollback()
 
+async def reconcile_finances():
+    """
+    Ежедневная сверка финансов: балансы против журнала и глобальный ноль.
+
+    Расхождение означает, что деньги двигали в обход финансового слоя, и это
+    надо увидеть сразу, а не при разборе жалобы через месяц. Поэтому при
+    несходе шлём алерт админу в Telegram.
+    """
+    from services import finance_service
+    from services.telegram_service import telegram_service
+
+    async with AsyncSessionLocal() as db:
+        try:
+            report = await finance_service.reconcile(db)
+        except Exception as e:
+            logger.exception("[SCHEDULER] Сверка упала: %s", e)
+            return
+
+        if report.ok:
+            return
+
+        lines = [
+            "СВЕРКА ФИНАНСОВ НЕ СОШЛАСЬ",
+            f"Проверено счетов: {report.checked_accounts}",
+            f"Расхождений: {len(report.issues)}",
+            f"Суммы по валютам (должны быть 0): {report.global_sum_by_currency}",
+        ]
+        lines += [f"  {issue}" for issue in report.issues[:10]]
+        if len(report.issues) > 10:
+            lines.append(f"  ... и ещё {len(report.issues) - 10}")
+
+        for chat_id in telegram_service.admin_chat_ids:
+            try:
+                await telegram_service.send_message(chat_id, "\n".join(lines), parse_mode=None)
+            except Exception as e:
+                logger.error("[SCHEDULER] Не удалось отправить алерт сверки в %s: %s", chat_id, e)
+
+
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(
             cleanup_reservations,
             trigger=IntervalTrigger(seconds=300), # Run every 5 minutes
             id="cleanup_reservations",
+            replace_existing=True
+        )
+        scheduler.add_job(
+            reconcile_finances,
+            trigger=IntervalTrigger(hours=24),
+            id="reconcile_finances",
             replace_existing=True
         )
         scheduler.start()

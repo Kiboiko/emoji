@@ -1,13 +1,16 @@
 from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 from models.withdrawal import WithdrawalStatus
 
 
 class WithdrawalCreate(BaseModel):
     """Schema for creating a withdrawal request"""
-    amount: float = Field(..., gt=0)
+    # Decimal, а не float: сумма приходит от пользователя и идёт в денежную
+    # логику, где float запрещён (см. services/money.py).
+    amount: Decimal = Field(..., gt=0, max_digits=18, decimal_places=2)
     wallet: str = Field(..., min_length=1, max_length=255)
 
 
