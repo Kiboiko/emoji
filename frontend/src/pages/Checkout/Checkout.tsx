@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
-import { ordersApi, paymentsApi } from '@/api/client';
+import { ArrowLeft, Wallet, Loader2, AlertCircle } from 'lucide-react';
+import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useTelegram } from '@/hooks/useTelegram';
+import { useTonPayment } from '@/hooks/useTonPayment';
 import './Checkout.css';
 
 export const Checkout: React.FC = () => {
@@ -13,90 +14,51 @@ export const Checkout: React.FC = () => {
     const { language } = useAuthStore();
     const { cart } = useCartStore();
     const { haptic } = useTelegram();
+    const wallet = useTonWallet();
+    const { pay, phase, error, request, stopPolling } = useTonPayment();
 
-    const [selectedCurrency, setSelectedCurrency] = useState<'USDT' | 'TON'>('USDT');
-    const [isProcessing, setIsProcessing] = useState(false);
+    const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
-    const handleCheckout = async () => {
-        try {
-            setIsProcessing(true);
-            haptic.impact('medium');
+    // Опрос статуса продолжался бы и после ухода со страницы
+    useEffect(() => stopPolling, [stopPolling]);
 
-            const response = await ordersApi.createOrder(selectedCurrency);
-            const orderId = response.order_id;
-
-            // Open payment URL using Telegram WebApp API
-            const payUrl = response.pay_url || response.mini_app_url;
-            if (payUrl) {
-                // Check if it's a telegram link (direct or via t.me)
-                if (payUrl.includes('t.me/') || payUrl.includes('tg://')) {
-                    // @ts-ignore
-                    window.Telegram?.WebApp?.openTelegramLink(payUrl);
-                } else {
-                    // @ts-ignore
-                    window.Telegram?.WebApp?.openLink(payUrl);
-                }
-            }
-
-            // Poll for payment status
-            const maxAttempts = 60; // Poll for 5 minutes (60 * 5 seconds)
-            let attempts = 0;
-            const pollInterval = setInterval(async () => {
-                try {
-                    attempts++;
-                    const status = await paymentsApi.checkPaymentStatus(orderId);
-
-                    if (status.paid) {
-                        clearInterval(pollInterval);
-
-                        // Clear cart manually since webhook might not have cleared it yet
-                        const { clearCart } = useCartStore.getState();
-                        await clearCart();
-
-                        haptic.notification('success');
-                        navigate('/profile'); // Navigate to profile to show completed order
-                    } else if (attempts >= maxAttempts) {
-                        clearInterval(pollInterval);
-                        // Timeout - navigate to profile anyway, webhook might complete later
-                        navigate('/profile');
-                    }
-                } catch (error) {
-                    console.error('Payment status check failed:', error);
-                    if (attempts >= maxAttempts) {
-                        clearInterval(pollInterval);
-                        navigate('/profile');
-                    }
-                }
-            }, 5000); // Check every 5 seconds
-
-        } catch (error) {
-            console.error('Checkout failed:', error);
-            haptic.notification('error');
-            alert(language === 'ru' ? 'Ошибка при создании заказа' : 'Failed to create order');
-        } finally {
-            setIsProcessing(false);
+    useEffect(() => {
+        if (!cart || cart.items.length === 0) {
+            if (phase === 'idle') navigate('/cart');
         }
+    }, [cart, phase, navigate]);
+
+    const busy = phase === 'creating' || phase === 'awaiting_sign' || phase === 'confirming';
+
+    const handlePay = async () => {
+        haptic.impact('medium');
+        await pay('TON', async () => {
+            await useCartStore.getState().clearCart();
+            haptic.notification('success');
+            navigate('/profile');
+        });
     };
 
-    if (!cart || cart.items.length === 0) {
-        navigate('/cart');
-        return null;
-    }
+    if (!cart || cart.items.length === 0) return null;
+
+    const statusText: Record<string, string> = {
+        creating: t('Готовим счёт...', 'Preparing invoice...'),
+        awaiting_sign: t('Подтвердите в кошельке', 'Confirm in your wallet'),
+        confirming: t('Ждём подтверждения сети...', 'Waiting for network confirmation...'),
+    };
 
     return (
         <div className="checkout-page">
             <div className="container">
-                <button className="btn-back" onClick={() => navigate('/cart')}>
+                <button className="btn-back" onClick={() => navigate('/cart')} disabled={busy}>
                     <ArrowLeft size={20} />
-                    <span>{language === 'ru' ? 'Назад' : 'Back'}</span>
+                    <span>{t('Назад', 'Back')}</span>
                 </button>
 
-                <h1>{language === 'ru' ? 'Оформление заказа' : 'Checkout'}</h1>
+                <h1>{t('Оформление заказа', 'Checkout')}</h1>
 
-                {/* Order Summary */}
                 <div className="order-summary glass-card">
-                    <h2>{language === 'ru' ? 'Ваш заказ' : 'Your Order'}</h2>
-
+                    <h2>{t('Ваш заказ', 'Your Order')}</h2>
                     <div className="summary-items">
                         {cart.items.map((item) => (
                             <div key={item.id} className="summary-item">
@@ -109,79 +71,88 @@ export const Checkout: React.FC = () => {
                             </div>
                         ))}
                     </div>
-
                     <div className="divider" />
-
                     <div className="summary-row">
-                        <span>{language === 'ru' ? 'Всего товаров' : 'Total Items'}</span>
-                        <span>{cart.items.reduce((sum, item) => sum + item.quantity, 0)}</span>
+                        <span>{t('Всего товаров', 'Total Items')}</span>
+                        <span>{cart.items.reduce((sum, i) => sum + i.quantity, 0)}</span>
                     </div>
                 </div>
 
-                {/* Payment Method */}
                 <div className="payment-section glass-card">
-                    <h2>{language === 'ru' ? 'Выберите валюту' : 'Select Currency'}</h2>
+                    <h2>{t('Оплата', 'Payment')}</h2>
 
-                    <div className="currency-options">
-                        <motion.button
-                            className={`currency-option ${selectedCurrency === 'USDT' ? 'active' : ''}`}
-                            onClick={() => {
-                                setSelectedCurrency('USDT');
-                                haptic.selection();
-                            }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            <div className="currency-info">
-                                <p className="currency-name">USDT</p>
-                            </div>
-                            {selectedCurrency === 'USDT' && (
-                                <div className="check-mark">✓</div>
-                            )}
-                        </motion.button>
-
-                        <motion.button
-                            className={`currency-option ${selectedCurrency === 'TON' ? 'active' : ''}`}
-                            onClick={() => {
-                                setSelectedCurrency('TON');
-                                haptic.selection();
-                            }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            <div className="currency-info">
-                                <p className="currency-name">TON</p>
-                            </div>
-                            {selectedCurrency === 'TON' && (
-                                <div className="check-mark">✓</div>
-                            )}
-                        </motion.button>
+                    <div className="wallet-row">
+                        <div className="wallet-label">
+                            <Wallet size={18} />
+                            <span>
+                                {wallet
+                                    ? t('Кошелёк подключён', 'Wallet connected')
+                                    : t('Подключите кошелёк TON', 'Connect your TON wallet')}
+                            </span>
+                        </div>
+                        <TonConnectButton />
                     </div>
 
+                    {request && (
+                        <div className="rate-note">
+                            {t('Курс зафиксирован: ', 'Rate locked: ')}
+                            1 TON = ${request.rate_usd_per_ton}
+                        </div>
+                    )}
                 </div>
 
-                {/* Total */}
                 <div className="total-section glass-card">
                     <div className="total-row">
-                        <span>{language === 'ru' ? 'Итого к оплате' : 'Total to Pay'}</span>
+                        <span>{t('Итого к оплате', 'Total to Pay')}</span>
                         <span className="total-amount text-gradient">
                             ${cart.total_usdt.toFixed(2)}
                         </span>
                     </div>
 
+                    {request && (
+                        <div className="total-row total-row-secondary">
+                            <span>{t('В TON', 'In TON')}</span>
+                            <span>{Number(request.amount_ton).toFixed(4)} TON</span>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div className="payment-error">
+                            <AlertCircle size={16} />
+                            <span>{error}</span>
+                        </div>
+                    )}
+
                     <motion.button
                         className="btn-gradient btn-pay"
-                        onClick={handleCheckout}
-                        disabled={isProcessing}
+                        onClick={handlePay}
+                        disabled={busy || !wallet}
                         whileTap={{ scale: 0.98 }}
                     >
-                        {isProcessing
-                            ? (language === 'ru' ? 'Обработка...' : 'Processing...')
-                            : (language === 'ru' ? 'Оплатить' : 'Pay Now')
-                        }
+                        {busy ? (
+                            <span className="btn-busy">
+                                <Loader2 size={18} className="spin" />
+                                {statusText[phase]}
+                            </span>
+                        ) : !wallet ? (
+                            t('Сначала подключите кошелёк', 'Connect wallet first')
+                        ) : (
+                            t('Оплатить', 'Pay Now')
+                        )}
                     </motion.button>
+
+                    {phase === 'confirming' && (
+                        <p className="confirm-hint">
+                            {t(
+                                'Не закрывайте страницу. Подтверждение обычно занимает несколько секунд.',
+                                'Keep this page open. Confirmation usually takes a few seconds.',
+                            )}
+                        </p>
+                    )}
                 </div>
             </div>
 
-            <div style={{ height: '80px' }} />
+            <div className="checkout-bottom-spacer" />
         </div>
     );
 };

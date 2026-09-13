@@ -18,7 +18,7 @@ from .product import Product
 from .category import Category
 from .cart import CartItem
 from .order import Order, OrderItem, OrderStatus, CurrencyType
-from .payment import Payment
+from .payment import Payment, PaymentStatus
 from .review import Review
 from .digital_item import DigitalItem
 from .referral import ReferralTransaction
@@ -38,6 +38,7 @@ __all__ = [
     "OrderStatus",
     "CurrencyType",
     "Payment",
+    "PaymentStatus",
     "Review",
     "DigitalItem",
     "ReferralTransaction",

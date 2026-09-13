@@ -96,6 +96,18 @@ docker compose -f docker-compose.yml up -d
 | `COOKIE_SECURE` | `true` | Флаг Secure у cookie админки. Локально по HTTP — `false`, иначе вход не работает |
 | `SQL_ECHO` | `false` | Вывод всех SQL-запросов в лог |
 | `SECRET_KEY` | случайный | Подпись JWT |
+| `TON_NETWORK` | `mainnet` | Сеть TON. Сейчас настроен `testnet` |
+| `TON_RECEIVING_ADDRESS` | адрес кошелька | Куда приходят платежи. Пусто — приём оплаты отдаёт 503 |
+| `TON_API_KEY` | ключ toncenter | Без него лимит ~1 запрос/сек |
+
+### Оплата в TON
+
+Курс, срок его фиксации и время жизни счёта настраиваются **в админке**
+(`ton_rate_source`, `ton_rate_ttl_sec`, `order_payment_ttl_min`), а не в `.env`.
+
+Манифест TON Connect генерируется на сборке образа из `SITE_URL`. Кошелёк
+скачивает его сам и сверяет origin, поэтому **с localhost полный прогон оплаты
+невозможен** — нужен публичный HTTPS-домен.
 
 `.env` в git не попадает. Секреты из архива предыдущего разработчика считать скомпрометированными.
 
@@ -110,6 +122,7 @@ docker compose -f docker-compose.yml up -d
 | `docs/STAGE-0-REPORT.md` | Фиксы безопасности, аудит роутов |
 | `docs/STAGE-1-REPORT.md` | Приведение миграций в порядок |
 | `docs/STAGE-2-REPORT.md` | Финансовый слой: счета, журнал, сверка, настройки |
+| `docs/STAGE-3-REPORT.md` | Оплата в TON через TON Connect |
 | `docs/db/` | Дампы схемы: до и после этапа 1 |
 
 ---

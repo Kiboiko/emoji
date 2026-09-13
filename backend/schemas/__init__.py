@@ -5,7 +5,7 @@ from schemas.product import ProductCreate, ProductUpdate, ProductResponse, Produ
 from schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemResponse
 from schemas.cart import CartItemCreate, CartItemUpdate, CartItemResponse, CartResponse
 from schemas.review import ReviewCreate, ReviewResponse
-from schemas.payment import CreateInvoiceRequest, InvoiceResponse, PaymentStatusResponse, CryptoBotWebhook
+from schemas.payment import PaymentStatusResponse, TonTransactionRequest
 
 __all__ = [
     "UserCreate",
@@ -30,8 +30,7 @@ __all__ = [
     "CartResponse",
     "ReviewCreate",
     "ReviewResponse",
-    "CreateInvoiceRequest",
-    "InvoiceResponse",
     "PaymentStatusResponse",
-    "CryptoBotWebhook",
+    "TonTransactionRequest",
+    "TonTransactionRequest",
 ]

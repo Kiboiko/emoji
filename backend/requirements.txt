@@ -24,8 +24,6 @@ httpx>=0.28.1
 python-telegram-bot>=22.5
 aiogram>=3.24.0
 
-# CryptoBot Payments
-aiocryptopay>=0.4.8
 
 # Image Processing
 Pillow>=12.1.0

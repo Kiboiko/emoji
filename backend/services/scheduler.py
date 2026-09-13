@@ -6,6 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import logging
 
+from config import settings
 from database import AsyncSessionLocal
 from models.order import Order, OrderStatus
 from models.digital_item import DigitalItem
@@ -22,14 +23,24 @@ from fastapi.encoders import jsonable_encoder
 
 async def cleanup_reservations():
     """
-    Check for pending orders created more than 120 minutes ago.
-    Cancel them, release digital items, and restore stock.
+    Отменяет неоплаченные заказы и освобождает зарезервированные товары.
+
+    Срок берётся из настройки order_payment_ttl_min, а не зашит в код: раньше
+    здесь стояли жёсткие 120 минут, при том что резерв цифровых товаров жил
+    3 минуты. Между этими значениями резерв успевал протухнуть на ещё живом
+    заказе, и товар мог уйти другому покупателю.
+
+    Небольшой запас сверх срока даётся намеренно: платёж мог уйти в сеть
+    в последнюю секунду и подтвердиться чуть позже.
     """
+    from services import settings_service
+
     async with AsyncSessionLocal() as db:
         try:
-            # 1. Find expired pending orders
-            expiration_time = datetime.utcnow() - timedelta(minutes=120)
-            
+            ttl_minutes = await settings_service.get_int(db, "order_payment_ttl_min")
+            grace = timedelta(seconds=settings.TON_LOOKAHEAD_SECONDS)
+            expiration_time = datetime.utcnow() - timedelta(minutes=ttl_minutes) - grace
+
             stmt = select(Order).where(
                 Order.status == OrderStatus.PENDING,
                 Order.created_at < expiration_time
@@ -122,12 +133,36 @@ async def reconcile_finances():
                 logger.error("[SCHEDULER] Не удалось отправить алерт сверки в %s: %s", chat_id, e)
 
 
+async def poll_ton_payments():
+    """
+    Опрос блокчейна по ожидающим платежам.
+
+    Интервал 15 секунд — компромисс между отзывчивостью (пользователь ждёт
+    товар) и лимитами индексера. Все ожидающие платежи проверяются ОДНИМ
+    запросом к индексеру, поэтому нагрузка не растёт с числом заказов.
+    """
+    from services import payment_service
+
+    async with AsyncSessionLocal() as db:
+        try:
+            await payment_service.poll_pending_payments(db)
+        except Exception as e:
+            logger.exception("[SCHEDULER] Опрос платежей упал: %s", e)
+            await db.rollback()
+
+
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(
             cleanup_reservations,
             trigger=IntervalTrigger(seconds=300), # Run every 5 minutes
             id="cleanup_reservations",
+            replace_existing=True
+        )
+        scheduler.add_job(
+            poll_ton_payments,
+            trigger=IntervalTrigger(seconds=15),
+            id="poll_ton_payments",
             replace_existing=True
         )
         scheduler.add_job(

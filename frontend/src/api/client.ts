@@ -139,8 +139,23 @@ export const ordersApi = {
 
 // Payments API
 export const paymentsApi = {
+    // Путь совпадает с бэкендом: /api/payments/check/{id}.
+    // Раньше фронт звал именно этот адрес, а роутер был смонтирован на
+    // /api/webhook — опрос статуса всегда возвращал 404 и молча не работал.
     checkPaymentStatus: async (orderId: string) => {
         const response = await apiClient.get(`/payments/check/${orderId}`);
+        return response.data;
+    },
+
+    getConfig: async () => {
+        const response = await apiClient.get('/payments/config');
+        return response.data;
+    },
+
+    // Перевыставить счёт: нужен, когда пользователь вернулся к неоплаченному
+    // заказу или истёк зафиксированный курс
+    initTonPayment: async (orderId: string) => {
+        const response = await apiClient.post(`/payments/ton/init/${orderId}`);
         return response.data;
     },
 };

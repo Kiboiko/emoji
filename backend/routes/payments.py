@@ -1,174 +1,130 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-import hashlib
-import hmac
-import json
+"""
+Оплата через TON Connect.
+
+Вебхук CryptoBot удалён вместе с провайдером. У блокчейна вебхука нет,
+поэтому статус узнаётся двумя путями: фоновым поллером (services/scheduler.py)
+и запросом с фронта «проверь сейчас».
+
+Ни один эндпоинт здесь не принимает от клиента факт оплаты. Клиент может
+попросить перепроверить платёж, но подтверждение всегда берётся из блокчейна.
+"""
+
+from __future__ import annotations
+
 import logging
 import uuid
 
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from config import settings
 from database import get_db
+from models.order import Order, OrderStatus
+from models.payment import Payment, PaymentStatus
 from models.user import User
-from models.order import Order
-from models.cart import CartItem
 from schemas.payment import PaymentStatusResponse
+from services import payment_service, ton_service
 from utils.auth import get_current_user
-from models.digital_item import DigitalItem
-from routes.orders import complete_order
-
-# Removed local wrapper as logic is now in routes/orders.py
-from services.payment_service import cryptobot_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/webhook", tags=["Payments"])
+router = APIRouter(prefix="/payments", tags=["Payments"])
 
 
-def _verify_cryptobot_signature(raw_body: bytes, received_signature: str | None) -> bool:
-    """
-    Проверка подлинности вебхука CryptoBot.
-
-    Схема из документации Crypto Pay API:
-        secret    = sha256(api_token)
-        signature = hmac_sha256(secret, raw_request_body).hexdigest()
-    и сравнивается с заголовком crypto-pay-api-signature.
-
-    Раньше проверки не было вовсе (комментарий "aiocryptopay handles this" не
-    соответствовал коду) — любой мог отправить сюда чужой order_id и получить
-    товар бесплатно.
-    """
-    if not received_signature:
-        return False
-    if not settings.CRYPTOBOT_API_TOKEN:
-        # Без токена проверить подпись невозможно — считаем запрос неподтверждённым.
-        logger.error("[WEBHOOK] CRYPTOBOT_API_TOKEN не задан, проверка подписи невозможна")
-        return False
-
-    secret = hashlib.sha256(settings.CRYPTOBOT_API_TOKEN.encode()).digest()
-    expected = hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, received_signature)
-
-
-@router.post("/crypto")
-async def cryptobot_webhook(
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-):
-    """Handle CryptoBot payment webhook"""
+async def _get_own_order(db: AsyncSession, order_id: str, user: User) -> Order:
     try:
-        raw_body = await request.body()
+        oid = uuid.UUID(order_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid order id")
 
-        if not _verify_cryptobot_signature(
-            raw_body, request.headers.get("crypto-pay-api-signature")
-        ):
-            logger.warning("[WEBHOOK] Отклонён вебхук с неверной подписью")
-            raise HTTPException(status_code=401, detail="Invalid signature")
+    order = await db.get(Order, oid)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.user_id != user.id and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return order
 
-        body = json.loads(raw_body)
-        logger.info("[WEBHOOK] Получен подписанный вебхук от CryptoBot")
 
-        update_type = body.get("update_type")
-        payload = body.get("payload") or {}
-        logger.info("[WEBHOOK] update_type=%s", update_type)
+@router.get("/config")
+async def payment_config():
+    """Параметры TON Connect для фронта."""
+    return {
+        "network": "testnet" if settings.ton_is_testnet else "mainnet",
+        "manifest_url": ton_service.manifest_url(),
+        "receiving_address": settings.TON_RECEIVING_ADDRESS or None,
+    }
 
-        if update_type == "invoice_paid":
-            invoice_id = payload.get("invoice_id")
-            order_payload = payload.get("payload")  # Our order_id
-            logger.info(
-                "[WEBHOOK] Invoice paid — invoice_id=%s order_id=%s", invoice_id, order_payload
-            )
 
-            if order_payload:
-                # Find order with row locking to prevent race conditions
-                stmt = select(Order).where(Order.id == uuid.UUID(order_payload)).with_for_update()
-                result = await db.execute(stmt)
-                order = result.scalar_one_or_none()
+@router.post("/ton/init/{order_id}")
+async def init_ton_payment(
+    order_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Выставляет (или обновляет) счёт по заказу.
 
-                if order:
-                    if order.status.value == "pending":
-                        logger.info("[WEBHOOK] Завершаем заказ %s", order.id)
-                        # Complete order
-                        await complete_order(order, db)
+    Нужен, когда пользователь вернулся к неоплаченному заказу или когда истёк
+    зафиксированный курс — тогда выдаётся новый счёт с актуальным курсом.
+    """
+    order = await _get_own_order(db, order_id, user)
 
-                        # Clear cart for this user after successful payment
-                        stmt = select(CartItem).where(CartItem.user_id == order.user_id)
-                        result = await db.execute(stmt)
-                        cart_items = result.scalars().all()
+    try:
+        payment = await payment_service.create_or_refresh_payment(db, order)
+    except ton_service.TonNotConfigured as e:
+        logger.error("[PAY] %s", e)
+        raise HTTPException(status_code=503, detail="Payments are not configured")
+    except ton_service.RateUnavailable as e:
+        logger.error("[PAY] %s", e)
+        raise HTTPException(status_code=503, detail="Exchange rate is unavailable")
+    except payment_service.PaymentError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-                        for cart_item in cart_items:
-                            await db.delete(cart_item)
-
-                        await db.commit()
-                        logger.info("[WEBHOOK] Заказ %s успешно завершён", order.id)
-                    else:
-                        logger.info(
-                            "[WEBHOOK] Заказ %s уже в статусе %s, пропускаем",
-                            order.id, order.status.value
-                        )
-                else:
-                    logger.error("[WEBHOOK] Заказ %s не найден", order_payload)
-            else:
-                logger.error("[WEBHOOK] В вебхуке нет order_payload")
-        else:
-            logger.info("[WEBHOOK] Игнорируем update_type=%s", update_type)
-
-        return {"status": "ok"}
-
-    except HTTPException:
-        # Не заворачивать 401 от проверки подписи в 400
-        raise
-    except Exception as e:
-        logger.exception("[WEBHOOK] Ошибка обработки вебхука: %s", e)
-        raise HTTPException(status_code=400, detail="Webhook error")
+    await db.commit()
+    return {
+        "order_id": str(order.id),
+        "payment": payment_service.build_transaction_request(payment).as_dict(),
+    }
 
 
 @router.get("/check/{order_id}", response_model=PaymentStatusResponse)
 async def check_payment_status(
     order_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """Check payment status for an order"""
-    order = await db.get(Order, uuid.UUID(order_id))
-    
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    if order.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    # If already paid, return status
-    if order.status.value in ["paid", "completed"]:
-        return PaymentStatusResponse(
-            status=order.status.value,
-            paid=True
+    """
+    Проверяет оплату заказа.
+
+    Вызывается фронтом, пока пользователь ждёт подтверждения. Проверка идёт
+    по блокчейну — никаких данных от клиента о том, что он «уже оплатил», не
+    принимается.
+    """
+    order = await _get_own_order(db, order_id, user)
+
+    if order.status in (OrderStatus.PAID, OrderStatus.COMPLETED):
+        return PaymentStatusResponse(status=order.status.value, paid=True)
+
+    payment = (
+        await db.execute(
+            select(Payment)
+            .where(Payment.order_id == order.id)
+            .order_by(Payment.created_at.desc())
         )
-    
-    # Check with CryptoBot
-    if order.cryptobot_invoice_id:
-        try:
-            invoice_status = await cryptobot_service.get_invoice_status(
-                int(order.cryptobot_invoice_id)
-            )
-            
-            # If paid, complete order
-            if invoice_status["paid"]:
-                await complete_order(order, db)
-                return PaymentStatusResponse(
-                    status="paid",
-                    paid=True
-                )
-            
-            return PaymentStatusResponse(
-                status=invoice_status["status"],
-                paid=False
-            )
-        
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to check status: {str(e)}")
-    
+    ).scalars().first()
+
+    if payment is None:
+        return PaymentStatusResponse(status=order.status.value, paid=False)
+
+    try:
+        status = await payment_service.verify_payment(db, payment)
+    except ton_service.TonError as e:
+        # Недоступность индексера не должна выглядеть как «не оплачено»
+        logger.error("[PAY] Проверка платежа %s не удалась: %s", payment.id, e)
+        raise HTTPException(status_code=503, detail="Payment provider is unavailable")
+
     return PaymentStatusResponse(
-        status=order.status.value,
-        paid=False
+        status=status.value,
+        paid=status == PaymentStatus.CONFIRMED,
     )

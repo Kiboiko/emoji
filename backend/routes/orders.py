@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
+import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from database import get_db
@@ -14,12 +15,14 @@ from models.product import Product
 from models.digital_item import DigitalItem
 from schemas.order import OrderCreate, OrderResponse
 from utils.auth import get_current_user, require_admin
-from services.payment_service import cryptobot_service
+from services import payment_service, settings_service
 from services.telegram_service import telegram_service
 from services.referral_service import process_referral_commission
 from utils.websockets import manager
 from fastapi.encoders import jsonable_encoder
 from schemas.product import ProductResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/orders", tags=["Orders"])
 
@@ -86,107 +89,70 @@ async def create_order(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create separate orders for each cart item"""
-    # Get cart items
-    stmt = select(CartItem).where(CartItem.user_id == user.id)
-    result = await db.execute(stmt)
-    cart_items = result.scalars().all()
-    
+    """
+    Создаёт ОДИН заказ на всю корзину и выставляет счёт в TON.
+
+    Раньше на каждую позицию корзины создавался отдельный заказ со своим
+    инвойсом, а фронт открывал только первый — остальные висели неоплаченными.
+    С TON Connect это было бы ещё хуже: каждый заказ требует отдельной подписи
+    транзакции в кошельке, то есть корзина из трёх товаров = три подписи.
+
+    Теперь: одна корзина = один заказ = одна транзакция = одна подпись.
+    """
+    cart_items = (
+        await db.execute(select(CartItem).where(CartItem.user_id == user.id))
+    ).scalars().all()
+
     if not cart_items:
         raise HTTPException(status_code=400, detail="Cart is empty")
-    
-    created_orders = []
-    first_invoice_url = None
-    
-    # Create separate order for EACH cart item
+
+    # Резерв держим ровно столько же, сколько живёт счёт: раньше товар
+    # резервировался на 3 минуты, а заказ отменялся через 120 — между этими
+    # значениями резерв успевал протухнуть на оплаченном заказе.
+    reservation_minutes = await settings_service.get_int(db, "order_payment_ttl_min")
+    reserved_until = datetime.utcnow() + timedelta(minutes=reservation_minutes)
+
+    order = Order(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        total_usdt=Decimal("0"),
+        total_ton=None,
+        currency=order_data.currency,
+        status=OrderStatus.PENDING,
+    )
+    db.add(order)
+    await db.flush()
+
+    total_usdt = Decimal("0")
+    out_of_stock_products: list[str] = []
+    updated_products: list[Product] = []
+
     for cart_item in cart_items:
         product = await db.get(Product, cart_item.product_id)
         if not product:
             continue
-        
-        # Calculate totals for THIS item's quantity
-        item_total_usdt = product.price_usdt * cart_item.quantity
-        item_total_ton = (product.price_ton * cart_item.quantity) if product.price_ton else None
-        
-        # Create order for this single item
-        order = Order(
-            id=uuid.uuid4(),
-            user_id=user.id,
-            total_usdt=item_total_usdt,
-            total_ton=item_total_ton if item_total_ton and item_total_ton > 0 else None,
-            currency=order_data.currency,
-            status=OrderStatus.PENDING
-        )
-        db.add(order)
-        await db.flush()  # IMPORTANT: Flush to persist order_id before using it
-        
-        # Check stock and reserve digital items
-        RESERVATION_MINUTES = 3
-        
+
+        quantity = cart_item.quantity
+        item_total = product.price_usdt * quantity
+        total_usdt += item_total
+
         if product.type == "digital":
-            quantity = cart_item.quantity
-            # Find available items (not sold, AND (not reserved OR reservation expired))
-            current_time = datetime.utcnow()
-            print(f"[ORDER] DEBUG: Product {product.id} (Digital), Quantity: {quantity}, Time: {current_time}")
-            
-            stmt = select(DigitalItem).where(
-                DigitalItem.product_id == product.id,
-                DigitalItem.is_sold == False,
-                or_(
-                    DigitalItem.order_id == None,
-                    DigitalItem.reserved_until < current_time
-                )
-            ).limit(quantity).with_for_update() # Lock rows to prevent race conditions
-            
-            result = await db.execute(stmt)
-            available_items = result.scalars().all()
-            print(f"[ORDER] DEBUG: Found {len(available_items)} available items")
-            
-            if len(available_items) < quantity:
-                print(f"[ORDER] ERROR: Not enough stock. Needed {quantity}, found {len(available_items)}")
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Not enough stock for product '{product.name_ru}'"
-                )
-                
-            # Reserve items
-            from datetime import timedelta
-            reserved_until = current_time + timedelta(minutes=RESERVATION_MINUTES)
-            
-            for digital_item in available_items:
-                digital_item.order_id = order.id
-                digital_item.reserved_until = reserved_until
-                db.add(digital_item)
-            
-            # Decrease product stock immediately
+            await _reserve_digital_items(
+                db, order=order, product=product, quantity=quantity,
+                reserved_until=reserved_until,
+            )
             if product.stock is not None:
                 product.stock -= quantity
                 db.add(product)
-                
-                # Broadcast real-time stock update
-                await manager.broadcast({
-                    "type": "product_updated",
-                    "data": jsonable_encoder(ProductResponse.model_validate(product))
-                })
-                
-                # Notify admin if out of stock
-                print(f"[ORDER] Product {product.name_ru} stock is now: {product.stock}")
+                updated_products.append(product)
                 if product.stock == 0:
-                    try:
-                        await telegram_service.send_out_of_stock_notification(product.name_ru)
-                    except Exception as e:
-                        print(f"[ORDER] WARNING: Failed to send out-of-stock notification: {e}")
-                
-        elif product.type in ["instruction", "service"]:
-            # Unlimited stock / Manual processing
-            pass
-            
-        # Create single order item for this product
-        order_item = OrderItem(
+                    out_of_stock_products.append(product.name_ru)
+
+        db.add(OrderItem(
             id=uuid.uuid4(),
             order_id=order.id,
             product_id=product.id,
-            quantity=cart_item.quantity,
+            quantity=quantity,
             price_usdt=product.price_usdt,
             price_ton=product.price_ton,
             product_snapshot={
@@ -195,54 +161,80 @@ async def create_order(
                 "description_ru": product.description_ru,
                 "description_en": product.description_en,
                 "content_data": product.content_data,
-                # "description_ru": product.description_ru, # Duplicate removed
-                # "description_en": product.description_en, # Duplicate removed
-                # "content_data": product.content_data, # Duplicate removed
                 "type": product.type,
-                "image_url": product.image_url
+                "image_url": product.image_url,
             },
-            user_data=cart_item.user_data  # Pass user_data from cart to order item
-        )
-        db.add(order_item)
-        
-        await db.flush()  # Flush to get order.id
-        
-        # Create CryptoBot invoice for THIS order
-        # Always send amount in USD - CryptoBot will convert if currency is TON
-        invoice = await cryptobot_service.create_invoice(
-            amount=item_total_usdt,  # Always USD amount
-            currency=order_data.currency,  # But currency can be USDT or TON
-            description=f"Order #{order.id} - {product.name_en}",
-            payload=str(order.id)
-        )
-        
-        # Save invoice data
-        order.cryptobot_invoice_id = invoice["invoice_id"]
-        order.payment_data = invoice
-        
-        created_orders.append({
-            "order_id": str(order.id),
-            "product_name": product.name_ru,
-            "pay_url": invoice["pay_url"],
-            "mini_app_url": invoice.get("mini_app_url"),
-            "web_app_url": invoice.get("web_app_url")
-        })
-        
-        # Store first invoice URL to redirect user
-        if not first_invoice_url:
-            first_invoice_url = invoice.get("mini_app_url") or invoice.get("pay_url")
-    
+            user_data=cart_item.user_data,
+        ))
+
+    if total_usdt <= 0:
+        raise HTTPException(status_code=400, detail="Cart contains no valid products")
+
+    order.total_usdt = total_usdt
+    await db.flush()
+
+    payment = await payment_service.create_or_refresh_payment(db, order)
+    tx_request = payment_service.build_transaction_request(payment)
+
     await db.commit()
-    
-    # Return first payment URL for redirect
+
+    # Уведомления и broadcast — после коммита: их падение не должно
+    # откатывать уже созданный заказ.
+    for product in updated_products:
+        await manager.broadcast({
+            "type": "product_updated",
+            "data": jsonable_encoder(ProductResponse.model_validate(product)),
+        })
+    for name in out_of_stock_products:
+        try:
+            await telegram_service.send_out_of_stock_notification(name)
+        except Exception as e:
+            logger.warning("Не удалось отправить уведомление об окончании товара: %s", e)
+
     return {
-        "orders_created": len(created_orders),
-        "order_id": created_orders[0]["order_id"] if created_orders else None,
-        "pay_url": created_orders[0]["pay_url"] if created_orders else None,
-        "mini_app_url": created_orders[0]["mini_app_url"] if created_orders else None,
-        "web_app_url": created_orders[0]["web_app_url"] if created_orders else None,
-        "all_orders": created_orders
+        "order_id": str(order.id),
+        "total_usdt": str(total_usdt),
+        "payment": tx_request.as_dict(),
     }
+
+
+async def _reserve_digital_items(
+    db: AsyncSession,
+    *,
+    order: Order,
+    product: Product,
+    quantity: int,
+    reserved_until: datetime,
+) -> None:
+    """
+    Резервирует цифровые товары под заказ.
+
+    SELECT ... FOR UPDATE обязателен: без блокировки двое покупателей в один
+    момент получают одни и те же экземпляры.
+    """
+    now = datetime.utcnow()
+    stmt = (
+        select(DigitalItem)
+        .where(
+            DigitalItem.product_id == product.id,
+            DigitalItem.is_sold == False,  # noqa: E712
+            or_(DigitalItem.order_id == None, DigitalItem.reserved_until < now),  # noqa: E711
+        )
+        .limit(quantity)
+        .with_for_update()
+    )
+    available = (await db.execute(stmt)).scalars().all()
+
+    if len(available) < quantity:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough stock for product '{product.name_ru}'",
+        )
+
+    for item in available:
+        item.order_id = order.id
+        item.reserved_until = reserved_until
+        db.add(item)
 
 
 async def complete_order(order: Order, db: AsyncSession):

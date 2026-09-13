@@ -18,9 +18,43 @@ class Settings(BaseSettings):
     REVIEWS_CHANNEL_ID: str = ""
     ADMIN_CHAT_ID: str = ""
     
-    # CryptoBot
-    CRYPTOBOT_API_TOKEN: str = ""
-    CRYPTOBOT_TESTNET: bool = True
+    # --- TON Connect -----------------------------------------------------
+    # testnet | mainnet. От этого зависит адрес индексера и сеть кошелька.
+    TON_NETWORK: str = "testnet"
+
+    # Кошелёк платформы, на который приходят платежи покупателей.
+    # Обязателен для приёма оплаты; при пустом значении инициация платежа
+    # отдаёт понятную ошибку, а не молчит.
+    TON_RECEIVING_ADDRESS: str = ""
+
+    # Индексер для проверки транзакций. Пусто -> подставляется по TON_NETWORK.
+    TON_API_BASE: str = ""
+    # Ключ toncenter. Без него работает, но с жёстким лимитом ~1 запрос/сек.
+    TON_API_KEY: str = ""
+
+    # Сколько транзакций забирать за один опрос индексера
+    TON_TX_FETCH_LIMIT: int = 100
+    # Запас по времени при поиске транзакции: платёж мог уйти чуть раньше
+    # фиксации курса или подтвердиться заметно позже истечения счёта
+    TON_LOOKBACK_SECONDS: int = 300
+    TON_LOOKAHEAD_SECONDS: int = 1800
+
+    # Домен для tonconnect-manifest.json (по умолчанию SITE_URL)
+    TONCONNECT_MANIFEST_URL: str = ""
+
+    @property
+    def ton_api_base(self) -> str:
+        if self.TON_API_BASE:
+            return self.TON_API_BASE.rstrip("/")
+        return (
+            "https://testnet.toncenter.com/api/v2"
+            if self.TON_NETWORK == "testnet"
+            else "https://toncenter.com/api/v2"
+        )
+
+    @property
+    def ton_is_testnet(self) -> bool:
+        return self.TON_NETWORK != "mainnet"
     
     # Application
     APP_NAME: str = "Marketplace 2.0"
@@ -55,9 +89,8 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE: int = 5 * 1024 * 1024  # 5MB
     
-    # Referral system
-    REFERRAL_PERCENTAGE: float = 3.0  # 3%
-    
+    # Реферальные проценты переехали в настройки БД (referral_l1_bp) —
+    # заказчик меняет их в админке без передеплоя. См. services/settings_service.py
     # CORS Origins
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",

@@ -49,7 +49,8 @@ class Order(Base):
         nullable=False
     )
     
-    # CryptoBot data
+    # Устаревшее поле от CryptoBot. Не удаляем: в нём лежит история
+    # платежей до перехода на TON Connect.
     cryptobot_invoice_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     payment_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     
@@ -66,6 +67,9 @@ class Order(Base):
         cascade="all, delete-orphan"
     )
     reviews: Mapped[list["Review"]] = relationship("Review", back_populates="order")
+    payments: Mapped[list["Payment"]] = relationship(
+        "Payment", back_populates="order", cascade="all, delete-orphan"
+    )
     
     def __repr__(self) -> str:
         return f"<Order(id={self.id}, user_id={self.user_id}, status={self.status}, total_usdt={self.total_usdt})>"

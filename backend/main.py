@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Marketplace 2.0 API",
     version="1.0.0",
-    description="Crypto Marketplace API with CryptoBot payments",
+    description="Marketplace API. Оплата в TON через TON Connect.",
     lifespan=lifespan
 )
 

@@ -47,6 +47,8 @@ services:
       args:
         - VITE_API_URL=${VITE_API_URL}
         - VITE_BOT_USERNAME=${VITE_BOT_USERNAME:-Marketplace1337bot}
+        - SITE_URL=${SITE_URL:-http://localhost:8080}
+        - APP_NAME=${APP_NAME:-Marketplace}
     container_name: marketplace_frontend
     volumes:
       - frontend-dist:/app/dist

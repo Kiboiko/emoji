@@ -1,30 +1,25 @@
 from pydantic import BaseModel
-from models.order import CurrencyType
-from decimal import Decimal
-from typing import Optional
-
-
-class CreateInvoiceRequest(BaseModel):
-    """Schema for creating CryptoBot invoice"""
-    order_id: str
-    amount: Decimal
-    currency: CurrencyType
-    description: str
-
-
-class InvoiceResponse(BaseModel):
-    """Schema for CryptoBot invoice response"""
-    invoice_id: str
-    pay_url: str
 
 
 class PaymentStatusResponse(BaseModel):
-    """Schema for payment status check"""
+    """Статус оплаты заказа."""
     status: str
     paid: bool
 
 
-class CryptoBotWebhook(BaseModel):
-    """Schema for CryptoBot webhook payload"""
-    update_type: str
-    payload: dict
+class TonTransactionRequest(BaseModel):
+    """
+    Данные для TON Connect sendTransaction.
+
+    Суммы строками, а не числами: JavaScript теряет точность на числах больше
+    2^53, а нанотоны легко выходят за этот предел (1 TON = 1e9, крупный
+    заказ — уже сотни миллиардов).
+    """
+    address: str
+    amount_nano: str
+    amount_ton: str
+    comment: str
+    valid_until: int
+    network: str
+    rate_usd_per_ton: str
+    usd_amount: str
