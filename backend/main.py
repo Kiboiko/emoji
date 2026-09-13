@@ -3,12 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
+import logging
 
 from config import settings
 from database import engine
-from database import Base
 
-# Import all models for table creation
+# Импорт всех моделей: нужен, чтобы SQLAlchemy успела зарегистрировать мапперы
+# до первого обращения (строковые ссылки в relationship разрешаются только
+# среди импортированных классов).
 from models import *
 
 # Import routers
@@ -16,6 +18,45 @@ from routes import auth, products, categories, cart, orders, payments, reviews, 
 
 
 from services.scheduler import start_scheduler, shutdown_scheduler
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+def _read_db_revision(sync_conn):
+    from alembic.runtime.migration import MigrationContext
+    return MigrationContext.configure(sync_conn).get_current_revision()
+
+
+async def _verify_schema_is_current() -> None:
+    """
+    Проверяет, что накатаны все миграции.
+
+    Раньше схему молча досоздавал create_all(), и рассинхрон БД с кодом
+    обнаруживался уже в бою, случайной ошибкой в рантайме. Лучше не стартовать
+    вовсе и сказать, что делать.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    script = ScriptDirectory.from_config(Config(str(Path(__file__).parent / "alembic.ini")))
+    expected = script.get_current_head()
+
+    async with engine.connect() as conn:
+        actual = await conn.run_sync(_read_db_revision)
+
+    if actual == expected:
+        logger.info("Схема БД актуальна (revision %s)", actual)
+        return
+
+    raise RuntimeError(
+        f"Схема БД не соответствует коду: в базе revision={actual or 'отсутствует'}, "
+        f"ожидается {expected}. Выполните `alembic upgrade head` перед запуском."
+    )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,10 +66,18 @@ async def lifespan(app: FastAPI):
     upload_dir = Path(settings.UPLOAD_DIR)
     (upload_dir / "products").mkdir(parents=True, exist_ok=True)
     
-    # Create database tables (in production, use Alembic migrations)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        
+    # Схема БД управляется ТОЛЬКО Alembic: `alembic upgrade head`.
+    #
+    # Здесь раньше вызывался Base.metadata.create_all(). Из-за него три таблицы
+    # (digital_items, payments, withdrawals) жили без единой миграции, история
+    # Alembic разошлась с реальной схемой, а autogenerate начал предлагать
+    # удаление колонок. Создание таблиц в обход миграций возвращает эту
+    # проблему, поэтому вызов убран намеренно — не возвращать.
+    #
+    # Вместо молчаливого создания таблиц проверяем, что миграции накатаны,
+    # и падаем на старте с внятной ошибкой, если нет.
+    await _verify_schema_is_current()
+
     # Start background scheduler
     start_scheduler()
     
