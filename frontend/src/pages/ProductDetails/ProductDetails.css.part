@@ -1,0 +1,48 @@
+.service-input-block {
+    margin: 24px 0;
+    padding: 16px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.service-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.required {
+    color: var(--accent-error);
+    margin-left: 4px;
+}
+
+.service-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 15px;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.service-input:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+.service-input.error {
+    border-color: var(--accent-error);
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.error-message {
+    color: var(--accent-error);
+    font-size: 12px;
+    margin-top: 6px;
+}

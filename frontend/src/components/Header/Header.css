@@ -1,0 +1,127 @@
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.header-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.search-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+}
+
+.search-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+}
+
+.search-input {
+    width: 100%;
+    height: 48px;
+    padding: 0 16px 0 44px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 15px;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.search-input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.search-input:focus {
+    border-color: var(--accent-primary);
+    background: var(--bg-card);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.icon-btn:hover {
+    background: var(--bg-tertiary);
+    transform: scale(1.05);
+}
+
+.icon-btn:active {
+    transform: scale(0.95);
+}
+
+.lang-code {
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    font-size: 8px;
+    font-weight: 700;
+    color: var(--accent-primary);
+}
+
+/* Page title in header - mobile only */
+.header-page-title {
+    display: none;
+}
+
+/* Mobile styles - apply ONLY on iOS/Android platforms */
+html[data-platform="ios"] .header,
+html[data-platform="android"] .header {
+    margin-top: 0;
+    margin-bottom: 12px;
+    margin-left: 0;
+    margin-right: 0;
+    border-radius: 0;
+    padding: calc(env(safe-area-inset-top, 0px) + 48px) 16px 16px 16px;
+    position: sticky;
+    top: 0;
+}
+
+html[data-platform="ios"] .header-page-title,
+html[data-platform="android"] .header-page-title {
+    display: block;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+html[data-platform="ios"] .header-page-title h1,
+html[data-platform="android"] .header-page-title h1 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+}
+
+html[data-platform="ios"] .header-row,
+html[data-platform="android"] .header-row {
+    margin-top: 20px;
+}

@@ -1,0 +1,45 @@
+from pydantic import BaseModel, Field, ConfigDict
+from uuid import UUID
+from datetime import datetime
+from typing import Optional
+
+
+class UserBase(BaseModel):
+    """Base user schema"""
+    username: Optional[str] = None
+    first_name: str
+    language_code: str = "ru"
+
+
+class UserCreate(UserBase):
+    """Schema for creating a user"""
+    telegram_id: int
+    referral_code: str
+    referrer_id: Optional[UUID] = None
+
+
+class UserUpdate(BaseModel):
+    """Schema for updating a user"""
+    username: Optional[str] = None
+    first_name: Optional[str] = None
+    language_code: Optional[str] = None
+
+
+class UserResponse(UserBase):
+    """Schema for user response"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: UUID
+    telegram_id: int
+    is_admin: bool
+    referral_code: str
+    referral_earnings: float
+    created_at: datetime
+
+
+class ReferralStats(BaseModel):
+    """Schema for referral statistics"""
+    referral_code: str
+    referral_count: int
+    total_earnings: float
+    referrals: list[dict]  # List of referrals with their purchases
