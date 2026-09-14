@@ -13,9 +13,12 @@ from models.order import Order, OrderStatus, OrderItem
 from models.cart import CartItem
 from models.product import Product
 from models.digital_item import DigitalItem
+from models.payment import Payment, PaymentStatus
+from models.subscription import Channel, SubscriptionPlan
 from schemas.order import OrderCreate, OrderResponse
 from utils.auth import get_current_user, require_admin
-from services import payment_service, settings_service
+from services import payment_service, settings_service, subscription_service
+from services.money import to_minor
 from services.telegram_service import telegram_service
 from services.referral_service import process_referral_commission
 from utils.websockets import manager
@@ -237,6 +240,81 @@ async def _reserve_digital_items(
         db.add(item)
 
 
+async def _activate_subscriptions(
+    db: AsyncSession, order: Order, user: User, items: list[OrderItem]
+) -> list[tuple[str, str]]:
+    """
+    Активирует подписки из заказа и начисляет авторам их долю.
+
+    Сумма к разделу берётся из фактически поступившего платежа, а не из цены в
+    USD: курс на момент оплаты уже зафиксирован, и пересчитывать его заново
+    значило бы начислить автору не то, что реально пришло.
+
+    Доля позиции считается пропорционально её стоимости в заказе. Округление
+    вниз оставляет копеечный остаток платформе — так автору никогда не
+    начислится больше, чем поступило.
+
+    Возвращает пары (название канала, инвайт-ссылка) для уведомления.
+    """
+    sub_items = [i for i in items if i.product_snapshot.get("type") == "subscription"]
+    if not sub_items:
+        return []
+
+    payment = (
+        await db.execute(
+            select(Payment)
+            .where(Payment.order_id == order.id, Payment.status == PaymentStatus.CONFIRMED)
+            .order_by(Payment.completed_at.desc())
+        )
+    ).scalars().first()
+
+    received_nano = (payment.received_nano or payment.amount_nano) if payment else 0
+    total_cents = to_minor(Decimal(str(order.total_usdt)), "USD")
+
+    invites: list[tuple[str, str]] = []
+
+    for item in sub_items:
+        plan_id = (item.product_snapshot.get("content_data") or {}).get("subscription_plan_id")
+        if not plan_id:
+            logger.error(
+                "[ORDER] У позиции подписки %s нет subscription_plan_id — доступ не выдан",
+                item.id,
+            )
+            continue
+
+        plan = await db.get(SubscriptionPlan, uuid.UUID(plan_id))
+        if plan is None:
+            logger.error("[ORDER] Тариф %s не найден, доступ не выдан", plan_id)
+            continue
+
+        channel = await db.get(Channel, plan.channel_id)
+        if channel is None:
+            logger.error("[ORDER] Канал тарифа %s не найден", plan_id)
+            continue
+
+        subscription = await subscription_service.activate_or_extend(
+            db, user=user, plan=plan, order_id=order.id, quantity=item.quantity,
+        )
+
+        if received_nano and total_cents:
+            item_cents = to_minor(
+                Decimal(str(item.price_usdt)) * item.quantity, "USD"
+            )
+            item_nano = received_nano * item_cents // total_cents
+            await subscription_service.split_subscription_payment(
+                db,
+                channel=channel,
+                order_id=order.id,
+                amount_nano=item_nano,
+                key_suffix=str(item.id),
+            )
+
+        if subscription.invite_link:
+            invites.append((channel.title, subscription.invite_link))
+
+    return invites
+
+
 async def complete_order(order: Order, db: AsyncSession):
     """Complete order after successful payment"""
     # Update order status
@@ -269,12 +347,29 @@ async def complete_order(order: Order, db: AsyncSession):
         item.reserved_until = None
         db.add(item)
 
+    # Подписки: активируем доступ в канал и делим сумму с автором
+    subscription_invites = await _activate_subscriptions(db, order, user, items)
+
     # Mark as completed ONLY if no service items (digital/instruction are instant)
     if not has_service_items:
         order.status = OrderStatus.COMPLETED
-    
+
     await db.commit()
     
+    # Ссылки на закрытые каналы отправляем отдельно: ссылка одноразовая и с
+    # ограниченным сроком, поэтому она не должна потеряться среди прочих
+    # сообщений о покупке.
+    for channel_title, invite_link in subscription_invites:
+        try:
+            await telegram_service.send_message(
+                user.telegram_id,
+                f"Подписка на «{channel_title}» оформлена.\n\n"
+                f"Ссылка для входа (одноразовая, действует сутки):\n{invite_link}",
+                parse_mode=None,
+            )
+        except Exception as e:
+            logger.error("[ORDER] Не удалось отправить инвайт-ссылку: %s", e)
+
     # Send purchase data to user (non-blocking, if fails order still completed)
     try:
         for order_item in items:
@@ -282,6 +377,10 @@ async def complete_order(order: Order, db: AsyncSession):
             product_type = order_item.product_snapshot.get("type", "service")
             content_data = order_item.product_snapshot.get("content_data", {})
             quantity = order_item.quantity
+
+            # Подписка: пользователь уже получил ссылку выше, дублировать не надо
+            if product_type == "subscription":
+                continue
             
             # For digital items, fetch actual purchased items
             digital_items_content = []

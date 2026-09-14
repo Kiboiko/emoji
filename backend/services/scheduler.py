@@ -151,6 +151,24 @@ async def poll_ton_payments():
             await db.rollback()
 
 
+async def process_subscriptions():
+    """
+    Истечение подписок и напоминания.
+
+    Раз в час, а не чаще: доступ в канал не требует посекундной точности, а
+    каждый прогон — это вызовы Telegram API по каждой истёкшей подписке.
+    """
+    from services import subscription_service
+
+    async with AsyncSessionLocal() as db:
+        try:
+            await subscription_service.expire_due_subscriptions(db)
+            await subscription_service.send_expiry_reminders(db)
+        except Exception as e:
+            logger.exception("[SCHEDULER] Обработка подписок упала: %s", e)
+            await db.rollback()
+
+
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(
@@ -163,6 +181,12 @@ def start_scheduler():
             poll_ton_payments,
             trigger=IntervalTrigger(seconds=15),
             id="poll_ton_payments",
+            replace_existing=True
+        )
+        scheduler.add_job(
+            process_subscriptions,
+            trigger=IntervalTrigger(hours=1),
+            id="process_subscriptions",
             replace_existing=True
         )
         scheduler.add_job(

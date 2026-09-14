@@ -122,3 +122,17 @@ export interface AuthResponse {
 
 export type Theme = 'light' | 'dark';
 export type Language = 'ru' | 'en';
+
+export interface MySubscription {
+    id: string;
+    channel_id: string;
+    channel_title: string | null;
+    plan_title: string | null;
+    status: 'pending' | 'active' | 'expired' | 'revoked';
+    started_at: string | null;
+    expires_at: string | null;
+    days_left: number | null;
+    joined: boolean;
+    /** Одноразовая ссылка. null, если уже использована или истекла. */
+    invite_link: string | null;
+}

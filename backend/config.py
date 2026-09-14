@@ -81,6 +81,10 @@ class Settings(BaseSettings):
     LOGIN_MAX_ATTEMPTS: int = 10
     LOGIN_ATTEMPT_WINDOW_SECONDS: int = 300
 
+    # Общий секрет для внутреннего API (бот -> бэкенд).
+    # Пустое значение НЕ означает "пускать всех": эндпоинты отдают 503.
+    INTERNAL_API_TOKEN: str = ""
+
     # Admin Credentials
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "change_me"

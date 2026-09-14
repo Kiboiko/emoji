@@ -4,6 +4,7 @@ import { Copy, Clock, Download, X, Wallet, ChevronDown, ChevronUp, Star, Check }
 import { usersApi, ordersApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useTelegram } from '@/hooks/useTelegram';
+import { MySubscriptions } from '@/components/MySubscriptions/MySubscriptions';
 import type { ReferralStats, Order } from '@/types';
 import './Profile.css';
 
@@ -272,6 +273,8 @@ export const Profile: React.FC = () => {
                 </div>
 
                 {/* Orders Section */}
+                <MySubscriptions />
+
                 <div className="orders-section glass-card">
                     <h2>{language === 'ru' ? 'Мои заказы' : 'My Orders'}</h2>
 

@@ -27,6 +27,10 @@ from .finance import (
     Account, AccountOwnerType, LedgerEntry, LedgerEntryType, LedgerRefType,
 )
 from .app_setting import AppSetting
+from .subscription import (
+    AccessAction, Channel, ChannelStatus, Subscription, SubscriptionAccessLog,
+    SubscriptionPlan, SubscriptionStatus,
+)
 
 __all__ = [
     "User",
@@ -50,4 +54,11 @@ __all__ = [
     "LedgerEntryType",
     "LedgerRefType",
     "AppSetting",
+    "Channel",
+    "ChannelStatus",
+    "SubscriptionPlan",
+    "Subscription",
+    "SubscriptionStatus",
+    "SubscriptionAccessLog",
+    "AccessAction",
 ]

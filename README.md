@@ -99,6 +99,7 @@ docker compose -f docker-compose.yml up -d
 | `TON_NETWORK` | `mainnet` | Сеть TON. Сейчас настроен `testnet` |
 | `TON_RECEIVING_ADDRESS` | адрес кошелька | Куда приходят платежи. Пусто — приём оплаты отдаёт 503 |
 | `TON_API_KEY` | ключ toncenter | Без него лимит ~1 запрос/сек |
+| `INTERNAL_API_TOKEN` | случайный | Секрет для связи бот → бэкенд. Пусто — внутренний API отдаёт 503 |
 
 ### Оплата в TON
 
@@ -123,6 +124,7 @@ docker compose -f docker-compose.yml up -d
 | `docs/STAGE-1-REPORT.md` | Приведение миграций в порядок |
 | `docs/STAGE-2-REPORT.md` | Финансовый слой: счета, журнал, сверка, настройки |
 | `docs/STAGE-3-REPORT.md` | Оплата в TON через TON Connect |
+| `docs/STAGE-4-REPORT.md` | Подписки на закрытые каналы |
 | `docs/db/` | Дампы схемы: до и после этапа 1 |
 
 ---

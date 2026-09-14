@@ -193,6 +193,27 @@ export const usersApi = {
     },
 };
 
+// Subscriptions API
+export const subscriptionsApi = {
+    // Каталог каналов с активными тарифами
+    getChannels: async () => {
+        const response = await apiClient.get('/subscriptions/channels');
+        return response.data;
+    },
+
+    getMySubscriptions: async () => {
+        const response = await apiClient.get('/subscriptions/my');
+        return response.data;
+    },
+
+    // Ссылка одноразовая и живёт сутки — пользователь вполне может не успеть
+    // перейти, поэтому её можно перевыпустить пока подписка активна
+    reissueInvite: async (subscriptionId: string) => {
+        const response = await apiClient.post(`/subscriptions/${subscriptionId}/invite`);
+        return response.data;
+    },
+};
+
 // Withdrawals API
 export const withdrawalsApi = {
     requestWithdrawal: async (data: { amount: number; wallet: string }) => {

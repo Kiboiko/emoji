@@ -99,3 +99,33 @@ async def user_factory(db):
         return user
 
     return make
+
+
+@pytest.fixture
+async def order_factory(db, user_factory):
+    """
+    Создаёт реальный заказ.
+
+    Нужен, потому что подписки и проводки ссылаются на orders по внешнему
+    ключу: подставить случайный UUID нельзя, и это правильно — иначе в
+    журнале появлялись бы ссылки в никуда.
+    """
+    import uuid as _uuid
+    from decimal import Decimal
+    from models.order import CurrencyType, Order, OrderStatus
+
+    async def make(user=None, total_usdt="10.00", **kwargs):
+        owner = user or await user_factory()
+        order = Order(
+            id=_uuid.uuid4(),
+            user_id=owner.id,
+            total_usdt=Decimal(total_usdt),
+            currency=kwargs.pop("currency", CurrencyType.TON),
+            status=kwargs.pop("status", OrderStatus.PENDING),
+            **kwargs,
+        )
+        db.add(order)
+        await db.flush()
+        return order
+
+    return make

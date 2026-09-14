@@ -1,4 +1,5 @@
 import httpx
+import time
 from typing import List, Union
 from config import settings
 
@@ -243,3 +244,118 @@ class TelegramService:
 
 # Global instance
 telegram_service = TelegramService()
+
+
+# ===========================================================================
+# Управление доступом в закрытые каналы (подписки)
+#
+# Важное ограничение Bot API, определяющее всю схему: бот НЕ МОЖЕТ добавить
+# пользователя в чат по user_id. Метода addChatMember в Bot API не существует
+# (он есть только в клиентском MTProto). Единственный способ выдать доступ —
+# создать персональную одноразовую инвайт-ссылку, по которой человек войдёт
+# сам.
+# ===========================================================================
+
+class TelegramApiError(Exception):
+    """Ошибка Bot API с сохранённым описанием — его пишем в журнал доступа."""
+
+    def __init__(self, method: str, description: str, error_code: int | None = None):
+        self.method = method
+        self.description = description
+        self.error_code = error_code
+        super().__init__(f"{method}: {description}")
+
+
+async def _call(method: str, payload: dict) -> dict:
+    """Вызов Bot API с разбором telegram-ответа."""
+    url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/{method}"
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.post(url, json=payload)
+
+    try:
+        data = response.json()
+    except ValueError:
+        raise TelegramApiError(method, f"не-JSON ответ, HTTP {response.status_code}")
+
+    if not data.get("ok"):
+        raise TelegramApiError(
+            method,
+            data.get("description", "unknown error"),
+            data.get("error_code"),
+        )
+    return data["result"]
+
+
+class ChannelAccessService:
+    """Операции с закрытыми каналами авторов."""
+
+    REQUIRED_RIGHTS = ("can_invite_users", "can_restrict_members")
+
+    async def get_chat(self, chat_id: int | str) -> dict:
+        return await _call("getChat", {"chat_id": chat_id})
+
+    async def check_bot_is_admin(self, chat_id: int | str) -> tuple[bool, str | None]:
+        """
+        Проверяет, что бот — администратор канала с нужными правами.
+
+        Без can_invite_users бот не сможет выдать доступ, без
+        can_restrict_members — отозвать его по истечении подписки. Поэтому
+        канал без обоих прав публиковать нельзя: подписки на нём будут
+        продаваться, а работать не будут.
+        """
+        try:
+            me = await _call("getMe", {})
+            member = await _call(
+                "getChatMember", {"chat_id": chat_id, "user_id": me["id"]}
+            )
+        except TelegramApiError as e:
+            return False, e.description
+
+        if member.get("status") != "administrator":
+            return False, f"бот не администратор канала (статус: {member.get('status')})"
+
+        missing = [r for r in self.REQUIRED_RIGHTS if not member.get(r)]
+        if missing:
+            return False, f"боту не хватает прав: {', '.join(missing)}"
+
+        return True, None
+
+    async def create_invite_link(
+        self, chat_id: int | str, *, expire_seconds: int = 86400, name: str | None = None
+    ) -> dict:
+        """
+        Персональная одноразовая ссылка-приглашение.
+
+        member_limit=1 — ссылка сгорает после первого входа, чтобы её нельзя
+        было передать другому. member_limit и creates_join_request
+        взаимоисключающие, поэтому заявки на вступление здесь не используем.
+        """
+        payload = {
+            "chat_id": chat_id,
+            "member_limit": 1,
+            "expire_date": int(time.time()) + expire_seconds,
+        }
+        if name:
+            payload["name"] = name[:32]  # Telegram ограничивает длину имени
+        return await _call("createChatInviteLink", payload)
+
+    async def revoke_invite_link(self, chat_id: int | str, invite_link: str) -> None:
+        await _call("revokeChatInviteLink", {"chat_id": chat_id, "invite_link": invite_link})
+
+    async def kick_member(self, chat_id: int | str, user_id: int) -> None:
+        """
+        Удаляет пользователя из канала.
+
+        Два вызова подряд не избыточны: banChatMember оставляет человека в
+        вечном бане, и он не сможет купить подписку повторно.
+        unbanChatMember с only_if_banned снимает бан, не трогая тех, кто
+        забанен администрацией за нарушения.
+        """
+        await _call("banChatMember", {"chat_id": chat_id, "user_id": user_id})
+        await _call(
+            "unbanChatMember",
+            {"chat_id": chat_id, "user_id": user_id, "only_if_banned": True},
+        )
+
+
+channel_access = ChannelAccessService()

@@ -1,0 +1,122 @@
+.subscriptions-section {
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.subscriptions-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+}
+
+.subscriptions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.subscription-item {
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.subscription-item.status-expired,
+.subscription-item.status-revoked {
+    opacity: 0.65;
+}
+
+.subscription-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.subscription-channel {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+    /* Длинные названия каналов не должны ломать карточку */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.subscription-badge {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.badge-active {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-success);
+}
+
+.badge-expired,
+.badge-revoked {
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+}
+
+.badge-pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--accent-warning);
+}
+
+.subscription-plan {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.subscription-expiry {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.days-left {
+    color: var(--text-secondary);
+}
+
+.subscription-actions {
+    margin-top: 10px;
+}
+
+.subscription-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--gradient-primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.subscription-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.subscription-joined {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--accent-success);
+}
