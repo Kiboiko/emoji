@@ -204,10 +204,13 @@ async def fetch_incoming_transactions(limit: int | None = None) -> list[OnChainT
     сопоставления и не требует разбора ячеек.
     """
     address = require_receiving_address()
+    # Параметр archival сюда НЕ передаём: toncenter отвечает 500 на
+    # `archival=false`, хотя тот же запрос без него отрабатывает нормально.
+    # Поведение по умолчанию (нежёсткий узел) нас устраивает — нужны свежие
+    # транзакции, а не глубокая история.
     params = {
         "address": address,
         "limit": limit or settings.TON_TX_FETCH_LIMIT,
-        "archival": "false",
     }
     if settings.TON_API_KEY:
         params["api_key"] = settings.TON_API_KEY
