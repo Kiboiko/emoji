@@ -13,6 +13,10 @@ import { Checkout } from './pages/Checkout/Checkout';
 import { ProductDetails } from './pages/ProductDetails/ProductDetails';
 import { Profile } from './pages/Profile/Profile';
 
+// Dev-вход без Telegram. Включается только на локальной сборке
+// (VITE_DEV_AUTH=true) и дополнительно требует DEBUG=true на бэкенде.
+const DEV_AUTH_ENABLED = import.meta.env.VITE_DEV_AUTH === 'true';
+
 // Placeholder components for other pages
 const Orders = () => <div className="container" style={{ padding: '20px' }}>Orders Page (Coming Soon)</div>;
 
@@ -77,6 +81,21 @@ export const App: React.FC = () => {
     const authenticate = async () => {
         try {
             if (!initData) {
+                // Локальная разработка: без Telegram initData витрину иначе
+                // вообще не открыть в браузере. Закрыто ДВУМЯ независимыми
+                // флагами — VITE_DEV_AUTH на сборке фронта и DEBUG на бэкенде
+                // (при DEBUG=false эндпоинта /api/auth/dev не существует).
+                // В production не включается ни один из них.
+                if (DEV_AUTH_ENABLED) {
+                    console.warn('[DEV] initData нет — вход через /api/auth/dev');
+                    const response = await authApi.authenticateDev();
+                    setAccessToken(response.access_token);
+                    setUser(response.user);
+                    useCartStore.getState().fetchCart();
+                    setIsAuthenticating(false);
+                    return;
+                }
+
                 console.warn('No Telegram initData available');
                 setIsAuthenticating(false);
                 return;
@@ -120,7 +139,7 @@ export const App: React.FC = () => {
         );
     }
 
-    if (!initData) {
+    if (!initData && !DEV_AUTH_ENABLED) {
         return (
             <div style={{
                 display: 'flex',

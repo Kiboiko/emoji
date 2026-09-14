@@ -48,6 +48,13 @@ export const authApi = {
         return response.data;
     },
 
+    // Только для локальной разработки. На бэкенде роут существует лишь при
+    // DEBUG=true, на проде запрос вернёт 404.
+    authenticateDev: async () => {
+        const response = await apiClient.post('/auth/dev');
+        return response.data;
+    },
+
     getCurrentUser: async () => {
         const response = await apiClient.get('/auth/me');
         return response.data;
