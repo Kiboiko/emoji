@@ -49,6 +49,56 @@ async def command_start_handler(message: types.Message, command: CommandObject):
     )
 
 
+@dp.my_chat_member()
+async def on_bot_status_changed(update: types.ChatMemberUpdated):
+    """
+    Бота добавили или убрали из канала.
+
+    Зачем: chat_id закрытого канала иначе никак не узнать — по инвайт-ссылке
+    Bot API его не отдаёт, а пересылать пост в сторонний бот ради этого
+    неудобно. Поэтому бот сам сообщает ID тому, кто его назначил, — этот ID
+    автор вставляет в приложение при подключении канала.
+    """
+    chat = update.chat
+    status = update.new_chat_member.status
+
+    if chat.type not in ("channel", "supergroup", "group"):
+        return
+
+    logger.info("Статус бота в %s (%s) изменён на %s", chat.title, chat.id, status)
+
+    if status != "administrator":
+        return
+
+    rights = update.new_chat_member
+    can_invite = getattr(rights, "can_invite_users", False)
+    can_restrict = getattr(rights, "can_restrict_members", False)
+
+    lines = [
+        f"Бот добавлен администратором в «{chat.title}».",
+        "",
+        f"ID канала: {chat.id}",
+        "",
+        "Права:",
+        f"  приглашать участников — {'есть' if can_invite else 'НЕТ'}",
+        f"  блокировать участников — {'есть' if can_restrict else 'НЕТ'}",
+    ]
+    if not (can_invite and can_restrict):
+        lines += [
+            "",
+            "Без обоих прав подписки работать не будут: без первого нельзя "
+            "выдать доступ, без второго — отозвать его по истечении срока.",
+        ]
+    else:
+        lines += ["", "Всё готово. Вставьте ID канала в приложении при подключении."]
+
+    try:
+        await bot.send_message(update.from_user.id, chr(10).join(lines))
+    except Exception as e:
+        # Пользователь мог не начинать диалог с ботом — тогда писать ему нельзя
+        logger.warning("Не удалось уведомить %s о назначении: %s", update.from_user.id, e)
+
+
 @dp.chat_member()
 async def on_chat_member_update(update: types.ChatMemberUpdated):
     """

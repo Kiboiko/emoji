@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 from database import get_db
 from models.finance import Account, LedgerEntry, LedgerEntryType, LedgerRefType
 from models.user import User
-from services import finance_service, settings_service
+from services import finance_service, payment_service, settings_service
 from services.money import from_minor
 from utils.auth import require_admin
 
@@ -190,3 +190,27 @@ async def run_reconcile(
             for i in report.issues
         ],
     }
+
+
+@router.post("/finance/ton/scan-unmatched")
+async def scan_unmatched_payments(
+    limit: int = Query(100, ge=1, le=500),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Поиск потерянных платежей.
+
+    Поллер ищет транзакции в ограниченном окне — иначе он перебирал бы всю
+    историю просроченных счетов при каждом прогоне. Но перевод может прийти
+    и через несколько часов после истечения счёта, и тогда деньги молча
+    зависают на кошельке платформы.
+
+    Эта кнопка сопоставляет транзакции с платежами любого возраста по
+    уникальному комментарию и доводит их до конца: товар по отменённому
+    заказу не выдаётся, сумма зачисляется на внутренний баланс покупателя.
+    """
+    try:
+        return await payment_service.scan_unmatched_transactions(db, limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Индексер недоступен: {e}")

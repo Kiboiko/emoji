@@ -69,7 +69,15 @@ async def create_or_refresh_payment(db: AsyncSession, order: Order) -> Payment:
         logger.info("[PAY] Счёт %s просрочен, выставляем новый", existing.id)
 
     rate = await ton_service.get_rate(db)
-    ttl = await settings_service.get_int(db, "ton_rate_ttl_sec")
+
+    # Срок счёта = сроку жизни заказа, а не времени кеширования курса.
+    # Раньше здесь стоял ton_rate_ttl_sec (15 мин), из-за чего счёт протухал
+    # вдвое раньше, чем отменялся сам заказ и освобождался резерв товара
+    # (order_payment_ttl_min, 30 мин). Пользователь видел «время вышло» при
+    # живом заказе. Курс при этом фиксируется на весь срок счёта — это
+    # обещание цены покупателю, а ton_rate_ttl_sec управляет лишь тем, как
+    # часто мы обновляем курс из внешнего источника.
+    ttl_minutes = await settings_service.get_int(db, "order_payment_ttl_min")
 
     usd_amount = Decimal(str(order.total_usdt))
     amount_nano = ton_service.usd_to_nano(usd_amount, rate)
@@ -84,7 +92,7 @@ async def create_or_refresh_payment(db: AsyncSession, order: Order) -> Payment:
         usd_amount=usd_amount,
         rate_usd_per_ton=rate,
         rate_locked_at=now,
-        expires_at=now + timedelta(seconds=ttl),
+        expires_at=now + timedelta(minutes=ttl_minutes),
         destination_address=address,
         payment_comment=ton_service.generate_payment_comment(),
         status=PaymentStatus.PENDING,
@@ -123,7 +131,12 @@ async def verify_payment(db: AsyncSession, payment: Payment) -> PaymentStatus:
     Возвращает актуальный статус. Идемпотентна: повторный вызов по уже
     подтверждённому платежу ничего не меняет.
     """
-    if payment.status in (PaymentStatus.CONFIRMED, PaymentStatus.EXPIRED):
+    # Терминален только CONFIRMED. EXPIRED — НЕ повод перестать проверять:
+    # пользователь вполне может отправить перевод через минуту после того,
+    # как счёт протух. Деньги уже ушли из его кошелька, и если мы перестанем
+    # искать транзакцию, они просто зависнут на кошельке платформы.
+    # Такой платёж зачисляется на внутренний баланс пользователя (см. _confirm).
+    if payment.status == PaymentStatus.CONFIRMED:
         return payment.status
 
     txs = await ton_service.fetch_incoming_transactions()
@@ -329,10 +342,17 @@ async def poll_pending_payments(db: AsyncSession) -> int:
     now = datetime.utcnow()
     window_slack = timedelta(seconds=settings.TON_LOOKAHEAD_SECONDS)
 
+    # EXPIRED сюда включён намеренно. Перевод мог уйти в сеть за секунду до
+    # истечения счёта или чуть позже: деньги из кошелька покупателя уже ушли,
+    # и перестать их искать значит потерять платёж. Окно ограничено
+    # TON_LOOKAHEAD_SECONDS — столько же, сколько окно поиска транзакции,
+    # иначе поллер вечно перебирал бы всю историю просроченных счетов.
     pending = (
         await db.execute(
             select(Payment).where(
-                Payment.status.in_([PaymentStatus.PENDING, PaymentStatus.SEEN]),
+                Payment.status.in_([
+                    PaymentStatus.PENDING, PaymentStatus.SEEN, PaymentStatus.EXPIRED,
+                ]),
                 Payment.expires_at > now - window_slack,
             )
         )
@@ -353,7 +373,12 @@ async def poll_pending_payments(db: AsyncSession) -> int:
     for payment in pending:
         tx = by_comment.get(payment.payment_comment)
         if tx is None:
-            if payment.expires_at and payment.expires_at < now:
+            # Уже просроченные помечать повторно незачем
+            if (
+                payment.status != PaymentStatus.EXPIRED
+                and payment.expires_at
+                and payment.expires_at < now
+            ):
                 await _handle_expired(db, payment)
                 processed += 1
             continue
@@ -365,3 +390,80 @@ async def poll_pending_payments(db: AsyncSession) -> int:
             await db.rollback()
 
     return processed
+
+
+async def scan_unmatched_transactions(db: AsyncSession, *, limit: int = 100) -> dict:
+    """
+    Ищет на кошельке платформы переводы, которые не привязаны ни к одному
+    подтверждённому платежу, и доводит их до конца.
+
+    Зачем нужно отдельно от поллера: поллер работает в ограниченном временнóм
+    окне, иначе он перебирал бы всю историю просроченных счетов при каждом
+    прогоне. Но перевод может прийти и через несколько часов после истечения
+    счёта — кошелёк лежал, человек отвлёкся. Деньги при этом уже ушли из его
+    кошелька и молча зависают у нас.
+
+    Этот метод запускается админом по кнопке и окна не имеет: он сопоставляет
+    транзакции с платежами ЛЮБОГО возраста по уникальному комментарию.
+
+    Заказ к этому моменту обычно уже отменён, поэтому сумма попадает на
+    внутренний баланс покупателя (см. _confirm -> _credit_cancelled_order).
+    """
+    txs = await ton_service.fetch_incoming_transactions(limit=limit)
+    by_comment = {tx.comment: tx for tx in txs if tx.comment.startswith("MP-")}
+
+    if not by_comment:
+        return {"scanned": len(txs), "matched": 0, "settled": [], "orphans": []}
+
+    payments = (
+        await db.execute(
+            select(Payment).where(Payment.payment_comment.in_(list(by_comment.keys())))
+        )
+    ).scalars().all()
+    by_key = {p.payment_comment: p for p in payments}
+
+    settled: list[dict] = []
+    orphans: list[str] = []
+
+    for comment, tx in by_comment.items():
+        payment = by_key.get(comment)
+        if payment is None:
+            # Комментарий нашего формата, но платежа нет: счёт удалили или
+            # перевод сделан с чужим комментарием. Разбирается вручную.
+            orphans.append(comment)
+            continue
+
+        if payment.status == PaymentStatus.CONFIRMED:
+            continue
+        if tx.value_nano < (payment.amount_nano or 0):
+            await _handle_underpaid(db, payment, tx)
+            continue
+
+        payment.tx_hash = tx.tx_hash
+        payment.tx_lt = tx.lt
+        payment.from_address = tx.source
+        payment.received_nano = tx.value_nano
+        payment.seen_at = payment.seen_at or datetime.utcnow()
+
+        try:
+            await _confirm(db, payment, tx.value_nano)
+        except Exception as e:
+            logger.exception("[PAY] Не удалось зачесть потерянный платёж %s: %s",
+                             payment.id, e)
+            await db.rollback()
+            continue
+
+        settled.append({
+            "payment_id": str(payment.id),
+            "order_id": str(payment.order_id),
+            "comment": comment,
+            "received_nano": tx.value_nano,
+        })
+        logger.warning("[PAY] Потерянный платёж %s зачтён вручную", payment.id)
+
+    return {
+        "scanned": len(txs),
+        "matched": len(by_comment),
+        "settled": settled,
+        "orphans": orphans,
+    }
