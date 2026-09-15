@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
+from sqlalchemy import select
+
 import pytest
 
 from models.finance import LedgerEntryType
@@ -254,3 +256,91 @@ class TestExpiry:
             await subs.expire_due_subscriptions(db)
 
         assert sub.status == SubscriptionStatus.EXPIRED
+
+
+class TestOrderWiring:
+    """
+    Регрессия: сплит вызывается из complete_order.
+
+    Баг, найденный на реальном платеже: _activate_subscriptions искала сумму
+    платежа запросом к БД, но в проекте autoflush=False — статус платежа,
+    выставленный вызывающим кодом, ещё не был записан, запрос ничего не
+    находил, и начисление автору молча пропускалось. Тесты это не ловили,
+    потому что проверяли split_subscription_payment напрямую, в обход связки.
+    """
+
+    async def _order_with_subscription(self, db, buyer, plan, order_factory):
+        import uuid as _uuid
+        from decimal import Decimal as D
+        from models.order import OrderItem
+
+        order = await order_factory(buyer, total_usdt="0.10")
+        item = OrderItem(
+            id=_uuid.uuid4(),
+            order_id=order.id,
+            product_id=None,
+            quantity=1,
+            price_usdt=D("0.10"),
+            product_snapshot={
+                "name_ru": "Подписка", "name_en": "Subscription",
+                "type": "subscription",
+                "content_data": {"subscription_plan_id": str(plan.id)},
+            },
+        )
+        db.add(item)
+        await db.flush()
+        return order, item
+
+    async def test_split_happens_when_amount_passed(
+        self, db, user_factory, order_factory, plan, channel
+    ):
+        from routes.orders import _activate_subscriptions
+        from services import finance_service as fin
+
+        buyer = await user_factory(username="sub_buyer")
+        order, item = await self._order_with_subscription(db, buyer, plan, order_factory)
+
+        received = 74_626_866
+        platform = await fin.platform_account(db, TON)
+        await fin.deposit_from_external(
+            db, account=platform, amount_minor=received,
+            ref_type=fin.LedgerRefType.ORDER, ref_id=order.id,
+        )
+
+        with patch.object(subs, "issue_invite", AsyncMock(return_value=None)):
+            await _activate_subscriptions(db, order, buyer, [item], received)
+
+        author = await fin.user_account(db, channel.owner_user_id, TON)
+        # 2% платформе, остальное автору — ровно как в примере из ТЗ
+        assert author.balance_minor == 73_134_329
+        assert platform.balance_minor == 1_492_537
+
+        report = await fin.reconcile(db)
+        assert report.ok
+
+    async def test_no_amount_still_activates_but_skips_split(
+        self, db, user_factory, order_factory, plan, channel
+    ):
+        """
+        Подписку всё равно выдаём: покупатель заплатил. Но автору ничего не
+        начисляем вслепую — это разбирается вручную по логу ошибки.
+        """
+        from routes.orders import _activate_subscriptions
+        from services import finance_service as fin
+        from models.subscription import Subscription
+
+        buyer = await user_factory(username="sub_buyer2")
+        order, item = await self._order_with_subscription(db, buyer, plan, order_factory)
+
+        with patch.object(subs, "issue_invite", AsyncMock(return_value=None)):
+            await _activate_subscriptions(db, order, buyer, [item], 0)
+
+        sub = (
+            await db.execute(
+                select(Subscription).where(Subscription.user_id == buyer.id)
+            )
+        ).scalars().first()
+        assert sub is not None and sub.status == SubscriptionStatus.ACTIVE
+
+        author = await fin.user_account(db, channel.owner_user_id, TON)
+        assert author.balance_minor == 0

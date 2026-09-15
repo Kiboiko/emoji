@@ -241,7 +241,11 @@ async def _reserve_digital_items(
 
 
 async def _activate_subscriptions(
-    db: AsyncSession, order: Order, user: User, items: list[OrderItem]
+    db: AsyncSession,
+    order: Order,
+    user: User,
+    items: list[OrderItem],
+    received_nano: int,
 ) -> list[tuple[str, str]]:
     """
     Активирует подписки из заказа и начисляет авторам их долю.
@@ -260,16 +264,17 @@ async def _activate_subscriptions(
     if not sub_items:
         return []
 
-    payment = (
-        await db.execute(
-            select(Payment)
-            .where(Payment.order_id == order.id, Payment.status == PaymentStatus.CONFIRMED)
-            .order_by(Payment.completed_at.desc())
-        )
-    ).scalars().first()
-
-    received_nano = (payment.received_nano or payment.amount_nano) if payment else 0
     total_cents = to_minor(Decimal(str(order.total_usdt)), "USD")
+
+    if not received_nano:
+        # Сумму передаёт тот, кто подтвердил платёж. Искать её запросом здесь
+        # нельзя: в проекте autoflush=False, и статус платежа, выставленный
+        # вызывающим кодом, ещё не записан в БД — запрос ничего не найдёт,
+        # и сплит молча не выполнится.
+        logger.error(
+            "[ORDER] Заказ %s содержит подписки, но сумма платежа не передана — "
+            "начисление автору пропущено", order.id,
+        )
 
     invites: list[tuple[str, str]] = []
 
@@ -315,8 +320,14 @@ async def _activate_subscriptions(
     return invites
 
 
-async def complete_order(order: Order, db: AsyncSession):
-    """Complete order after successful payment"""
+async def complete_order(order: Order, db: AsyncSession, received_nano: int = 0):
+    """
+    Завершает заказ после подтверждённой оплаты.
+
+    received_nano — фактически поступившая сумма. Передаётся явно вызывающим
+    кодом: запрашивать её из БД здесь нельзя, потому что статус платежа в этот
+    момент ещё не записан (autoflush=False).
+    """
     # Update order status
     order.status = OrderStatus.PAID
     order.paid_at = datetime.utcnow()
@@ -348,7 +359,9 @@ async def complete_order(order: Order, db: AsyncSession):
         db.add(item)
 
     # Подписки: активируем доступ в канал и делим сумму с автором
-    subscription_invites = await _activate_subscriptions(db, order, user, items)
+    subscription_invites = await _activate_subscriptions(
+        db, order, user, items, received_nano
+    )
 
     # Mark as completed ONLY if no service items (digital/instruction are instant)
     if not has_service_items:

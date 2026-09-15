@@ -235,7 +235,7 @@ async def _confirm(db: AsyncSession, payment: Payment, received_nano: int) -> Pa
         return await _credit_cancelled_order(db, payment, order, received_nano)
 
     if order.status == OrderStatus.PENDING:
-        await complete_order(order, db)  # внутри делает commit
+        await complete_order(order, db, received_nano=received_nano)  # внутри делает commit
     else:
         await db.commit()
 
