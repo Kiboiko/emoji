@@ -17,7 +17,7 @@ from models.payment import Payment, PaymentStatus
 from models.subscription import Channel, SubscriptionPlan
 from schemas.order import OrderCreate, OrderResponse
 from utils.auth import get_current_user, require_admin
-from services import payment_service, settings_service, subscription_service
+from services import deal_service, payment_service, relay_service, settings_service, subscription_service
 from services.money import to_minor
 from services.telegram_service import telegram_service
 from services.referral_service import process_referral_commission
@@ -166,6 +166,11 @@ async def create_order(
                 "content_data": product.content_data,
                 "type": product.type,
                 "image_url": product.image_url,
+                # Признаки P2P попадают в снапшот, а не читаются из products:
+                # товар могут снять с продажи или сменить владельца, а условия
+                # уже оформленной сделки меняться не должны
+                "is_p2p": product.is_p2p,
+                "owner_user_id": str(product.owner_user_id) if product.owner_user_id else None,
             },
             user_data=cart_item.user_data,
         ))
@@ -341,12 +346,14 @@ async def complete_order(order: Order, db: AsyncSession, received_nano: int = 0)
     result = await db.execute(stmt)
     items = result.scalars().all()
     
-    # Check if order contains service items
-    has_service_items = False
-    for item in items:
-        if item.product_snapshot.get("type") == "service":
-            has_service_items = True
-            break
+    # Заказ считается завершённым только когда по нему нечего доделывать.
+    # Услуги ждут ручной обработки админом, P2P — подтверждения получения
+    # покупателем. И то и другое оставляет заказ в статусе PAID.
+    has_pending_fulfillment = any(
+        item.product_snapshot.get("type") == "service"
+        or item.product_snapshot.get("is_p2p")
+        for item in items
+    )
             
     # Finalize Digital Items (Mark as sold, clear reservation)
     stmt = select(DigitalItem).where(DigitalItem.order_id == order.id)
@@ -363,12 +370,37 @@ async def complete_order(order: Order, db: AsyncSession, received_nano: int = 0)
         db, order, user, items, received_nano
     )
 
-    # Mark as completed ONLY if no service items (digital/instruction are instant)
-    if not has_service_items:
+    # P2P: создаём сделки и замораживаем деньги в escrow.
+    # Продавцу они не начислены — он получит их после подтверждения получения.
+    deals = await deal_service.create_deals_for_order(
+        db, order=order, buyer=user, items=items, received_nano=received_nano,
+    )
+
+    # Цифровые товары и инструкции выдаются мгновенно — такой заказ закрывается сразу
+    if not has_pending_fulfillment:
         order.status = OrderStatus.COMPLETED
 
     await db.commit()
     
+    # Приветствие в релей-чат: стороны должны понимать, куда писать.
+    # Активная сделка ставится покупателю сразу — обычно она у него одна.
+    for deal in deals:
+        try:
+            await relay_service.post_system_message(
+                db, deal,
+                "Оплата получена, деньги удерживаются платформой до подтверждения "
+                "получения.\n\n"
+                "Пишите сюда — сообщения передаются второй стороне через бота, "
+                "контакты не раскрываются.",
+            )
+            buyer = await db.get(User, deal.buyer_id)
+            if buyer and buyer.active_deal_id is None:
+                buyer.active_deal_id = deal.id
+        except Exception as e:
+            logger.error("[ORDER] Не удалось открыть чат по сделке #%s: %s", deal.number, e)
+    if deals:
+        await db.commit()
+
     # Ссылки на закрытые каналы отправляем отдельно: ссылка одноразовая и с
     # ограниченным сроком, поэтому она не должна потеряться среди прочих
     # сообщений о покупке.

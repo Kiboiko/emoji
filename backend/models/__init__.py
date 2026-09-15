@@ -27,6 +27,10 @@ from .finance import (
     Account, AccountOwnerType, LedgerEntry, LedgerEntryType, LedgerRefType,
 )
 from .app_setting import AppSetting
+from .p2p import (
+    Deal, DealMessage, DealStatus, ListingImage, ListingStatus, MessageDirection,
+    ProductListing, SellerProfile, SellerStatus, TermsAcceptance,
+)
 from .subscription import (
     AccessAction, Channel, ChannelStatus, Subscription, SubscriptionAccessLog,
     SubscriptionPlan, SubscriptionStatus,
@@ -61,4 +65,14 @@ __all__ = [
     "SubscriptionStatus",
     "SubscriptionAccessLog",
     "AccessAction",
+    "SellerProfile",
+    "SellerStatus",
+    "ProductListing",
+    "ListingStatus",
+    "ListingImage",
+    "Deal",
+    "DealStatus",
+    "DealMessage",
+    "MessageDirection",
+    "TermsAcceptance",
 ]

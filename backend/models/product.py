@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Integer, Numeric
+from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Integer, Numeric, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -47,6 +47,17 @@ class Product(Base):
     # Content to deliver after purchase (keys, files, instructions)
     content_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     
+    # --- P2P: товар пользователя, а не площадки -------------------------
+    # NULL в owner_user_id = товар платформы. По этому полю витрина рисует
+    # пометку «товар пользователя», а оплата уходит в escrow вместо прямой
+    # выдачи.
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    is_p2p: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     
