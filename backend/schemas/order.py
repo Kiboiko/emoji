@@ -29,6 +29,9 @@ class OrderItemResponse(BaseModel):
 class OrderCreate(BaseModel):
     """Schema for creating an order from cart"""
     currency: CurrencyType
+    # Галочка «согласен с условиями площадки». Нужна, только если пользователь
+    # ещё не принимал текущую редакцию — повторно на каждом заказе не требуется.
+    accept_terms: bool = False
 
 
 class OrderUpdate(BaseModel):

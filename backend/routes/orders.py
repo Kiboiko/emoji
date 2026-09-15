@@ -17,7 +17,7 @@ from models.payment import Payment, PaymentStatus
 from models.subscription import Channel, SubscriptionPlan
 from schemas.order import OrderCreate, OrderResponse
 from utils.auth import get_current_user, require_admin
-from services import deal_service, payment_service, relay_service, settings_service, subscription_service
+from services import deal_service, payment_service, relay_service, settings_service, subscription_service, terms_service
 from services.money import to_minor
 from services.telegram_service import telegram_service
 from services.referral_service import process_referral_commission
@@ -108,6 +108,18 @@ async def create_order(
 
     if not cart_items:
         raise HTTPException(status_code=400, detail="Cart is empty")
+
+    # Условия площадки принимаются до оплаты. 409 с кодом, а не просто 400 —
+    # фронт по коду понимает, что надо показать галочку, а не текст ошибки.
+    try:
+        await terms_service.require(
+            db, user, accepted_now=order_data.accept_terms, context="purchase",
+        )
+    except terms_service.TermsNotAccepted as e:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "terms_required", "version": e.version, "message": str(e)},
+        )
 
     # Резерв держим ровно столько же, сколько живёт счёт: раньше товар
     # резервировался на 3 минуты, а заказ отменялся через 120 — между этими

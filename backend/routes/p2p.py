@@ -28,10 +28,10 @@ from config import settings
 from database import get_db
 from models.p2p import (
     Deal, DealStatus, ListingImage, ListingStatus, ProductListing,
-    SellerProfile, SellerStatus, TermsAcceptance,
+    SellerProfile, SellerStatus,
 )
 from models.user import User
-from services import deal_service, relay_service, settings_service
+from services import deal_service, relay_service, settings_service, terms_service
 from services.money import from_minor
 from utils.auth import get_current_user
 
@@ -70,23 +70,6 @@ class DisputeOpen(BaseModel):
 # ---------------------------------------------------------------------------
 # Вспомогательное
 # ---------------------------------------------------------------------------
-
-async def _record_terms(
-    db: AsyncSession, user: User, context: str, ref_type: str | None = None,
-    ref_id: uuid.UUID | None = None,
-) -> str:
-    version = await settings_service.get_str(db, "terms_version")
-    db.add(TermsAcceptance(
-        id=uuid.uuid4(),
-        user_id=user.id,
-        telegram_id=user.telegram_id,
-        terms_version=version,
-        context=context,
-        ref_type=ref_type,
-        ref_id=ref_id,
-    ))
-    return version
-
 
 async def _get_seller(db: AsyncSession, user: User) -> SellerProfile:
     profile = (
@@ -196,7 +179,7 @@ async def register_seller(
     if existing is not None:
         raise HTTPException(status_code=400, detail="Вы уже зарегистрированы как продавец")
 
-    version = await _record_terms(db, user, context="listing")
+    version = await terms_service.record(db, user, context="listing")
     profile = SellerProfile(
         id=uuid.uuid4(),
         user_id=user.id,
@@ -288,7 +271,7 @@ async def create_listing(
         status=ListingStatus.DRAFT,
     )
     db.add(listing)
-    await _record_terms(db, user, context="listing", ref_type="listing", ref_id=listing.id)
+    await terms_service.record(db, user, context="listing", ref_type="listing", ref_id=listing.id)
     await db.commit()
 
     return {"id": str(listing.id), "status": listing.status.value}

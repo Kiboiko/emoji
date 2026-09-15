@@ -24,7 +24,7 @@ from models.subscription import (
     Channel, ChannelStatus, Subscription, SubscriptionPlan, SubscriptionStatus,
 )
 from models.user import User
-from services import settings_service, subscription_service
+from services import settings_service, subscription_service, terms_service
 from services.telegram_service import TelegramApiError, channel_access
 from utils.auth import get_current_user
 
@@ -247,7 +247,7 @@ async def connect_channel(
             raise HTTPException(status_code=400, detail="Этот канал уже подключён вами")
         raise HTTPException(status_code=400, detail="Этот канал уже подключён другим автором")
 
-    terms_version = await settings_service.get_str(db, "terms_version")
+    terms_version = await terms_service.record(db, user, context="channel")
 
     channel = Channel(
         id=uuid.uuid4(),

@@ -32,6 +32,15 @@ class Review(Base):
         nullable=True
     )
 
+    # P2P-сделка, по которой оставлен отзыв. По ней пересчитывается рейтинг
+    # продавца; UNIQUE не даёт накрутить рейтинг повторными отзывами.
+    deal_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("deals.id", ondelete="SET NULL"),
+        unique=True,
+        nullable=True,
+    )
+
     # Review content
     text: Mapped[str] = mapped_column(Text, nullable=False)
     rating: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Optional rating 1-5

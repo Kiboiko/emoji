@@ -52,8 +52,33 @@ async def create_review(
     
     if not order or order.user_id != user.id:
         raise HTTPException(status_code=404, detail="Order not found")
-    
-    if order.status != OrderStatus.COMPLETED:
+
+    product_for_check = await db.get(Product, review_data.product_id)
+    deal = None
+
+    if product_for_check is not None and product_for_check.is_p2p:
+        # Товар пользователя: условие — завершённая СДЕЛКА, а не заказ.
+        # Заказ может оставаться в PAID, пока в нём есть другие незакрытые
+        # сделки, но по этой уже всё решено, и покупатель вправе оценить
+        # продавца. Отзыв после возврата не принимаем: сделка не состоялась.
+        from models.p2p import Deal, DealStatus
+        deal = (
+            await db.execute(
+                select(Deal).where(
+                    Deal.order_id == order.id,
+                    Deal.product_id == review_data.product_id,
+                    Deal.buyer_id == user.id,
+                )
+            )
+        ).scalars().first()
+        if deal is None:
+            raise HTTPException(status_code=400, detail="Сделка по этому товару не найдена")
+        if deal.status != DealStatus.RELEASED:
+            raise HTTPException(
+                status_code=400,
+                detail="Отзыв о продавце можно оставить после завершения сделки",
+            )
+    elif order.status != OrderStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Can only review completed orders")
     
     # Verify product is in the order
@@ -87,10 +112,23 @@ async def create_review(
         user_id=user.id,
         product_id=review_data.product_id,
         order_id=review_data.order_id,
+        deal_id=deal.id if deal else None,
         text=sanitized_text,
         rating=review_data.rating
     )
     db.add(review)
+
+    if deal is not None and review_data.rating:
+        # Рейтинг храним суммой и количеством, а не средним: так пересчёт не
+        # накапливает ошибку округления при каждом новом отзыве
+        from models.p2p import SellerProfile
+        profile = (
+            await db.execute(select(SellerProfile).where(SellerProfile.user_id == deal.seller_id))
+        ).scalars().first()
+        if profile is not None:
+            profile.rating_sum += review_data.rating
+            profile.rating_count += 1
+
     await db.commit()
     await db.refresh(review)
     

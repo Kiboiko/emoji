@@ -248,6 +248,42 @@ async def _release_to_seller(db: AsyncSession, deal: Deal, *, reason: str) -> No
         "[DEAL] #%s завершена: продавцу %s, комиссия %s нанотон",
         deal.number, deal.seller_amount_nano, deal.commission_nano,
     )
+    await db.flush()
+    await complete_order_if_settled(db, deal.order_id)
+
+
+async def complete_order_if_settled(db: AsyncSession, order_id: uuid.UUID) -> bool:
+    """
+    Переводит заказ в COMPLETED, когда по нему больше нечего доделывать.
+
+    Заказ с P2P-товаром остаётся в PAID, пока идут сделки. Без этой функции он
+    висел бы в PAID вечно: отзыв по нему было бы не оставить, а в отчётах он
+    выглядел бы незакрытым.
+
+    Условия: все сделки заказа в финальном статусе И в заказе нет услуг,
+    ждущих ручной обработки админом (их закрывает отдельный сценарий).
+    """
+    from models.order import Order, OrderItem, OrderStatus
+
+    order = await db.get(Order, order_id)
+    if order is None or order.status != OrderStatus.PAID:
+        return False
+
+    statuses = (
+        await db.execute(select(Deal.status).where(Deal.order_id == order_id))
+    ).scalars().all()
+    if not statuses or any(st not in FINAL for st in statuses):
+        return False
+
+    items = (
+        await db.execute(select(OrderItem).where(OrderItem.order_id == order_id))
+    ).scalars().all()
+    if any(i.product_snapshot.get("type") == "service" for i in items):
+        return False
+
+    order.status = OrderStatus.COMPLETED
+    logger.info("[DEAL] Заказ %s закрыт: все сделки завершены", order_id)
+    return True
 
 
 async def open_dispute(db: AsyncSession, deal: Deal, user: User, reason: str) -> Deal:
@@ -333,6 +369,8 @@ async def resolve_dispute(
     deal.chat_closed = True
 
     logger.warning("[DEAL] #%s: возврат покупателю %s нанотон", deal.number, deal.amount_nano)
+    await db.flush()
+    await complete_order_if_settled(db, deal.order_id)
     return deal
 
 
