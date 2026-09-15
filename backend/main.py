@@ -14,7 +14,7 @@ from database import engine
 from models import *
 
 # Import routers
-from routes import auth, products, categories, cart, orders, payments, reviews, users, admin_auth, admin_stats, admin_orders, admin_finance, admin_subscriptions, internal, subscriptions, withdrawals
+from routes import auth, products, categories, cart, orders, payments, reviews, users, admin_auth, admin_stats, admin_orders, admin_finance, admin_subscriptions, admin_p2p, internal, p2p, subscriptions, withdrawals
 
 
 from services.scheduler import start_scheduler, shutdown_scheduler
@@ -149,6 +149,7 @@ app.include_router(admin_auth.router)
 app.include_router(admin_stats.router)
 app.include_router(admin_finance.router)
 app.include_router(admin_subscriptions.router)
+app.include_router(admin_p2p.router)
 app.include_router(admin_orders.router)
 app.include_router(auth.router)
 app.include_router(products.router)
@@ -159,6 +160,7 @@ app.include_router(payments.router, prefix="/api")
 app.include_router(reviews.router)
 app.include_router(users.router)
 app.include_router(internal.router)
+app.include_router(p2p.router)
 app.include_router(subscriptions.router)
 app.include_router(withdrawals.router)
 

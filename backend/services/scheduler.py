@@ -133,6 +133,23 @@ async def reconcile_finances():
                 logger.error("[SCHEDULER] Не удалось отправить алерт сверки в %s: %s", chat_id, e)
 
 
+async def auto_confirm_deals():
+    """
+    Автоподтверждение P2P-сделок с истёкшим сроком.
+
+    Раз в час. Без неё деньги продавца зависали бы навсегда, если покупатель
+    получил товар и просто не нажал кнопку.
+    """
+    from services import deal_service
+
+    async with AsyncSessionLocal() as db:
+        try:
+            await deal_service.auto_confirm_due_deals(db)
+        except Exception as e:
+            logger.exception("[SCHEDULER] Автоподтверждение сделок упало: %s", e)
+            await db.rollback()
+
+
 async def poll_ton_payments():
     """
     Опрос блокчейна по ожидающим платежам.
@@ -181,6 +198,12 @@ def start_scheduler():
             poll_ton_payments,
             trigger=IntervalTrigger(seconds=15),
             id="poll_ton_payments",
+            replace_existing=True
+        )
+        scheduler.add_job(
+            auto_confirm_deals,
+            trigger=IntervalTrigger(hours=1),
+            id="auto_confirm_deals",
             replace_existing=True
         )
         scheduler.add_job(

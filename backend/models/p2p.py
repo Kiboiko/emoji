@@ -4,8 +4,8 @@ from decimal import Decimal
 from enum import Enum as PyEnum
 
 from sqlalchemy import (
-    BigInteger, Boolean, DateTime, Enum, ForeignKey, Index, Integer, Numeric,
-    String, Text, UniqueConstraint, text,
+    BigInteger, Boolean, DateTime, Enum, ForeignKey, Identity, Index, Integer,
+    Numeric, String, Text, UniqueConstraint, text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -185,8 +185,13 @@ class Deal(Base):
     __tablename__ = "deals"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    # Человекочитаемый номер для чата и поддержки: «Сделка №123»
-    number: Mapped[int] = mapped_column(BigInteger, autoincrement=True, unique=True, nullable=False)
+    # Человекочитаемый номер для чата и поддержки: «Сделка №123».
+    # Identity, а не autoincrement: в SQLAlchemy autoincrement действует только
+    # на первичный ключ, а здесь первичный — id. Без последовательности колонка
+    # оставалась бы NOT NULL без значения, и первая же сделка не создалась бы.
+    number: Mapped[int] = mapped_column(
+        BigInteger, Identity(always=False, start=1), unique=True, nullable=False
+    )
 
     order_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
