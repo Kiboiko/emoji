@@ -37,6 +37,9 @@ class AccessAction(str, PyEnum):
     INVITE_FAILED = "invite_failed"
     REVOKED = "revoked"
     EXTENDED = "extended"
+    # Снятие бана перед выдачей доступа. «Удалить участника» через интерфейс
+    # Telegram — это бан, и забаненный не войдёт ни по какой ссылке.
+    RESTORED = "restored"
 
 
 class Channel(Base):

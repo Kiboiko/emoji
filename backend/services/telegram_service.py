@@ -342,6 +342,36 @@ class ChannelAccessService:
     async def revoke_invite_link(self, chat_id: int | str, invite_link: str) -> None:
         await _call("revokeChatInviteLink", {"chat_id": chat_id, "invite_link": invite_link})
 
+    async def ensure_not_banned(self, chat_id: int | str, user_id: int) -> bool:
+        """
+        Снимает бан с пользователя, если он забанен.
+
+        Обязательный шаг перед выдачей доступа. В Telegram «удалить участника
+        из канала» через интерфейс — это БАН, а не просто исключение:
+        пользователь остаётся в чёрном списке. Забаненный не может войти ни по
+        какой инвайт-ссылке, Telegram показывает ему «срок действия ссылки
+        истёк» — и выглядит это как поломка оплаты, хотя ссылка живая.
+
+        Такое случается, когда владелец канала убирал человека вручную, а тот
+        потом купил подписку.
+
+        only_if_banned=True не трогает тех, кто не забанен.
+        Возвращает True, если бан пришлось снимать.
+        """
+        try:
+            member = await _call("getChatMember", {"chat_id": chat_id, "user_id": user_id})
+        except TelegramApiError:
+            return False
+
+        if member.get("status") != "kicked":
+            return False
+
+        await _call(
+            "unbanChatMember",
+            {"chat_id": chat_id, "user_id": user_id, "only_if_banned": True},
+        )
+        return True
+
     async def kick_member(self, chat_id: int | str, user_id: int) -> None:
         """
         Удаляет пользователя из канала.

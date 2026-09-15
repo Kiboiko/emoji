@@ -30,8 +30,12 @@ dp = Dispatcher()
 @dp.message(CommandStart())
 async def command_start_handler(message: types.Message, command: CommandObject):
     """Кнопка открытия Mini App + проброс реферального кода."""
+    user = message.from_user
+    logger.info("/start от %s (@%s, id=%s), args=%s",
+                user.full_name, user.username, user.id, command.args)
+
     if not WEBAPP_URL:
-        await message.answer("Error: WEBAPP_URL not configured.")
+        await message.answer("Магазин временно недоступен: не настроен адрес приложения.")
         return
 
     start_arg = command.args
@@ -39,6 +43,20 @@ async def command_start_handler(message: types.Message, command: CommandObject):
     if start_arg:
         separator = "&" if "?" in app_url else "?"
         app_url = f"{app_url}{separator}startapp={start_arg}"
+
+    # Telegram принимает кнопку Mini App только с HTTPS. На локальном стенде
+    # адрес http://localhost, и раньше обработчик падал с TelegramBadRequest —
+    # пользователь не получал вообще ничего, включая уведомления о покупках.
+    # Теперь при не-HTTPS адресе отправляем текст без кнопки.
+    if not app_url.startswith("https://"):
+        logger.warning("WEBAPP_URL не HTTPS (%s) — кнопка Mini App не добавлена", app_url)
+        await message.answer(
+            "Бот подключён.\n\n"
+            "Кнопка магазина появится, когда приложение будет доступно по HTTPS "
+            "(сейчас идёт локальное тестирование).\n\n"
+            f"Ваш ID: {user.id}"
+        )
+        return
 
     builder = InlineKeyboardBuilder()
     builder.button(text="Открыть магазин", web_app=WebAppInfo(url=app_url))
@@ -111,6 +129,15 @@ async def on_chat_member_update(update: types.ChatMemberUpdated):
     ВАЖНО: апдейты chat_member Telegram по умолчанию НЕ присылает — их надо
     явно перечислить в allowed_updates при запуске поллинга (см. main()).
     """
+    member = update.new_chat_member.user
+    # Логируем сразу, до обращения к бэкенду: если тот недоступен, событие
+    # всё равно останется видимым в логах бота
+    logger.info(
+        "chat_member: %s (@%s, id=%s) в «%s» -> %s",
+        member.full_name, member.username, member.id,
+        update.chat.title, update.new_chat_member.status,
+    )
+
     if not INTERNAL_TOKEN:
         logger.warning("INTERNAL_API_TOKEN не задан — событие chat_member не отправлено")
         return

@@ -101,6 +101,24 @@ async def issue_invite(db: AsyncSession, subscription: Subscription) -> str | No
     админ мог выдать доступ вручную.
     """
     channel = subscription.channel or await db.get(Channel, subscription.channel_id)
+    user = subscription.user or await db.get(User, subscription.user_id)
+
+    # Сначала снимаем бан, если он есть. «Удалить участника» через интерфейс
+    # Telegram — это бан: человек остаётся в чёрном списке и не может войти ни
+    # по какой ссылке, получая «срок действия ссылки истёк». Выглядит как
+    # сломанная оплата, хотя ссылка живая.
+    if user:
+        try:
+            if await channel_access.ensure_not_banned(channel.telegram_chat_id, user.telegram_id):
+                logger.info(
+                    "[SUB] Снят бан с %s в канале %s перед выдачей доступа",
+                    user.telegram_id, channel.telegram_chat_id,
+                )
+                _log(db, subscription, AccessAction.RESTORED)
+        except TelegramApiError as e:
+            # Не фатально: возможно, прав не хватает. Ссылку всё равно создадим,
+            # а причина останется в журнале.
+            logger.warning("[SUB] Не удалось снять бан: %s", e)
 
     try:
         result = await channel_access.create_invite_link(
