@@ -7,6 +7,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { useTonPayment } from '@/hooks/useTonPayment';
+import { TermsGate } from '@/components/TermsGate/TermsGate';
 import './Checkout.css';
 
 export const Checkout: React.FC = () => {
@@ -16,6 +17,7 @@ export const Checkout: React.FC = () => {
     const { haptic } = useTelegram();
     const wallet = useTonWallet();
     const { pay, phase, error, request, stopPolling } = useTonPayment();
+    const [termsAccepted, setTermsAccepted] = React.useState(false);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
@@ -32,7 +34,7 @@ export const Checkout: React.FC = () => {
 
     const handlePay = async () => {
         haptic.impact('medium');
-        await pay('TON', async () => {
+        await pay('TON', termsAccepted, async () => {
             await useCartStore.getState().clearCart();
             haptic.notification('success');
             navigate('/profile');
@@ -93,6 +95,8 @@ export const Checkout: React.FC = () => {
                         <TonConnectButton />
                     </div>
 
+                    <TermsGate onChange={setTermsAccepted} />
+
                     {request && (
                         <div className="rate-note">
                             {t('Курс зафиксирован: ', 'Rate locked: ')}
@@ -126,7 +130,7 @@ export const Checkout: React.FC = () => {
                     <motion.button
                         className="btn-gradient btn-pay"
                         onClick={handlePay}
-                        disabled={busy || !wallet}
+                        disabled={busy || !wallet || !termsAccepted}
                         whileTap={{ scale: 0.98 }}
                     >
                         {busy ? (
@@ -136,6 +140,8 @@ export const Checkout: React.FC = () => {
                             </span>
                         ) : !wallet ? (
                             t('Сначала подключите кошелёк', 'Connect wallet first')
+                        ) : !termsAccepted ? (
+                            t('Примите условия площадки', 'Accept the terms first')
                         ) : (
                             t('Оплатить', 'Pay Now')
                         )}

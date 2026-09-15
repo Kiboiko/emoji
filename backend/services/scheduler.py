@@ -75,6 +75,18 @@ async def cleanup_reservations():
                     # Count for stock restoration
                     product_counts[item.product_id] = product_counts.get(item.product_id, 0) + 1
                     
+                # Товары пользователей резервируются стоком, а не DigitalItem:
+                # неоплаченный заказ должен вернуть вещь на витрину
+                from models.order import OrderItem
+                p2p_items = (
+                    await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))
+                ).scalars().all()
+                for oi in p2p_items:
+                    if oi.product_snapshot.get("is_p2p") and oi.product_id:
+                        product_counts[oi.product_id] = (
+                            product_counts.get(oi.product_id, 0) + oi.quantity
+                        )
+
                 # 4. Restore Product Stock
                 for product_id, count in product_counts.items():
                     product = await db.get(Product, product_id)

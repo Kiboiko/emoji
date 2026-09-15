@@ -1,0 +1,165 @@
+.deals-section {
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.deals-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+}
+
+.deals-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.deal-item {
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.deal-released,
+.deal-refunded,
+.deal-cancelled {
+    opacity: 0.65;
+}
+
+.deal-disputed {
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+.deal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.deal-number {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+}
+
+.deal-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.badge-paid_escrow,
+.badge-chat_opened,
+.badge-delivered_claimed {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--accent-primary);
+}
+
+.badge-released,
+.badge-confirmed {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-success);
+}
+
+.badge-disputed {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--accent-warning);
+}
+
+.badge-refunded,
+.badge-cancelled {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--accent-error);
+}
+
+.deal-product {
+    margin-top: 4px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.deal-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.deal-amount {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.deal-deadline,
+.deal-dispute {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.deal-dispute {
+    color: var(--accent-warning);
+}
+
+.deal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.deal-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 12px;
+    border: none;
+    border-radius: 9px;
+    background: var(--gradient-primary);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.deal-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.deal-btn-ghost {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.deal-btn-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-error);
+}
+
+.deal-hint {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-tertiary);
+}

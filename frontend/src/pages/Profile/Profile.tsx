@@ -5,6 +5,7 @@ import { usersApi, ordersApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { MySubscriptions } from '@/components/MySubscriptions/MySubscriptions';
+import { MyDeals } from '@/components/MyDeals/MyDeals';
 import type { ReferralStats, Order } from '@/types';
 import './Profile.css';
 
@@ -273,6 +274,8 @@ export const Profile: React.FC = () => {
                 </div>
 
                 {/* Orders Section */}
+                <MyDeals />
+
                 <MySubscriptions />
 
                 <div className="orders-section glass-card">

@@ -81,3 +81,9 @@ class ProductLocalized(BaseModel):
     min_quantity: int = 1
     max_quantity: Optional[int] = None
     created_at: datetime
+
+    # Товар пользователя: витрина рисует пометку, а покупка уходит в escrow
+    is_p2p: bool = False
+    seller_name: Optional[str] = None
+    seller_rating: Optional[float] = None
+    seller_deals: int = 0

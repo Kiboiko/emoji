@@ -102,12 +102,12 @@ export function useTonPayment() {
     );
 
     const pay = useCallback(
-        async (currency: 'USDT' | 'TON', onPaid: () => void) => {
+        async (currency: 'USDT' | 'TON', acceptTerms: boolean, onPaid: () => void) => {
             setError(null);
             setPhase('creating');
 
             try {
-                const created = await ordersApi.createOrder(currency);
+                const created = await ordersApi.createOrder(currency, acceptTerms);
                 const orderId: string = created.order_id;
                 const payment: TonPaymentRequest = created.payment;
                 setRequest(payment);
@@ -136,8 +136,12 @@ export function useTonPayment() {
 
                 setPhase(rejected ? 'idle' : 'failed');
                 if (!rejected) {
+                    // Бэкенд отдаёт detail объектом для машиночитаемых ошибок
+                    // (например terms_required) — показывать [object Object]
+                    // пользователю нельзя
+                    const detail = e?.response?.data?.detail;
                     setError(
-                        e?.response?.data?.detail ??
+                        (typeof detail === 'string' ? detail : detail?.message) ??
                             e?.message ??
                             'Не удалось создать платёж',
                     );

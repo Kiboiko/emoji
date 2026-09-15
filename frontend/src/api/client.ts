@@ -138,8 +138,12 @@ export const ordersApi = {
         return response.data;
     },
 
-    createOrder: async (currency: 'USDT' | 'TON') => {
-        const response = await apiClient.post('/orders', { currency });
+    // accept_terms нужен, только если пользователь ещё не принимал текущую
+    // редакцию условий: бэкенд ответит 409 с кодом terms_required
+    createOrder: async (currency: 'USDT' | 'TON', acceptTerms = false) => {
+        const response = await apiClient.post('/orders', {
+            currency, accept_terms: acceptTerms,
+        });
         return response.data;
     },
 };
@@ -198,6 +202,50 @@ export const usersApi = {
         const response = await apiClient.get('/users/referral-stats');
         return response.data;
     },
+};
+
+// Terms API
+export const termsApi = {
+    get: async () => (await apiClient.get('/terms')).data,
+    // Нужно ли показывать галочку: условия принимаются раз на версию,
+    // а не перед каждой покупкой
+    status: async () => (await apiClient.get('/terms/status')).data,
+    accept: async (version: string) =>
+        (await apiClient.post('/terms/accept', { version })).data,
+};
+
+// P2P API
+export const p2pApi = {
+    getSellerProfile: async () => (await apiClient.get('/p2p/seller/me')).data,
+
+    registerSeller: async (data: {
+        display_name: string; payout_wallet: string; accept_terms: boolean;
+    }) => (await apiClient.post('/p2p/seller/register', data)).data,
+
+    getMyListings: async () => (await apiClient.get('/p2p/seller/listings')).data,
+
+    createListing: async (data: {
+        name: string; description: string; price_usd: string;
+        category_id?: string; accept_terms: boolean;
+    }) => (await apiClient.post('/p2p/seller/listings', data)).data,
+
+    uploadListingImage: async (listingId: string, file: File) => {
+        const form = new FormData();
+        form.append('image', file);
+        // Content-Type не ставим руками: браузер сам добавит boundary
+        return (await apiClient.post(`/p2p/seller/listings/${listingId}/images`, form)).data;
+    },
+
+    submitListing: async (listingId: string) =>
+        (await apiClient.post(`/p2p/seller/listings/${listingId}/submit`)).data,
+
+    getMyDeals: async () => (await apiClient.get('/p2p/deals')).data,
+    markDelivered: async (id: string) => (await apiClient.post(`/p2p/deals/${id}/delivered`)).data,
+    confirmReceipt: async (id: string) => (await apiClient.post(`/p2p/deals/${id}/confirm`)).data,
+    openDispute: async (id: string, reason: string) =>
+        (await apiClient.post(`/p2p/deals/${id}/dispute`, { reason })).data,
+    setActiveDeal: async (id: string) => (await apiClient.post(`/p2p/deals/${id}/activate`)).data,
+    getMessages: async (id: string) => (await apiClient.get(`/p2p/deals/${id}/messages`)).data,
 };
 
 // Subscriptions API

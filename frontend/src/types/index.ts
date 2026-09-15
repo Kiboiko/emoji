@@ -25,10 +25,15 @@ export interface Product {
     image_url: string;
     category_id: string;
     is_top: boolean;
-    type?: 'digital' | 'service' | 'instruction';
+    type?: 'digital' | 'service' | 'instruction' | 'subscription' | 'p2p';
     min_quantity?: number;
     max_quantity?: number;
     created_at: string;
+    /** Товар пользователя, а не площадки: оплата уходит в escrow */
+    is_p2p?: boolean;
+    seller_name?: string | null;
+    seller_rating?: number | null;
+    seller_deals?: number;
 }
 
 export interface CartItem {
@@ -135,4 +140,40 @@ export interface MySubscription {
     joined: boolean;
     /** Одноразовая ссылка. null, если уже использована или истекла. */
     invite_link: string | null;
+}
+
+export type DealStatus =
+    | 'created' | 'paid_escrow' | 'chat_opened' | 'delivered_claimed'
+    | 'confirmed' | 'released' | 'disputed' | 'refunded' | 'cancelled';
+
+export interface Deal {
+    id: string;
+    number: number;
+    product_name: string;
+    role: 'buyer' | 'seller';
+    status: DealStatus;
+    amount_ton: string;
+    seller_amount_ton: string;
+    confirm_deadline_at: string | null;
+    chat_closed: boolean;
+    dispute_reason: string | null;
+    created_at: string;
+}
+
+export interface SellerProfile {
+    registered: boolean;
+    display_name?: string;
+    payout_wallet?: string;
+    status?: 'active' | 'restricted' | 'banned';
+    restricted_until?: string | null;
+    restriction_reason?: string | null;
+    rating?: number | null;
+    rating_count?: number;
+    deals_completed?: number;
+}
+
+export interface Terms {
+    version: string;
+    text: string;
+    is_empty: boolean;
 }

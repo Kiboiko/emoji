@@ -172,8 +172,11 @@ async def moderate_listing(
         category_id=category_id,
         type="p2p",
         min_quantity=1,
-        max_quantity=1,          # товар пользователя продаётся поштучно
-        stock=None,
+        max_quantity=1,
+        # Сток ровно 1: это конкретная вещь продавца. max_quantity ограничивает
+        # только количество в одной корзине, а без стока одну и ту же вещь
+        # могли бы оплатить сразу несколько покупателей.
+        stock=1,
         content_data={"listing_id": str(listing.id)},
         owner_user_id=seller.user_id,
         is_p2p=True,

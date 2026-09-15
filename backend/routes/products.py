@@ -93,19 +93,25 @@ async def get_products(
     stmt = stmt.order_by(Product.is_top.desc(), Product.sort_order.desc(), Product.created_at.desc())
     stmt = stmt.offset(skip).limit(limit)
     
-    # DEBUG: Print compiled SQL
-    from sqlalchemy.dialects import postgresql
-    compiled = stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
-    print(f"[PRODUCTS] SQL Query:\n{compiled}")
-    
+    # Здесь на КАЖДЫЙ запрос каталога печатался скомпилированный SQL и строка
+    # по каждому товару. Фронт грузит каталог с limit=1000 при каждом открытии
+    # главной, так что лог забивался мгновенно. Убрано.
     result = await db.execute(stmt)
     products = result.scalars().all()
-    
-    # DEBUG: Log query results
-    print(f"[PRODUCTS] Query returned {len(products)} products")
-    for p in products:
-        print(f"[PRODUCTS] - {p.name_ru}: type={p.type}, stock={p.stock}")
-    
+
+    # Продавцы нужны, чтобы показать на карточке «товар пользователя» с именем
+    # и рейтингом. Одним запросом, а не по товару в цикле.
+    seller_ids = {p.owner_user_id for p in products if p.owner_user_id}
+    sellers: dict = {}
+    if seller_ids:
+        from models.p2p import SellerProfile
+        rows = (
+            await db.execute(
+                select(SellerProfile).where(SellerProfile.user_id.in_(seller_ids))
+            )
+        ).scalars().all()
+        sellers = {s.user_id: s for s in rows}
+
     localized = []
     for p in products:
         item = ProductLocalized(
@@ -120,7 +126,14 @@ async def get_products(
             type=p.type,
             min_quantity=p.min_quantity,
             max_quantity=p.max_quantity,
-            created_at=p.created_at
+            created_at=p.created_at,
+            is_p2p=p.is_p2p,
+            seller_name=(sellers[p.owner_user_id].display_name
+                         if p.owner_user_id in sellers else None),
+            seller_rating=(sellers[p.owner_user_id].rating
+                           if p.owner_user_id in sellers else None),
+            seller_deals=(sellers[p.owner_user_id].deals_completed
+                          if p.owner_user_id in sellers else 0),
             # content_data is NOT included in ProductLocalized purposefully to hide instructions
         )
         localized.append(item)
@@ -205,6 +218,15 @@ async def get_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
+    seller = None
+    if product.owner_user_id:
+        from models.p2p import SellerProfile
+        seller = (
+            await db.execute(
+                select(SellerProfile).where(SellerProfile.user_id == product.owner_user_id)
+            )
+        ).scalars().first()
+
     return ProductLocalized(
         id=product.id,
         name=product.name_ru if lang == "ru" else product.name_en,
@@ -217,7 +239,11 @@ async def get_product(
         type=product.type,
         min_quantity=product.min_quantity,
         max_quantity=product.max_quantity,
-        created_at=product.created_at
+        created_at=product.created_at,
+        is_p2p=product.is_p2p,
+        seller_name=seller.display_name if seller else None,
+        seller_rating=seller.rating if seller else None,
+        seller_deals=seller.deals_completed if seller else 0,
     )
 
 @router.post("")

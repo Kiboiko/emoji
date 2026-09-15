@@ -151,6 +151,24 @@ async def create_order(
         item_total = product.price_usdt * quantity
         total_usdt += item_total
 
+        if product.is_p2p:
+            # Товар пользователя существует в единственном экземпляре.
+            # SELECT ... FOR UPDATE обязателен: без блокировки два покупателя,
+            # нажавшие «Оплатить» одновременно, оба увидят stock=1 и оба купят.
+            product = (
+                await db.execute(
+                    select(Product).where(Product.id == product.id).with_for_update()
+                )
+            ).scalar_one()
+            if product.stock is None or product.stock < quantity:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Товар «{product.name_ru}» уже продан",
+                )
+            product.stock -= quantity
+            db.add(product)
+            updated_products.append(product)
+
         if product.type == "digital":
             await _reserve_digital_items(
                 db, order=order, product=product, quantity=quantity,

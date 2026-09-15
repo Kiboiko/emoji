@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ShoppingCart, Flame } from 'lucide-react';
+import { ShoppingCart, Flame, User, Star } from 'lucide-react';
 import type { Product } from '@/types';
 import './ProductCard.css';
 
@@ -44,6 +44,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </div>
 
             <div className="product-info">
+                {/* Покупатель должен сразу видеть, что товар не от площадки:
+                    оплата уходит в escrow и есть срок подтверждения */}
+                {product.is_p2p && (
+                    <div className="p2p-tag">
+                        <User size={12} />
+                        <span>{product.seller_name || 'Товар пользователя'}</span>
+                        {product.seller_rating != null && (
+                            <span className="p2p-rating">
+                                <Star size={11} fill="currentColor" />
+                                {product.seller_rating}
+                            </span>
+                        )}
+                    </div>
+                )}
+
                 <h3 className="product-name">{product.name}</h3>
                 <p className="product-description">{product.description}</p>
 
