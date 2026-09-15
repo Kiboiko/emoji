@@ -27,6 +27,47 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 
+async def call_backend(path: str, payload: dict) -> dict | None:
+    """
+    Запрос к внутреннему API бэкенда.
+
+    Вся логика сделок и маршрутизации живёт там: у бота нет доступа к БД, и
+    заводить второе подключение значило бы дублировать модели и ловить
+    рассинхрон при миграциях.
+    """
+    if not INTERNAL_TOKEN:
+        logger.warning("INTERNAL_API_TOKEN не задан — запрос %s не отправлен", path)
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                f"{BACKEND_URL}/api/internal/{path}",
+                json=payload,
+                headers={"X-Internal-Token": INTERNAL_TOKEN},
+            )
+        if response.status_code >= 400:
+            logger.error("Бэкенд отклонил %s: %s %s", path,
+                         response.status_code, response.text[:200])
+            return None
+        return response.json()
+    except Exception as e:
+        # Падение бэкенда не должно ронять бота
+        logger.error("Запрос %s не удался: %s", path, e)
+        return None
+
+
+def deal_keyboard(deal_number: int, role: str) -> InlineKeyboardBuilder:
+    """Кнопки действий под сообщением о сделке."""
+    builder = InlineKeyboardBuilder()
+    if role == "seller":
+        builder.button(text="Я отправил товар", callback_data=f"deal:delivered:{deal_number}")
+    else:
+        builder.button(text="Подтвердить получение", callback_data=f"deal:confirm:{deal_number}")
+    builder.button(text="Открыть спор", callback_data=f"deal:dispute:{deal_number}")
+    builder.adjust(1)
+    return builder
+
+
 @dp.message(CommandStart())
 async def command_start_handler(message: types.Message, command: CommandObject):
     """Кнопка открытия Mini App + проброс реферального кода."""
@@ -164,6 +205,57 @@ async def on_chat_member_update(update: types.ChatMemberUpdated):
     except Exception as e:
         # Падение бэкенда не должно ронять бота
         logger.error("Не удалось передать chat_member: %s", e)
+
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("deal:"))
+async def on_deal_action(callback: types.CallbackQuery):
+    """Нажатие кнопки действия по сделке."""
+    try:
+        _, action, number = callback.data.split(":", 2)
+    except ValueError:
+        await callback.answer("Некорректная кнопка")
+        return
+
+    result = await call_backend("deal-action", {
+        "telegram_user_id": callback.from_user.id,
+        "deal_number": int(number),
+        "action": action,
+    })
+
+    reply = (result or {}).get("reply") or "Не удалось выполнить действие, попробуйте позже."
+    # alert=True для действий с деньгами: всплывающее окно труднее
+    # не заметить, чем тост внизу экрана
+    await callback.answer(reply, show_alert=True)
+
+
+@dp.message()
+async def on_relay_message(message: types.Message):
+    """
+    Любое сообщение в личке боту — это реплика в чате сделки.
+
+    Ловим и текст, и вложения: бэкенд пересылает их контрагенту через
+    copyMessage, поэтому здесь важно передать сообщение целиком, а не только
+    текст.
+
+    Обработчик стоит ПОСЛЕДНИМ: команды и кнопки перехватываются выше.
+    """
+    if message.chat.type != "private":
+        return
+
+    payload = message.model_dump(mode="json", exclude_none=True)
+
+    result = await call_backend("relay", {
+        "telegram_user_id": message.from_user.id,
+        "message": payload,
+    })
+
+    if result is None:
+        await message.answer("Сервис временно недоступен, попробуйте позже.")
+        return
+
+    reply = result.get("reply")
+    if reply:
+        await message.answer(reply)
 
 
 async def main():

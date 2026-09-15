@@ -110,3 +110,123 @@ async def handle_chat_member(
         event.telegram_user_id, event.new_status, channel.title,
     )
     return {"ok": True, "subscription_id": str(subscription.id), "action": action.value}
+
+
+# ---------------------------------------------------------------------------
+# Релей-чат сделок
+# ---------------------------------------------------------------------------
+
+class RelayIn(BaseModel):
+    telegram_user_id: int
+    # Сырое сообщение Telegram: нужно целиком, потому что copyMessage
+    # оперирует message_id, а тип вложения определяется по составу полей
+    message: dict
+
+
+@router.post("/relay", dependencies=[Depends(require_internal_token)])
+async def relay_incoming(payload: RelayIn, db: AsyncSession = Depends(get_db)):
+    """
+    Сообщение пользователя боту -> контрагенту по сделке.
+
+    Вся логика здесь, а не в боте: маршрутизация требует доступа к БД, а
+    держать в боте второе подключение к базе значит дублировать модели и
+    ловить рассинхрон при миграциях.
+
+    Ответ говорит боту, что сказать отправителю: пустой reply — всё хорошо,
+    молчим.
+    """
+    from services import relay_service
+
+    user = (
+        await db.execute(select(User).where(User.telegram_id == payload.telegram_user_id))
+    ).scalars().first()
+    if user is None:
+        return {"reply": "Вы ещё не пользовались магазином. Откройте его кнопкой ниже."}
+
+    reply_to = (payload.message.get("reply_to_message") or {}).get("message_id")
+
+    deal, error = await relay_service.resolve_deal(db, user, reply_to_message_id=reply_to)
+    if deal is None:
+        return {"reply": error}
+
+    try:
+        await relay_service.relay_message(
+            db, deal=deal, sender=user, message=payload.message
+        )
+    except relay_service.CounterpartUnavailable as e:
+        await db.commit()   # сообщение сохранено с ошибкой доставки
+        return {"reply": str(e)}
+    except relay_service.RelayError as e:
+        await db.rollback()
+        return {"reply": str(e)}
+
+    await db.commit()
+    return {"reply": None, "deal_number": deal.number}
+
+
+class DealActionIn(BaseModel):
+    telegram_user_id: int
+    deal_number: int
+    # delivered | confirm | dispute | activate
+    action: str
+    reason: str | None = None
+
+
+@router.post("/deal-action", dependencies=[Depends(require_internal_token)])
+async def deal_action(payload: DealActionIn, db: AsyncSession = Depends(get_db)):
+    """Кнопки под сообщением о сделке: «отправил», «подтверждаю», «спор»."""
+    from models.p2p import Deal
+    from services import deal_service, relay_service
+
+    user = (
+        await db.execute(select(User).where(User.telegram_id == payload.telegram_user_id))
+    ).scalars().first()
+    if user is None:
+        return {"reply": "Пользователь не найден"}
+
+    deal = (
+        await db.execute(select(Deal).where(Deal.number == payload.deal_number))
+    ).scalars().first()
+    if deal is None or user.id not in (deal.buyer_id, deal.seller_id):
+        return {"reply": "Сделка не найдена"}
+
+    try:
+        if payload.action == "delivered":
+            await deal_service.mark_delivered(db, deal, user)
+            await relay_service.post_system_message(
+                db, deal,
+                "Продавец отметил отправку. Покупателю нужно подтвердить получение.",
+            )
+            reply = "Отмечено. Ждём подтверждения покупателя."
+
+        elif payload.action == "confirm":
+            await deal_service.confirm_receipt(db, deal, user)
+            await relay_service.post_system_message(
+                db, deal, "Покупатель подтвердил получение. Сделка завершена.",
+            )
+            await relay_service.close_chat(db, deal)
+            reply = "Спасибо! Деньги перечислены продавцу."
+
+        elif payload.action == "dispute":
+            await deal_service.open_dispute(
+                db, deal, user, payload.reason or "не указана",
+            )
+            await relay_service.post_system_message(
+                db, deal,
+                "Открыт спор. Деньги остаются у платформы до решения администрации.",
+            )
+            reply = "Спор открыт, администрация уведомлена."
+
+        elif payload.action == "activate":
+            await relay_service.set_active_deal(db, user, deal)
+            reply = f"Теперь сообщения уходят по сделке №{deal.number}."
+
+        else:
+            return {"reply": "Неизвестное действие"}
+
+    except (deal_service.DealError, relay_service.RelayError) as e:
+        await db.rollback()
+        return {"reply": str(e)}
+
+    await db.commit()
+    return {"reply": reply}
