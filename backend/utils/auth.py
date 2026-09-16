@@ -188,7 +188,20 @@ async def get_current_user(
         user = await db.get(User, uuid.UUID(user_id))
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
+        # Блокировка проверяется здесь, а не в отдельных роутах: колонка
+        # is_blocked существовала с первой миграции, но не проверялась нигде,
+        # то есть заблокировать человека было невозможно — он продолжал
+        # покупать и торговать как ни в чём не бывало.
+        #
+        # 403, а не 401: 401 клиенты понимают как «сессия истекла» и пробуют
+        # перелогиниться, что при блокировке даёт бесконечный цикл.
+        if user.is_blocked:
+            raise HTTPException(
+                status_code=403,
+                detail="Аккаунт заблокирован. Обратитесь в поддержку.",
+            )
+
         return user
     
     except HTTPException:

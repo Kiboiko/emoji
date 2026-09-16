@@ -144,6 +144,16 @@ async def authenticate_telegram(
         user = result.scalar_one_or_none()
         
         if user:
+            # Заблокированному токен не выдаём. Проверка именно здесь, до
+            # обновления данных: иначе блокировка обходилась бы простым
+            # перезаходом в приложение — токен выдавался заново, а проверка
+            # is_blocked стоит только на уже выданном токене.
+            if user.is_blocked:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Аккаунт заблокирован. Обратитесь в поддержку.",
+                )
+
             # Update user data from Telegram (name/username may have changed)
             user.first_name = telegram_data["first_name"]
             user.username = telegram_data.get("username")
