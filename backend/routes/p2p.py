@@ -26,10 +26,12 @@ from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import get_db
+from models.finance import Account, AccountOwnerType
 from models.p2p import (
     Deal, DealStatus, ListingImage, ListingStatus, ProductListing,
     SellerProfile, SellerStatus,
 )
+from models.product import Product
 from models.user import User
 from services import deal_service, relay_service, settings_service, terms_service
 from services.money import from_minor
@@ -55,12 +57,25 @@ class SellerRegister(BaseModel):
     accept_terms: bool
 
 
+class SellerUpdate(BaseModel):
+    display_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    payout_wallet: Optional[str] = Field(None, min_length=10, max_length=80)
+
+
 class ListingCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=500)
     description: str = Field(..., min_length=10, max_length=5000)
     price_usd: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2)
     category_id: Optional[uuid.UUID] = None
     accept_terms: bool
+
+
+class ListingUpdate(BaseModel):
+    """Правка заявки. Любое поле необязательно — меняем только присланные."""
+    name: Optional[str] = Field(None, min_length=3, max_length=500)
+    description: Optional[str] = Field(None, min_length=10, max_length=5000)
+    price_usd: Optional[Decimal] = Field(None, gt=0, max_digits=10, decimal_places=2)
+    category_id: Optional[uuid.UUID] = None
 
 
 class DisputeOpen(BaseModel):
@@ -90,6 +105,39 @@ def _assert_can_sell(profile: SellerProfile) -> None:
                 detail=f"Размещение ограничено до {profile.restricted_until:%d.%m.%Y %H:%M}. "
                        f"{profile.restriction_reason or ''}".strip(),
             )
+
+
+# Статусы, в которых заявку ещё можно править. После отправки на модерацию
+# правка запрещена: иначе можно отправить безобидный текст, дождаться
+# одобрения и подменить его на что угодно.
+EDITABLE_STATUSES = (ListingStatus.DRAFT, ListingStatus.REJECTED)
+
+
+def _assert_editable(listing: ProductListing) -> None:
+    if listing.status not in EDITABLE_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Заявка в статусе «{listing.status.value}» — правка недоступна",
+        )
+
+
+async def _seller_balance_nano(db: AsyncSession, user: User) -> int:
+    """
+    Заработок продавца, лежащий на его счёте.
+
+    Читаем напрямую, а не через finance_service.user_account: тот заводит счёт,
+    если его нет, а GET-запрос не должен ничего создавать.
+    """
+    account = (
+        await db.execute(
+            select(Account).where(
+                Account.owner_type == AccountOwnerType.USER,
+                Account.owner_id == user.id,
+                Account.currency == "TON",
+            )
+        )
+    ).scalars().first()
+    return account.balance_minor if account else 0
 
 
 async def _save_listing_image(upload: UploadFile) -> str:
@@ -161,7 +209,33 @@ async def seller_profile(
         "rating": profile.rating,
         "rating_count": profile.rating_count,
         "deals_completed": profile.deals_completed,
+        "balance_ton": str(from_minor(await _seller_balance_nano(db, user), "TON")),
     }
+
+
+@router.patch("/seller/me")
+async def update_seller(
+    payload: SellerUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Правка витринного имени и кошелька для выплат.
+
+    Кошелёк меняется без ограничений: он используется только при выводе,
+    который подтверждает администратор вручную, так что подмена перед выплатой
+    ничего не даёт злоумышленнику, зато потеря доступа к старому кошельку —
+    обычное дело.
+    """
+    profile = await _get_seller(db, user)
+
+    if payload.display_name is not None:
+        profile.display_name = payload.display_name.strip()
+    if payload.payout_wallet is not None:
+        profile.payout_wallet = payload.payout_wallet.strip()
+
+    await db.commit()
+    return {"display_name": profile.display_name, "payout_wallet": profile.payout_wallet}
 
 
 @router.post("/seller/register")
@@ -218,7 +292,9 @@ async def my_listings(
             "status": l.status.value,
             "moderation_comment": l.moderation_comment,
             "product_id": str(l.product_id) if l.product_id else None,
-            "images": [img.url for img in l.images],
+            "category_id": str(l.category_id) if l.category_id else None,
+            # Не только url: чтобы удалить фото, фронту нужен его id
+            "images": [{"id": str(img.id), "url": img.url} for img in l.images],
             "created_at": l.created_at.isoformat(),
         }
         for l in listings
@@ -295,10 +371,11 @@ async def upload_listing_image(
         raise HTTPException(status_code=400, detail=f"Максимум {MAX_IMAGES_PER_LISTING} фото")
 
     url = await _save_listing_image(image)
-    db.add(ListingImage(id=uuid.uuid4(), listing_id=listing.id, url=url, sort_order=count))
+    record = ListingImage(id=uuid.uuid4(), listing_id=listing.id, url=url, sort_order=count)
+    db.add(record)
     await db.commit()
 
-    return {"url": url}
+    return {"id": str(record.id), "url": url}
 
 
 @router.post("/seller/listings/{listing_id}/submit")
@@ -335,6 +412,162 @@ async def submit_listing(
         except Exception as e:
             logger.warning("[P2P] Не удалось уведомить о заявке: %s", e)
 
+    return {"status": listing.status.value}
+
+
+@router.patch("/seller/listings/{listing_id}")
+async def update_listing(
+    listing_id: uuid.UUID,
+    payload: ListingUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Правка заявки до отправки на модерацию.
+
+    Главный сценарий — заявку отклонили с комментарием, и продавец исправляет
+    ровно то, на что указал модератор. Без этого отказ означал бы «заводи
+    заявку заново», а причина отказа терялась бы.
+    """
+    profile = await _get_seller(db, user)
+    listing = await _own_listing(db, listing_id, profile)
+    _assert_editable(listing)
+
+    if payload.name is not None:
+        listing.name = payload.name.strip()
+    if payload.description is not None:
+        listing.description = payload.description.strip()
+    if payload.price_usd is not None:
+        listing.price_usd = payload.price_usd
+    if payload.category_id is not None:
+        listing.category_id = payload.category_id
+
+    await db.commit()
+    return {"id": str(listing.id), "status": listing.status.value}
+
+
+@router.delete("/seller/listings/{listing_id}")
+async def delete_listing(
+    listing_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Удаление черновика или отклонённой заявки. Опубликованные не трогаем."""
+    profile = await _get_seller(db, user)
+    listing = await _own_listing(db, listing_id, profile)
+    _assert_editable(listing)
+
+    await db.delete(listing)
+    await db.commit()
+    return {"deleted": True}
+
+
+@router.delete("/seller/listings/{listing_id}/images/{image_id}")
+async def delete_listing_image(
+    listing_id: uuid.UUID,
+    image_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    profile = await _get_seller(db, user)
+    listing = await _own_listing(db, listing_id, profile)
+    _assert_editable(listing)
+
+    image = next((img for img in listing.images if img.id == image_id), None)
+    if image is None:
+        raise HTTPException(status_code=404, detail="Фото не найдено")
+
+    # Файл с диска не удаляем: он мог уже уйти в каталог как картинка товара
+    # (при одобрении берётся первое фото), и удаление оставило бы битую
+    # ссылку. Место под фото стоит дешевле сломанной витрины.
+    await db.delete(image)
+    await db.commit()
+    return {"deleted": True}
+
+
+async def _product_is_taken(db: AsyncSession, product_id: uuid.UUID | None) -> bool:
+    """
+    Есть ли по товару сделка, из-за которой вещь больше нельзя продавать.
+
+    Отменённые и возвращённые сделки не считаются: в первом случае заказ не
+    оплатили, во втором вещь осталась у продавца.
+    """
+    if product_id is None:
+        return False
+
+    deal = (
+        await db.execute(
+            select(Deal).where(
+                Deal.product_id == product_id,
+                Deal.status.notin_([DealStatus.CANCELLED, DealStatus.REFUNDED]),
+            ).limit(1)
+        )
+    ).scalars().first()
+    return deal is not None
+
+
+@router.post("/seller/listings/{listing_id}/withdraw")
+async def withdraw_listing(
+    listing_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Снять одобренный товар с продажи — например, вещь продана где-то ещё.
+
+    Товар из каталога не удаляем, а обнуляем сток: на него могут ссылаться
+    прошлые заказы и отзывы.
+    """
+    profile = await _get_seller(db, user)
+    listing = await _own_listing(db, listing_id, profile)
+
+    if listing.status != ListingStatus.APPROVED:
+        raise HTTPException(status_code=400, detail="Снять с продажи можно только опубликованный товар")
+
+    if listing.product_id:
+        product = await db.get(Product, listing.product_id)
+        if product:
+            product.stock = 0
+
+    listing.status = ListingStatus.WITHDRAWN
+    await db.commit()
+    return {"status": listing.status.value}
+
+
+@router.post("/seller/listings/{listing_id}/republish")
+async def republish_listing(
+    listing_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Вернуть снятый товар в продажу.
+
+    Повторная модерация не нужна: текст уже проверен и с тех пор не менялся —
+    правка после одобрения запрещена (см. _assert_editable).
+    """
+    profile = await _get_seller(db, user)
+    _assert_can_sell(profile)
+    listing = await _own_listing(db, listing_id, profile)
+
+    if listing.status != ListingStatus.WITHDRAWN:
+        raise HTTPException(status_code=400, detail="Вернуть можно только снятый с продажи товар")
+
+    # Без этой проверки проданную вещь можно было бы выставить снова: после
+    # покупки сток и так равен нулю, и «снять — вернуть» вернуло бы его в 1.
+    if await _product_is_taken(db, listing.product_id):
+        raise HTTPException(
+            status_code=400,
+            detail="По этому товару уже есть сделка — вернуть его в продажу нельзя",
+        )
+
+    if listing.product_id:
+        product = await db.get(Product, listing.product_id)
+        if product:
+            product.stock = 1
+
+    listing.status = ListingStatus.APPROVED
+    await db.commit()
     return {"status": listing.status.value}
 
 

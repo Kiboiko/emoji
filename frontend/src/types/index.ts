@@ -170,6 +170,29 @@ export interface SellerProfile {
     rating?: number | null;
     rating_count?: number;
     deals_completed?: number;
+    /** Заработок на внутреннем счёте, ещё не выведенный */
+    balance_ton?: string;
+}
+
+export type ListingStatus =
+    | 'draft' | 'pending' | 'approved' | 'rejected' | 'withdrawn' | 'archived';
+
+export interface ListingImage {
+    id: string;
+    url: string;
+}
+
+export interface Listing {
+    id: string;
+    name: string;
+    description: string;
+    price_usd: string;
+    status: ListingStatus;
+    moderation_comment: string | null;
+    product_id: string | null;
+    category_id: string | null;
+    images: ListingImage[];
+    created_at: string;
 }
 
 export interface Terms {

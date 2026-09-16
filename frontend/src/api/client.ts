@@ -222,7 +222,26 @@ export const p2pApi = {
         display_name: string; payout_wallet: string; accept_terms: boolean;
     }) => (await apiClient.post('/p2p/seller/register', data)).data,
 
+    updateSeller: async (data: { display_name?: string; payout_wallet?: string }) =>
+        (await apiClient.patch('/p2p/seller/me', data)).data,
+
     getMyListings: async () => (await apiClient.get('/p2p/seller/listings')).data,
+
+    updateListing: async (listingId: string, data: {
+        name?: string; description?: string; price_usd?: string; category_id?: string;
+    }) => (await apiClient.patch(`/p2p/seller/listings/${listingId}`, data)).data,
+
+    deleteListing: async (listingId: string) =>
+        (await apiClient.delete(`/p2p/seller/listings/${listingId}`)).data,
+
+    deleteListingImage: async (listingId: string, imageId: string) =>
+        (await apiClient.delete(`/p2p/seller/listings/${listingId}/images/${imageId}`)).data,
+
+    withdrawListing: async (listingId: string) =>
+        (await apiClient.post(`/p2p/seller/listings/${listingId}/withdraw`)).data,
+
+    republishListing: async (listingId: string) =>
+        (await apiClient.post(`/p2p/seller/listings/${listingId}/republish`)).data,
 
     createListing: async (data: {
         name: string; description: string; price_usd: string;
