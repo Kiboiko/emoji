@@ -447,7 +447,7 @@ html[data-platform="android"] .referral-balance-card {
     border-radius: 12px;
     box-shadow: var(--shadow-lg);
     animation: slideUp 0.3s ease;
-    z-index: 10000;
+    z-index: var(--z-toast);
 }
 
 @keyframes slideUp {
@@ -471,7 +471,7 @@ html[data-platform="android"] .referral-balance-card {
     bottom: 0;
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(8px);
-    z-index: 1000;
+    z-index: var(--z-modal);
     display: flex;
     align-items: center;
     justify-content: center;

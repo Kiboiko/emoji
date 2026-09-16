@@ -126,40 +126,21 @@ export const App: React.FC = () => {
 
     if (isAuthenticating) {
         return (
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: '100vh',
-                background: 'var(--tg-theme-bg-color, #fff)'
-            }}>
-                <div className="shimmer" style={{
-                    width: '200px',
-                    height: '200px',
-                    borderRadius: '20px',
-                }} />
+            <div className="boot-screen">
+                <div className="skeleton boot-placeholder" />
             </div>
         );
     }
 
     if (!initData && !DEV_AUTH_ENABLED) {
+        // Цвета брались жёстко белым по тёмному: в тёмной теме этот экран
+        // вспыхивал белым прямоугольником поверх тёмного Telegram
         return (
-            <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100vh',
-                backgroundColor: '#ffffff',
-                color: '#1a1a1a',
-                padding: '20px',
-                textAlign: 'center'
-            }}>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>
-                    Откройте через Telegram
-                </div>
-                <div style={{ fontSize: '14px', color: '#6c757d', maxWidth: '300px' }}>
-                    Это приложение работает только внутри Telegram. Откройте бота и нажмите кнопку запуска.
+            <div className="boot-screen boot-screen-message">
+                <div className="boot-title">Откройте через Telegram</div>
+                <div className="boot-text">
+                    Это приложение работает только внутри Telegram.
+                    Откройте бота и нажмите кнопку запуска.
                 </div>
             </div>
         );
@@ -223,7 +204,7 @@ const PageTransition: React.FC<{ children: React.ReactNode }> = ({ children }) =
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -10 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
-        style={{ width: '100%', height: '100%' }}
+        className="page-transition"
     >
         {children}
     </motion.div>
@@ -244,15 +225,7 @@ const HomeWithProductOverlay: React.FC = () => {
                         animate={{ x: 0 }}
                         exit={{ x: '100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        style={{
-                            position: 'fixed',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            zIndex: 1100,
-                            background: 'var(--bg-primary)'
-                        }}
+                        className="product-overlay"
                     >
                         <ProductDetails />
                     </motion.div>

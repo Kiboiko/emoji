@@ -15,7 +15,7 @@
     background: var(--bg-primary);
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: var(--z-sticky);
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -197,7 +197,7 @@ html[data-platform="android"] .cart-items {
     border: 1px solid var(--border-color);
     border-radius: 20px;
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-    z-index: 900;
+    z-index: var(--z-floating);
     max-width: 608px;
     margin: 0 auto;
 }

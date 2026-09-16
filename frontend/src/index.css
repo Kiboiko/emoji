@@ -103,11 +103,12 @@
      Единая шкала: раньше z-index назначались на глаз (99, 100, 999, 1000) и
      новый элемент приходилось перекрывать очередной случайной цифрой. */
   --z-base: 1;
-  --z-sticky: 10;
-  --z-nav: 20;
-  --z-overlay: 30;
-  --z-modal: 40;
-  --z-toast: 50;
+  --z-sticky: 10;     /* заголовки, залипающие при прокрутке */
+  --z-floating: 20;   /* плавающая сводка корзины */
+  --z-nav: 30;        /* нижнее меню */
+  --z-overlay: 40;    /* полноэкранная карточка товара */
+  --z-modal: 50;      /* модальные окна */
+  --z-toast: 60;      /* уведомления поверх всего */
 
   /* --- Движение --------------------------------------------------------- */
   --transition-fast: 0.15s ease;
@@ -361,4 +362,55 @@ body {
 /* Разделитель с уменьшенными полями — в плотных блоках вроде итогов корзины */
 .divider-tight {
   margin: var(--space-2) 0;
+}
+
+/* --- Экраны до загрузки приложения ------------------------------------
+   Цвета берутся из токенов: раньше здесь был жёстко заданный белый фон, и в
+   тёмной теме экран вспыхивал белым поверх тёмного Telegram. */
+
+.boot-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.boot-placeholder {
+  width: 200px;
+  height: 200px;
+  border-radius: var(--radius-xl);
+}
+
+.boot-screen-message {
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  text-align: center;
+}
+
+.boot-title {
+  font-size: var(--font-xl);
+  font-weight: var(--weight-bold);
+}
+
+.boot-text {
+  font-size: var(--font-md);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+  max-width: 300px;
+}
+
+.page-transition {
+  width: 100%;
+  height: 100%;
+}
+
+/* Полноэкранная карточка товара поверх каталога */
+.product-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: var(--bg-primary);
 }
