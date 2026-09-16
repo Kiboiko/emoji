@@ -58,6 +58,73 @@
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
+
+  /* --- Отступы ---------------------------------------------------------
+     Шкала, а не произвольные числа: до этого в разметке встречались 4, 5, 6,
+     7, 8, 9, 10, 11, 12, 14, 16, 18, 20 пикселей вперемешку, и одинаковые по
+     смыслу отступы отличались на пиксель от файла к файлу. */
+  --space-1: 4px;
+  /* Полушаги: без них плотные места (бейджи, строки статусов) пришлось бы
+     округлять до 8px, и они бы расползлись */
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* --- Радиусы --------------------------------------------------------- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* --- Типографика ----------------------------------------------------- */
+  --font-xs: 11px;
+  --font-sm: 12px;
+  --font-md: 14px;
+  --font-lg: 16px;
+  --font-xl: 20px;
+  --font-2xl: 26px;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.45;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* --- Слои ------------------------------------------------------------
+     Единая шкала: раньше z-index назначались на глаз (99, 100, 999, 1000) и
+     новый элемент приходилось перекрывать очередной случайной цифрой. */
+  --z-base: 1;
+  --z-sticky: 10;
+  --z-nav: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+
+  /* --- Движение --------------------------------------------------------- */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.3s ease;
+}
+
+/* Уважаем системную настройку «меньше движения»: анимации в интерфейсе
+   покупки — украшение, а для части людей ещё и источник тошноты. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 body {
@@ -221,4 +288,73 @@ body {
   height: 1px;
   background: var(--border-color);
   margin: 16px 0;
+}
+/* --- Скелетоны -------------------------------------------------------
+   Класс .shimmer существовал, но использовался только на экране входа:
+   каталог, профиль и корзина показывали пустоту до загрузки, и приложение
+   выглядело сломанным на медленной сети. */
+
+.skeleton {
+  background: linear-gradient(90deg,
+      var(--bg-secondary) 0%,
+      var(--bg-tertiary) 25%,
+      var(--bg-secondary) 50%,
+      var(--bg-tertiary) 75%,
+      var(--bg-secondary) 100%);
+  background-size: 1000px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-text {
+  height: 12px;
+  margin-bottom: var(--space-2);
+}
+
+.skeleton-text:last-child {
+  margin-bottom: 0;
+  width: 60%;
+}
+
+/* --- Пустые состояния ------------------------------------------------- */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-10) var(--space-4);
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.empty-state-icon {
+  opacity: 0.5;
+}
+
+.empty-state-title {
+  font-size: var(--font-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+}
+
+.empty-state-text {
+  font-size: var(--font-md);
+  line-height: var(--leading-normal);
+  max-width: 320px;
+}
+
+/* --- Отступ под нижним меню ------------------------------------------
+   Задавался инлайново и по-разному: где-то 80px, где-то с безопасной зоной.
+   В корзине безопасная зона не учитывалась, и на телефонах с жестовой
+   навигацией последний товар оказывался под панелью. */
+.bottom-nav-spacer {
+  height: calc(80px + var(--safe-area-bottom));
+  flex-shrink: 0;
+}
+
+/* Разделитель с уменьшенными полями — в плотных блоках вроде итогов корзины */
+.divider-tight {
+  margin: var(--space-2) 0;
 }

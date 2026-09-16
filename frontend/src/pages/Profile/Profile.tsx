@@ -392,7 +392,7 @@ export const Profile: React.FC = () => {
                 </div>
             </div>
 
-            <div style={{ height: 'calc(80px + env(safe-area-inset-bottom, 0px))' }} />
+            <div className="bottom-nav-spacer" />
 
             {/* Withdraw Modal */}
             <AnimatePresence>

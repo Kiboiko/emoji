@@ -26,7 +26,7 @@ export const CartSummary: React.FC = () => {
                 <span>{itemCount}</span>
             </div>
 
-            <div className="divider" style={{ margin: '8px 0' }} />
+            <div className="divider divider-tight" />
 
             <div className="summary-total">
                 <span className="total-label">{language === 'ru' ? 'Итого' : 'Total'}</span>

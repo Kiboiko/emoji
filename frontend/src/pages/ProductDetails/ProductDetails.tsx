@@ -199,35 +199,12 @@ export const ProductDetails: React.FC = () => {
     if (isLoading) {
         return (
             <div className="product-details-page">
-                <div className="shimmer" style={{
-                    height: '400px',
-                    width: '100%',
-                    borderRadius: '0 0 32px 32px'
-                }} />
-                <div className="container" style={{ marginTop: '24px', padding: '0 16px' }}>
-                    <div className="shimmer" style={{
-                        height: '32px',
-                        width: '70%',
-                        marginBottom: '12px',
-                        borderRadius: '8px'
-                    }} />
-                    <div className="shimmer" style={{
-                        height: '24px',
-                        width: '30%',
-                        marginBottom: '24px',
-                        borderRadius: '8px'
-                    }} />
-                    <div className="shimmer" style={{
-                        height: '120px',
-                        width: '100%',
-                        marginBottom: '16px',
-                        borderRadius: '12px'
-                    }} />
-                    <div className="shimmer" style={{
-                        height: '60px',
-                        width: '100%',
-                        borderRadius: '12px'
-                    }} />
+                <div className="skeleton details-skeleton-image" />
+                <div className="container details-skeleton-body">
+                    <div className="skeleton details-skeleton-title" />
+                    <div className="skeleton details-skeleton-price" />
+                    <div className="skeleton details-skeleton-text" />
+                    <div className="skeleton details-skeleton-button" />
                 </div>
             </div>
         );
@@ -403,7 +380,7 @@ export const ProductDetails: React.FC = () => {
                             {isReviewsExpanded && reviews.slice(2).map((review, index) => (
                                 <motion.div
                                     key={review.id}
-                                    className="review-card glass-card"
+                                    className="review-card glass-card review-item"
                                     initial={{ opacity: 0, y: -10 }}
                                     animate={{
                                         opacity: 1,
@@ -418,7 +395,6 @@ export const ProductDetails: React.FC = () => {
                                         opacity: 0,
                                         transition: { duration: 0.2 }
                                     }}
-                                    style={{ marginTop: 12 }}
                                 >
                                     <div className="review-header">
                                         <div className="review-user">

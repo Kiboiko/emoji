@@ -20,8 +20,6 @@ export const BottomNav: React.FC = () => {
     });
     const { language } = useAuthStore();
 
-    console.log('BottomNav itemCount:', itemCount);
-
     const navItems = [
         {
             to: '/',

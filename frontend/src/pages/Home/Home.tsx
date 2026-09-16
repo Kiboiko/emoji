@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { PackageOpen } from 'lucide-react';
 import { Header } from '@/components/Header/Header';
 import { ProductCard } from '@/components/ProductCard/ProductCard';
 import { productsApi, categoriesApi, cartApi } from '@/api/client';
@@ -202,7 +203,22 @@ export const Home: React.FC = () => {
                         ))
                     ) : filteredProducts.length === 0 ? (
                         <div className="empty-state">
-                            <p>{language === 'ru' ? 'Товары не найдены' : 'No products found'}</p>
+                            <PackageOpen size={40} className="empty-state-icon" />
+                            <div className="empty-state-title">
+                                {language === 'ru' ? 'Товары не найдены' : 'No products found'}
+                            </div>
+                            {/* Разные подсказки: «ничего нет» и «ничего не подошло под
+                                фильтр» — это разные ситуации, и совет во втором случае
+                                должен быть про фильтр, а не про магазин */}
+                            <p className="empty-state-text">
+                                {searchQuery || selectedCategory
+                                    ? (language === 'ru'
+                                        ? 'Попробуйте изменить запрос или выбрать другую категорию.'
+                                        : 'Try a different search or category.')
+                                    : (language === 'ru'
+                                        ? 'Каталог пока пуст. Загляните позже.'
+                                        : 'The catalog is empty for now. Check back later.')}
+                            </p>
                         </div>
                     ) : (
                         filteredProducts.map((product, index) => (
@@ -210,7 +226,10 @@ export const Home: React.FC = () => {
                                 key={product.id}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: index * 0.05 }}
+                                // Задержку ограничиваем: при множителе без потолка
+                                // сотый товар появлялся бы через пять секунд, а
+                                // тысячный — почти через минуту
+                                transition={{ delay: Math.min(index * 0.05, 0.4) }}
                             >
                                 <ProductCard
                                     product={product}
@@ -223,7 +242,7 @@ export const Home: React.FC = () => {
                 </div>
             </div>
 
-            <div style={{ height: 'calc(80px + env(safe-area-inset-bottom, 0px))' }} /> {/* Bottom nav spacer */}
+            <div className="bottom-nav-spacer" />
         </div>
     );
 };

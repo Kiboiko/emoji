@@ -1,27 +1,27 @@
 .deals-section {
-    padding: 16px;
-    margin-bottom: 16px;
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
 }
 
 .deals-title {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 16px;
-    font-weight: 600;
+    gap: var(--space-2);
+    font-size: var(--font-lg);
+    font-weight: var(--weight-semibold);
     color: var(--text-primary);
-    margin-bottom: 14px;
+    margin-bottom: var(--space-3);
 }
 
 .deals-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-2-5);
 }
 
 .deal-item {
-    padding: 12px;
-    border-radius: 12px;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
 }
@@ -40,20 +40,20 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .deal-number {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-semibold);
     color: var(--text-tertiary);
 }
 
 .deal-badge {
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-md);
+    font-size: var(--font-xs);
+    font-weight: var(--weight-semibold);
     background: var(--bg-tertiary);
     color: var(--text-secondary);
     flex-shrink: 0;
@@ -84,9 +84,9 @@
 }
 
 .deal-product {
-    margin-top: 4px;
-    font-weight: 600;
-    font-size: 14px;
+    margin-top: var(--space-1);
+    font-weight: var(--weight-semibold);
+    font-size: var(--font-md);
     color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -97,13 +97,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 4px;
-    font-size: 12px;
+    margin-top: var(--space-1);
+    font-size: var(--font-sm);
     color: var(--text-secondary);
 }
 
 .deal-amount {
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
     color: var(--text-primary);
 }
 
@@ -111,9 +111,9 @@
 .deal-dispute {
     display: flex;
     align-items: center;
-    gap: 5px;
-    margin-top: 6px;
-    font-size: 12px;
+    gap: var(--space-1-5);
+    margin-top: var(--space-1-5);
+    font-size: var(--font-sm);
     color: var(--text-tertiary);
 }
 
@@ -124,21 +124,21 @@
 .deal-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 10px;
+    gap: var(--space-1-5);
+    margin-top: var(--space-2-5);
 }
 
 .deal-btn {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 7px 12px;
+    gap: var(--space-1-5);
+    padding: var(--space-1-5) var(--space-3);
     border: none;
-    border-radius: 9px;
+    border-radius: var(--radius-md);
     background: var(--gradient-primary);
     color: #fff;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-semibold);
     cursor: pointer;
 }
 
@@ -158,8 +158,8 @@
 }
 
 .deal-hint {
-    margin: 8px 0 0;
-    font-size: 11px;
+    margin: var(--space-2) 0 0;
+    font-size: var(--font-xs);
     line-height: 1.4;
     color: var(--text-tertiary);
 }

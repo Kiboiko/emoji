@@ -533,3 +533,45 @@
     border-radius: 16px;
     background: var(--bg-tertiary);
 }
+/* --- Скелетон загрузки -----------------------------------------------
+   Размеры повторяют реальную разметку страницы: скелетон другой высоты даёт
+   скачок содержимого в момент загрузки. */
+
+.details-skeleton-image {
+    height: 400px;
+    width: 100%;
+    border-radius: 0 0 32px 32px;
+}
+
+.details-skeleton-body {
+    margin-top: var(--space-6);
+}
+
+.details-skeleton-title {
+    height: 32px;
+    width: 70%;
+    margin-bottom: var(--space-3);
+}
+
+.details-skeleton-price {
+    height: 24px;
+    width: 30%;
+    margin-bottom: var(--space-6);
+}
+
+.details-skeleton-text {
+    height: 120px;
+    width: 100%;
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius-md);
+}
+
+.details-skeleton-button {
+    height: 60px;
+    width: 100%;
+    border-radius: var(--radius-md);
+}
+
+.review-item {
+    margin-top: var(--space-3);
+}

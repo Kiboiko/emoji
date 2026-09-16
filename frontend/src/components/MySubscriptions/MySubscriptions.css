@@ -1,27 +1,27 @@
 .subscriptions-section {
-    padding: 16px;
-    margin-bottom: 16px;
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
 }
 
 .subscriptions-title {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 16px;
-    font-weight: 600;
+    gap: var(--space-2);
+    font-size: var(--font-lg);
+    font-weight: var(--weight-semibold);
     color: var(--text-primary);
-    margin-bottom: 14px;
+    margin-bottom: var(--space-3);
 }
 
 .subscriptions-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-2-5);
 }
 
 .subscription-item {
-    padding: 12px;
-    border-radius: 12px;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
 }
@@ -35,13 +35,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .subscription-channel {
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: var(--font-md);
     /* Длинные названия каналов не должны ломать карточку */
     overflow: hidden;
     text-overflow: ellipsis;
@@ -50,10 +50,10 @@
 
 .subscription-badge {
     flex-shrink: 0;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-md);
+    font-size: var(--font-xs);
+    font-weight: var(--weight-semibold);
 }
 
 .badge-active {
@@ -73,17 +73,17 @@
 }
 
 .subscription-plan {
-    margin-top: 4px;
-    font-size: 13px;
+    margin-top: var(--space-1);
+    font-size: var(--font-sm);
     color: var(--text-secondary);
 }
 
 .subscription-expiry {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-top: 6px;
-    font-size: 12px;
+    gap: var(--space-1-5);
+    margin-top: var(--space-1-5);
+    font-size: var(--font-sm);
     color: var(--text-tertiary);
 }
 
@@ -92,20 +92,20 @@
 }
 
 .subscription-actions {
-    margin-top: 10px;
+    margin-top: var(--space-2-5);
 }
 
 .subscription-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
+    gap: var(--space-1-5);
+    padding: var(--space-2) var(--space-3);
     border: none;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     background: var(--gradient-primary);
     color: #fff;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-semibold);
     cursor: pointer;
     transition: opacity 0.2s ease;
 }
@@ -116,7 +116,7 @@
 }
 
 .subscription-joined {
-    margin-top: 8px;
-    font-size: 12px;
+    margin-top: var(--space-2);
+    font-size: var(--font-sm);
     color: var(--accent-success);
 }

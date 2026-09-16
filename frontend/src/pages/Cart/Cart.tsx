@@ -194,7 +194,7 @@ export const Cart: React.FC = () => {
                 </div>
             </div>
 
-            <div style={{ height: '80px' }} />
+            <div className="bottom-nav-spacer" />
         </div>
     );
 };

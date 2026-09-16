@@ -18,7 +18,10 @@ import { Profile } from './pages/Profile/Profile';
 const DEV_AUTH_ENABLED = import.meta.env.VITE_DEV_AUTH === 'true';
 
 // Placeholder components for other pages
-const Orders = () => <div className="container" style={{ padding: '20px' }}>Orders Page (Coming Soon)</div>;
+// История заказов живёт в профиле, а отдельная страница так и осталась
+// заглушкой «Coming Soon». Редирект вместо неё: по ссылке из старой переписки
+// или закладки человек попадает туда, где заказы действительно есть.
+const Orders = () => <Navigate to="/profile" replace />;
 
 export const App: React.FC = () => {
     const { initData, startParam, isReady } = useTelegram();
