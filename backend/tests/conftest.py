@@ -75,6 +75,22 @@ async def db(engine) -> AsyncSession:
             await trans.rollback()
 
 
+@pytest.fixture(autouse=True)
+def reset_settings_cache():
+    """
+    Сбрасывает кеш настроек вокруг каждого теста.
+
+    Кеш живёт в модуле, а тесты откатываются: без сброса значение, выставленное
+    одним тестом, переживало бы откат его транзакции и всплывало в следующем,
+    причём в зависимости от порядка запуска.
+    """
+    from services import settings_service
+
+    settings_service.invalidate_cache()
+    yield
+    settings_service.invalidate_cache()
+
+
 @pytest.fixture
 async def user_factory(db):
     """Создаёт пользователей — почти каждому тесту нужен владелец счёта."""

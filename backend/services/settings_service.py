@@ -6,7 +6,9 @@
     где заводится новая настройка (тип, дефолт, описание);
   * значение берётся из таблицы app_settings, при отсутствии — из дефолта.
     Поэтому добавление ключа не требует миграции данных;
-  * значения кешируются в памяти процесса и сбрасываются при записи.
+  * значения кешируются в памяти процесса: сбрасываются при записи и в любом
+    случае перечитываются раз в CACHE_TTL_SECONDS, чтобы правка из админки
+    доходила до всех процессов без перезапуска.
 
 Проценты хранятся в базисных пунктах (bp): 2% = 200. См. services/money.py.
 """
@@ -14,6 +16,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -106,6 +109,18 @@ _DEFS_BY_KEY: dict[str, SettingDef] = {d.key: d for d in SETTING_DEFS}
 
 # Кеш процесса: ключ -> значение. Сбрасывается при записи через set_setting().
 _cache: dict[str, Any] | None = None
+_cache_loaded_at: float = 0.0
+
+# Кеш живёт ограниченное время, а не до записи.
+#
+# set_setting() сбрасывает кеш только в СВОЁМ процессе. Пока uvicorn запущен с
+# одним воркером, этого достаточно, но `--workers 4` в проде — обычное дело, и
+# тогда правка комиссии в админке применилась бы лишь в одном процессе из
+# четырёх, а остальные продолжили бы считать по-старому до перезапуска.
+# Незаметно и прямо в деньгах. Срок жизни ограничивает такое расхождение
+# несколькими секундами и не требует ни общего кеша, ни сигналов между
+# процессами.
+CACHE_TTL_SECONDS = 30.0
 
 
 class UnknownSettingKey(KeyError):
@@ -144,7 +159,7 @@ def _coerce(defn: SettingDef, raw: Any) -> Any:
 
 async def load_cache(db: AsyncSession) -> dict[str, Any]:
     """Читает все настройки из БД, накладывая их поверх дефолтов."""
-    global _cache
+    global _cache, _cache_loaded_at
 
     values: dict[str, Any] = {d.key: d.default for d in SETTING_DEFS}
 
@@ -162,24 +177,32 @@ async def load_cache(db: AsyncSession) -> dict[str, Any]:
             logger.error("[SETTINGS] Некорректное значение в БД, берём дефолт: %s", e)
 
     _cache = values
+    _cache_loaded_at = time.monotonic()
     return values
 
 
 def invalidate_cache() -> None:
-    global _cache
+    global _cache, _cache_loaded_at
     _cache = None
+    _cache_loaded_at = 0.0
+
+
+def _cache_is_fresh() -> bool:
+    # monotonic, а не time(): перевод системных часов не должен ни продлевать
+    # кеш навсегда, ни сбрасывать его на каждом обращении
+    return _cache is not None and (time.monotonic() - _cache_loaded_at) < CACHE_TTL_SECONDS
 
 
 async def get_all(db: AsyncSession) -> dict[str, Any]:
-    if _cache is None:
+    if not _cache_is_fresh():
         return await load_cache(db)
-    return dict(_cache)
+    return dict(_cache)  # type: ignore[arg-type]
 
 
 async def get(db: AsyncSession, key: str) -> Any:
     if key not in _DEFS_BY_KEY:
         raise UnknownSettingKey(key)
-    if _cache is None:
+    if not _cache_is_fresh():
         await load_cache(db)
     return _cache[key]  # type: ignore[index]
 

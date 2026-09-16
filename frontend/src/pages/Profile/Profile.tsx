@@ -263,6 +263,16 @@ export const Profile: React.FC = () => {
                         {language === 'ru' ? 'Приглашено' : 'Invited'}: {stats?.referral_count || 0} {language === 'ru' ? 'пользователей' : 'users'}
                     </div>
 
+                    {/* Второй уровень включается настройкой и чаще выключен —
+                        показываем строку, только когда по нему что-то есть */}
+                    {!!stats?.level2_earnings && (
+                        <div className="invited-count">
+                            {language === 'ru'
+                                ? 'Из них со второго уровня'
+                                : 'Of which from level 2'}: ${stats.level2_earnings.toFixed(2)}
+                        </div>
+                    )}
+
                     <div className="referral-link-box">
                         <div className="link-label">{language === 'ru' ? 'Реферальная ссылка' : 'Referral Link'}</div>
                         <div className="link-content">

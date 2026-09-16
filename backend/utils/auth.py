@@ -152,11 +152,21 @@ def generate_referral_code(length: int = 8) -> str:
 # === NEW DEPENDENCIES ===
 
 async def get_current_user(
-    authorization: str = Header(..., alias="Authorization"),
+    authorization: str | None = Header(None, alias="Authorization"),
     db: AsyncSession = Depends(get_db)
 ) -> User:
-    """Dependency to get current authenticated user"""
+    """
+    Dependency to get current authenticated user.
+
+    Заголовок объявлен необязательным намеренно. С Header(...) его отсутствие
+    даёт 422 «ошибка валидации», а клиенты (и витрина, и админка) считают
+    признаком протухшей сессии именно 401 — админка по нему обновляет токен.
+    С 422 вместо повторного входа пользователь видел бы непонятную ошибку.
+    """
     try:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
         # Extract token
         if not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Invalid authorization header")

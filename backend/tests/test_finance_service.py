@@ -127,6 +127,51 @@ class TestIdempotency:
         assert second.already_applied is True
         assert account.balance_minor == 5_000_000_000  # НЕ 10
 
+    async def test_two_recipients_need_key_suffix(self, db, user_factory):
+        """
+        Два зачисления по одному основанию разным получателям.
+
+        Проводка по внешнему счёту у них одинаковая, и без key_suffix ключ
+        идемпотентности совпадает — вторая операция отбрасывается целиком как
+        мнимый повтор, хотя получатель другой. Так терялось реферальное
+        начисление второго уровня.
+        """
+        first_user = await user_factory(username="recipient_one")
+        second_user = await user_factory(username="recipient_two")
+        first_account = await fin.user_account(db, first_user.id, TON)
+        second_account = await fin.user_account(db, second_user.id, TON)
+        order_id = uuid.uuid4()
+
+        await fin.deposit_from_external(
+            db, account=first_account, amount_minor=3_000_000_000,
+            ref_type=LedgerRefType.ORDER, ref_id=order_id,
+            entry_type=LedgerEntryType.REFERRAL_ACCRUAL, key_suffix="l1",
+        )
+        result = await fin.deposit_from_external(
+            db, account=second_account, amount_minor=1_000_000_000,
+            ref_type=LedgerRefType.ORDER, ref_id=order_id,
+            entry_type=LedgerEntryType.REFERRAL_ACCRUAL, key_suffix="l2",
+        )
+
+        assert result.already_applied is False
+        assert first_account.balance_minor == 3_000_000_000
+        assert second_account.balance_minor == 1_000_000_000
+
+    async def test_same_suffix_still_deduplicates(self, db, user_factory):
+        """key_suffix различает операции, но не отключает защиту от повтора."""
+        user = await user_factory(username="suffix_repeat")
+        account = await fin.user_account(db, user.id, TON)
+        order_id = uuid.uuid4()
+
+        for _ in range(2):
+            await fin.deposit_from_external(
+                db, account=account, amount_minor=2_000_000_000,
+                ref_type=LedgerRefType.ORDER, ref_id=order_id,
+                entry_type=LedgerEntryType.REFERRAL_ACCRUAL, key_suffix="l1",
+            )
+
+        assert account.balance_minor == 2_000_000_000
+
     async def test_different_refs_are_independent(self, db, user_factory):
         user = await user_factory()
         account = await fin.user_account(db, user.id, TON)

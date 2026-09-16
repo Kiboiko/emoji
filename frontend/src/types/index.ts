@@ -109,6 +109,8 @@ export interface ReferralStats {
     referral_code: string;
     referral_count: number;
     total_earnings: number;
+    /** Заработок со второго уровня. 0, когда второй уровень выключен. */
+    level2_earnings?: number;
     referrals: Array<{
         user_id: string;
         telegram_id: number;

@@ -287,8 +287,18 @@ async def deposit_from_external(
     ref_id: uuid.UUID | None,
     entry_type: LedgerEntryType = LedgerEntryType.PAYMENT_IN,
     comment: str | None = None,
+    key_suffix: str | None = None,
 ) -> PostResult:
-    """Приход денег извне (оплата покупателя) на внутренний счёт."""
+    """
+    Приход денег извне (оплата покупателя) на внутренний счёт.
+
+    key_suffix нужен, когда по одному и тому же основанию делается несколько
+    разных зачислений одного типа. Ключ идемпотентности собирается из
+    (ref_type, ref_id, entry_type, счёт), и у проводки по внешнему счёту он
+    получается одинаковым у всех таких зачислений — вторая операция целиком
+    отбрасывается как повтор, даже если получатель другой. Так терялось
+    реферальное начисление второго уровня.
+    """
     if amount_minor <= 0:
         raise FinanceError("Сумма зачисления должна быть положительной")
 
@@ -299,8 +309,10 @@ async def deposit_from_external(
         ref_id=ref_id,
         comment=comment,
         postings=[
-            Posting(account=ext, entry_type=entry_type, amount_minor=-amount_minor),
-            Posting(account=account, entry_type=entry_type, amount_minor=amount_minor),
+            Posting(account=ext, entry_type=entry_type, amount_minor=-amount_minor,
+                    key_suffix=key_suffix),
+            Posting(account=account, entry_type=entry_type, amount_minor=amount_minor,
+                    key_suffix=key_suffix),
         ],
     )
 
