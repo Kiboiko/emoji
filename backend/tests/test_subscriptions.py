@@ -20,6 +20,7 @@ from models.subscription import (
 from services import finance_service as fin
 from services import subscription_service as subs
 from services.money import to_minor
+from services.telegram_service import TelegramApiError
 
 pytestmark = pytest.mark.asyncio
 
@@ -344,3 +345,240 @@ class TestOrderWiring:
 
         author = await fin.user_account(db, channel.owner_user_id, TON)
         assert author.balance_minor == 0
+
+
+# ---------------------------------------------------------------------------
+# Проверка прав бота в канале
+# ---------------------------------------------------------------------------
+
+class TestChannelVerification:
+    """
+    Без прав бота канал бесполезен: выдать доступ и отозвать его невозможно.
+    Поэтому результат проверки запоминается, а публикация без него запрещена.
+    """
+
+    async def test_admin_rights_are_recorded(self, db, channel):
+        channel.bot_is_admin = False
+        with patch.object(subs.channel_access, "check_bot_is_admin",
+                          AsyncMock(return_value=(True, None))), \
+             patch.object(subs.channel_access, "get_chat",
+                          AsyncMock(return_value={"title": "Новое имя", "username": "chan"})):
+            ok, error = await subs.verify_channel(db, channel)
+
+        assert ok is True
+        assert error is None
+        assert channel.bot_is_admin is True
+        assert channel.bot_checked_at is not None
+        # Заодно подтянули актуальное имя канала — автор мог его переименовать
+        assert channel.title == "Новое имя"
+        assert channel.username == "chan"
+
+    async def test_missing_rights_are_recorded_with_reason(self, db, channel):
+        """
+        Причина отказа сохраняется.
+
+        Автору надо сказать, чего именно не хватает, иначе он будет
+        добавлять бота заново и получать тот же результат.
+        """
+        with patch.object(subs.channel_access, "check_bot_is_admin",
+                          AsyncMock(return_value=(False, "Бот не администратор"))):
+            ok, error = await subs.verify_channel(db, channel)
+
+        assert ok is False
+        assert error == "Бот не администратор"
+        assert channel.bot_is_admin is False
+        assert channel.bot_check_error == "Бот не администратор"
+
+    async def test_chat_info_failure_does_not_break_verification(self, db, channel):
+        """Права подтверждены — неудача с получением имени канала не важна."""
+        with patch.object(subs.channel_access, "check_bot_is_admin",
+                          AsyncMock(return_value=(True, None))), \
+             patch.object(subs.channel_access, "get_chat",
+                          AsyncMock(side_effect=TelegramApiError("getChat", "недоступен"))):
+            ok, _ = await subs.verify_channel(db, channel)
+
+        assert ok is True
+        assert channel.bot_is_admin is True
+        assert channel.title == "Закрытый канал"
+
+
+# ---------------------------------------------------------------------------
+# Выдача ссылки
+# ---------------------------------------------------------------------------
+
+class TestInviteIssuing:
+
+    @pytest.fixture
+    async def subscription(self, db, user_factory, channel, plan):
+        buyer = await user_factory(username="sub_buyer")
+        row = Subscription(
+            id=uuid.uuid4(),
+            user_id=buyer.id,
+            plan_id=plan.id,
+            channel_id=channel.id,
+            status=SubscriptionStatus.ACTIVE,
+            started_at=datetime.utcnow(),
+            expires_at=datetime.utcnow() + timedelta(days=30),
+        )
+        db.add(row)
+        await db.flush()
+        row.channel = channel
+        row.user = buyer
+        return row
+
+    async def test_link_is_saved_with_expiry(self, db, subscription):
+        with patch.object(subs.channel_access, "ensure_not_banned",
+                          AsyncMock(return_value=False)), \
+             patch.object(subs.channel_access, "create_invite_link",
+                          AsyncMock(return_value={"invite_link": "https://t.me/+abc"})):
+            link = await subs.issue_invite(db, subscription)
+
+        assert link == "https://t.me/+abc"
+        assert subscription.invite_link == "https://t.me/+abc"
+        # Ссылка одноразовая и с сроком — иначе её передадут дальше
+        assert subscription.invite_link_expires_at > datetime.utcnow()
+
+    async def test_ban_is_lifted_before_issuing(self, db, subscription):
+        """
+        Перед выдачей снимается бан.
+
+        «Удалить участника» через интерфейс Telegram — это бан. Забаненный не
+        войдёт ни по какой ссылке и увидит «срок действия ссылки истёк»:
+        выглядит как сломанная оплата, хотя ссылка живая.
+        """
+        unban = AsyncMock(return_value=True)
+        with patch.object(subs.channel_access, "ensure_not_banned", unban), \
+             patch.object(subs.channel_access, "create_invite_link",
+                          AsyncMock(return_value={"invite_link": "https://t.me/+xyz"})):
+            await subs.issue_invite(db, subscription)
+
+        assert unban.await_count == 1
+
+    async def test_telegram_failure_does_not_break_paid_subscription(self, db, subscription):
+        """
+        Отказ Telegram не откатывает оплату.
+
+        Подписка уже оплачена. Падение выдачи фиксируется в журнале, админу
+        уходит алерт, доступ выдаётся вручную — но деньги остаются учтёнными.
+        """
+        alerts = []
+
+        async def capture(text):
+            alerts.append(text)
+
+        with patch.object(subs.channel_access, "ensure_not_banned",
+                          AsyncMock(return_value=False)), \
+             patch.object(subs.channel_access, "create_invite_link",
+                          AsyncMock(side_effect=TelegramApiError(
+                              "createChatInviteLink", "not enough rights"))), \
+             patch.object(subs, "_alert_admins", capture):
+            link = await subs.issue_invite(db, subscription)
+
+        assert link is None
+        assert subscription.invite_link is None
+        assert subscription.status == SubscriptionStatus.ACTIVE
+        assert len(alerts) == 1
+        assert "вручную" in alerts[0]
+
+    async def test_unban_failure_does_not_stop_issuing(self, db, subscription):
+        """Не удалось снять бан — ссылку всё равно создаём, причина в журнале."""
+        with patch.object(subs.channel_access, "ensure_not_banned",
+                          AsyncMock(side_effect=TelegramApiError("unbanChatMember", "нет прав"))), \
+             patch.object(subs.channel_access, "create_invite_link",
+                          AsyncMock(return_value={"invite_link": "https://t.me/+ok"})):
+            link = await subs.issue_invite(db, subscription)
+
+        assert link == "https://t.me/+ok"
+
+
+# ---------------------------------------------------------------------------
+# Напоминания
+# ---------------------------------------------------------------------------
+
+class TestExpiryReminders:
+
+    @pytest.fixture
+    async def expiring(self, db, user_factory, channel, plan):
+        async def make(days_left: float):
+            buyer = await user_factory(username=f"rem_{uuid.uuid4().hex[:6]}")
+            row = Subscription(
+                id=uuid.uuid4(),
+                user_id=buyer.id,
+                plan_id=plan.id,
+                channel_id=channel.id,
+                status=SubscriptionStatus.ACTIVE,
+                started_at=datetime.utcnow() - timedelta(days=27),
+                expires_at=datetime.utcnow() + timedelta(days=days_left),
+            )
+            db.add(row)
+            await db.flush()
+            return row
+
+        return make
+
+    async def test_reminder_is_sent_three_days_before(self, db, expiring):
+        subscription = await expiring(2.5)
+        sender = AsyncMock()
+
+        with patch.object(subs.telegram_service, "send_message", sender):
+            sent = await subs.send_expiry_reminders(db)
+
+        assert sent == 1
+        assert sender.await_count == 1
+        assert subscription.reminder_sent_for_days == 3
+
+    async def test_same_reminder_is_not_repeated(self, db, expiring):
+        """
+        Джоба крутится каждый час — без отметки человек получал бы напоминание
+        двадцать четыре раза в сутки.
+        """
+        await expiring(2.5)
+        sender = AsyncMock()
+
+        with patch.object(subs.telegram_service, "send_message", sender):
+            first = await subs.send_expiry_reminders(db)
+            second = await subs.send_expiry_reminders(db)
+
+        assert first == 1
+        assert second == 0
+        assert sender.await_count == 1
+
+    async def test_day_before_reminder_still_goes_out(self, db, expiring):
+        """Напоминание за сутки приходит, даже если за три дня уже приходило."""
+        subscription = await expiring(2.5)
+        sender = AsyncMock()
+
+        with patch.object(subs.telegram_service, "send_message", sender):
+            await subs.send_expiry_reminders(db)
+            subscription.expires_at = datetime.utcnow() + timedelta(hours=12)
+            await db.flush()
+            second = await subs.send_expiry_reminders(db)
+
+        assert second == 1
+        assert subscription.reminder_sent_for_days == 1
+
+    async def test_failed_send_is_retried_later(self, db, expiring):
+        """
+        Не доставленное напоминание не помечается отправленным.
+
+        Человек мог заблокировать бота временно; отметить отправку означало бы
+        молча лишить его единственного предупреждения об окончании доступа.
+        """
+        subscription = await expiring(2.5)
+
+        with patch.object(subs.telegram_service, "send_message",
+                          AsyncMock(side_effect=RuntimeError("bot blocked"))):
+            sent = await subs.send_expiry_reminders(db)
+
+        assert sent == 0
+        assert subscription.reminder_sent_for_days is None
+
+    async def test_distant_expiry_gets_no_reminder(self, db, expiring):
+        await expiring(20)
+        sender = AsyncMock()
+
+        with patch.object(subs.telegram_service, "send_message", sender):
+            sent = await subs.send_expiry_reminders(db)
+
+        assert sent == 0
+        assert sender.await_count == 0
