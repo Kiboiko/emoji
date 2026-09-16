@@ -10,8 +10,14 @@ class WithdrawalCreate(BaseModel):
     """Schema for creating a withdrawal request"""
     # Decimal, а не float: сумма приходит от пользователя и идёт в денежную
     # логику, где float запрещён (см. services/money.py).
-    amount: Decimal = Field(..., gt=0, max_digits=18, decimal_places=2)
+    #
+    # decimal_places=9, а не 2: у TON девять знаков, и с двумя вывести можно
+    # было бы только круглые суммы, а остаток навсегда застрял бы на счёте.
+    amount: Decimal = Field(..., gt=0, max_digits=20, decimal_places=9)
     wallet: str = Field(..., min_length=1, max_length=255)
+    # USD (реферальный баланс) или TON (заработок продавца). По умолчанию USD —
+    # так работает существующий вызов с витрины.
+    currency: Optional[str] = Field(None, max_length=10)
 
 
 class WithdrawalUpdate(BaseModel):
@@ -26,6 +32,7 @@ class WithdrawalResponse(BaseModel):
     id: UUID
     user_id: UUID
     amount: float
+    currency: str = "USD"
     wallet: str
     status: WithdrawalStatus
     created_at: datetime

@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Store, Star, Plus, Upload, X, Send, Pencil, Trash2,
-    EyeOff, Eye, AlertTriangle, ChevronDown, ChevronUp, Check,
+    EyeOff, Eye, AlertTriangle, ChevronDown, ChevronUp, Check, Wallet,
 } from 'lucide-react';
-import { p2pApi, categoriesApi, termsApi } from '@/api/client';
+import { p2pApi, categoriesApi, termsApi, withdrawalsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import type { Category, Listing, SellerProfile } from '@/types';
@@ -351,14 +351,120 @@ const SellerSummary: React.FC<{
             )}
 
             {Number(profile.balance_ton ?? 0) > 0 && (
-                <p className="seller-hint">
-                    {t(
-                        'Заработок выводится администрацией на указанный кошелёк. Напишите в поддержку для вывода.',
-                        'Earnings are paid out by the admins to the wallet above. Contact support to withdraw.',
-                    )}
-                </p>
+                <Payout
+                    balance={profile.balance_ton ?? '0'}
+                    wallet={profile.payout_wallet ?? ''}
+                    language={language}
+                    onDone={onSaved}
+                    onError={onError}
+                />
             )}
         </div>
+    );
+};
+
+/**
+ * Вывод заработка продавца.
+ *
+ * Деньги уходят не мгновенно: заявка замораживает сумму на счёте, а перевод
+ * делает администрация вручную. Так написано и в тексте — иначе продавец ждёт
+ * поступления сразу и идёт в поддержку.
+ */
+const Payout: React.FC<{
+    balance: string;
+    wallet: string;
+    language: string;
+    onDone: () => Promise<SellerProfile>;
+    onError: (e: any, fallback: string) => void;
+}> = ({ balance, wallet, language, onDone, onError }) => {
+    const { haptic } = useTelegram();
+    const [open, setOpen] = useState(false);
+    const [amount, setAmount] = useState(balance);
+    const [busy, setBusy] = useState(false);
+    const [sent, setSent] = useState(false);
+
+    const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
+
+    const submit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (Number(amount) <= 0 || Number(amount) > Number(balance)) {
+            onError(null, t('Некорректная сумма', 'Invalid amount'));
+            return;
+        }
+
+        setBusy(true);
+        try {
+            await withdrawalsApi.requestWithdrawal({
+                amount, wallet, currency: 'TON',
+            });
+            haptic.notification('success');
+            setSent(true);
+            setOpen(false);
+            await onDone();
+        } catch (err) {
+            onError(err, t('Не удалось создать заявку', 'Request failed'));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (sent) {
+        return (
+            <p className="seller-hint">
+                {t(
+                    'Заявка на вывод создана. Администрация переведёт средства на указанный кошелёк.',
+                    'Withdrawal requested. The admins will send the funds to the wallet above.',
+                )}
+            </p>
+        );
+    }
+
+    if (!open) {
+        return (
+            <div className="seller-payout">
+                <button className="seller-btn" onClick={() => setOpen(true)}>
+                    <Wallet size={14} />
+                    {t('Вывести', 'Withdraw')} {balance} TON
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <form className="seller-form" onSubmit={submit}>
+            <label className="seller-label">
+                {t('Сумма к выводу', 'Amount')}
+                <input
+                    className="seller-input"
+                    type="number"
+                    step="0.000000001"
+                    min="0.000000001"
+                    max={balance}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    required
+                />
+            </label>
+
+            <p className="seller-hint">
+                {t('На кошелёк ', 'To wallet ')}
+                <span className="seller-wallet-inline">{wallet}</span>
+                {t('. Изменить его можно выше.', '. You can change it above.')}
+            </p>
+
+            <div className="seller-row-btns">
+                <button className="seller-btn" type="submit" disabled={busy}>
+                    {t('Отправить заявку', 'Request')}
+                </button>
+                <button
+                    className="seller-btn seller-btn-ghost"
+                    type="button"
+                    onClick={() => setOpen(false)}
+                >
+                    {t('Отмена', 'Cancel')}
+                </button>
+            </div>
+        </form>
     );
 };
 

@@ -20,8 +20,10 @@ from services.telegram_service import telegram_service
 
 router = APIRouter(prefix="/api/withdrawals", tags=["Withdrawals"])
 
-# Реферальные балансы номинированы в USD (см. миграцию d9e3f4a5b6c7).
+# Реферальные балансы номинированы в USD (см. миграцию d9e3f4a5b6c7),
+# заработок продавцов и авторов каналов — в TON.
 WITHDRAWAL_CURRENCY = "USD"
+ALLOWED_CURRENCIES = ("USD", "TON")
 
 
 def _sync_balance_cache(user: User, account: Account) -> None:
@@ -30,7 +32,13 @@ def _sync_balance_cache(user: User, account: Account) -> None:
     фронта. Держим в нём ДОСТУПНУЮ сумму (баланс минус заморозка), чтобы
     поведение совпадало с прежним: заявка на вывод сразу уменьшает
     показываемый баланс.
+
+    Кеш относится только к реферальному балансу в USD: заработок в TON в
+    referral_earnings не отражается, иначе в одном поле сложились бы две
+    разные валюты.
     """
+    if account.currency != WITHDRAWAL_CURRENCY:
+        return
     user.referral_earnings = float(
         from_minor(account.available_minor, WITHDRAWAL_CURRENCY)
     )
@@ -53,8 +61,12 @@ async def request_withdrawal(
     недоступен к повторной заявке. Списание происходит в момент подтверждения
     вывода админом, и каждый шаг попадает в журнал.
     """
-    account = await finance_service.user_account(db, user.id, WITHDRAWAL_CURRENCY)
-    amount_minor = to_minor(withdrawal_data.amount, WITHDRAWAL_CURRENCY)
+    currency = (withdrawal_data.currency or WITHDRAWAL_CURRENCY).upper()
+    if currency not in ALLOWED_CURRENCIES:
+        raise HTTPException(status_code=400, detail=f"Валюта {currency} не поддерживается")
+
+    account = await finance_service.user_account(db, user.id, currency)
+    amount_minor = to_minor(withdrawal_data.amount, currency)
 
     if amount_minor <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
@@ -63,8 +75,8 @@ async def request_withdrawal(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Insufficient referral balance: доступно "
-                f"{from_minor(account.available_minor, WITHDRAWAL_CURRENCY)}"
+                f"Недостаточно средств: доступно "
+                f"{from_minor(account.available_minor, currency)} {currency}"
             ),
         )
 
@@ -72,6 +84,8 @@ async def request_withdrawal(
         id=uuid.uuid4(),
         user_id=user.id,
         amount=float(withdrawal_data.amount),
+        amount_minor=amount_minor,
+        currency=currency,
         wallet=withdrawal_data.wallet,
         status=WithdrawalStatus.PENDING
     )
@@ -85,7 +99,7 @@ async def request_withdrawal(
         entry_type=LedgerEntryType.WITHDRAWAL_RESERVE,
         ref_type=LedgerRefType.WITHDRAWAL,
         ref_id=withdrawal.id,
-        comment=f"Резерв под заявку на вывод на {withdrawal.wallet}",
+        comment=f"Резерв под заявку на вывод {currency} на {withdrawal.wallet}",
     )
 
     _sync_balance_cache(user, account)
@@ -184,26 +198,35 @@ async def update_withdrawal_status(
         # Фактическое списание: снимаем заморозку и уводим сумму на внешний
         # счёт. Идемпотентно по ключу заявки — повторное подтверждение
         # (двойной клик, ретрай) не спишет деньги дважды.
-        account = await finance_service.user_account(
-            db, withdrawal.user_id, WITHDRAWAL_CURRENCY
-        )
+        currency = withdrawal.currency or WITHDRAWAL_CURRENCY
+        account = await finance_service.user_account(db, withdrawal.user_id, currency)
+
+        # amount_minor — точная сумма, записанная при создании заявки. У старых
+        # заявок его нет, и приходится пересчитывать из float-поля: для USD с
+        # двумя знаками это безопасно, а новые заявки так не считаются.
+        amount_minor = withdrawal.amount_minor
+        if amount_minor is None:
+            amount_minor = to_minor(Decimal(str(withdrawal.amount)), currency)
+
         await finance_service.withdraw_to_external(
             db,
             account=account,
-            amount_minor=to_minor(Decimal(str(withdrawal.amount)), WITHDRAWAL_CURRENCY),
+            amount_minor=amount_minor,
             ref_type=LedgerRefType.WITHDRAWAL,
             ref_id=withdrawal.id,
-            comment=f"Вывод на {withdrawal.wallet}",
+            comment=f"Вывод {currency} на {withdrawal.wallet}",
         )
         _sync_balance_cache(withdrawal.user, account)
         db.add(withdrawal.user)
 
         # Notify user via Telegram
         try:
+            label = "USDT" if currency == WITHDRAWAL_CURRENCY else currency
+            precision = 2 if currency == WITHDRAWAL_CURRENCY else 9
             message = (
-                f"<b>Ваш реф.баланс выведен.</b>\n"
+                f"<b>Средства выведены.</b>\n"
                 f"Кошелек - <code>{withdrawal.wallet}</code>\n"
-                f"Сумма - {withdrawal.amount:.2f} USDT"
+                f"Сумма - {withdrawal.amount:.{precision}f} {label}"
             )
             await telegram_service.send_message(withdrawal.user.telegram_id, message)
         except Exception as e:

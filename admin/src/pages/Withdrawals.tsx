@@ -14,6 +14,8 @@ interface Withdrawal {
     user_first_name: string;
     user_telegram_id: number;
     amount: number;
+    /** USD — реферальный баланс, TON — заработок продавца */
+    currency?: string;
     wallet: string;
     status: 'pending' | 'completed';
     created_at: string;
@@ -126,7 +128,13 @@ export const Withdrawals: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className="text-green-400 font-bold">${w.amount.toFixed(2)}</span>
+                                        <span className="text-green-400 font-bold">
+                                            {/* У TON девять знаков — округление до двух
+                                                показало бы 0.00 вместо реальной суммы */}
+                                            {w.currency === 'TON'
+                                                ? `${w.amount.toFixed(9).replace(/0+$/, '').replace(/\.$/, '')} TON`
+                                                : `$${w.amount.toFixed(2)}`}
+                                        </span>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2 group">

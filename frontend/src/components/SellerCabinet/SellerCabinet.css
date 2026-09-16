@@ -428,3 +428,13 @@
     gap: 6px;
     margin-top: 10px;
 }
+
+.seller-payout {
+    margin-top: 10px;
+}
+
+.seller-wallet-inline {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    word-break: break-all;
+    color: var(--text-secondary);
+}

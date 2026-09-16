@@ -290,7 +290,10 @@ export const subscriptionsApi = {
 
 // Withdrawals API
 export const withdrawalsApi = {
-    requestWithdrawal: async (data: { amount: number; wallet: string }) => {
+    // currency не указан — USD, как раньше: реферальный баланс
+    requestWithdrawal: async (data: {
+        amount: number | string; wallet: string; currency?: 'USD' | 'TON';
+    }) => {
         const response = await apiClient.post('/withdrawals', data);
         return response.data;
     },
