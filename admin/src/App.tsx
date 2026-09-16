@@ -15,6 +15,9 @@ import ProcessingPage from './pages/ProcessingPage';
 import { Settings } from './pages/Settings';
 import { Moderation } from './pages/Moderation';
 import { Deals } from './pages/Deals';
+import { Subscriptions } from './pages/Subscriptions';
+import { Finance } from './pages/Finance';
+import { Referrals } from './pages/Referrals';
 const queryClient = new QueryClient();
 
 function App() {
@@ -37,6 +40,9 @@ function App() {
               <Route path="withdrawals" element={<Withdrawals />} />
               <Route path="moderation" element={<Moderation />} />
               <Route path="deals" element={<Deals />} />
+              <Route path="subscriptions" element={<Subscriptions />} />
+              <Route path="finance" element={<Finance />} />
+              <Route path="referrals" element={<Referrals />} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Routes>

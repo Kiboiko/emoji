@@ -228,6 +228,39 @@ async def on_deal_action(callback: types.CallbackQuery):
     await callback.answer(reply, show_alert=True)
 
 
+@dp.callback_query(lambda c: c.data and c.data.startswith("mod:"))
+async def on_moderation_action(callback: types.CallbackQuery):
+    """
+    Кнопка модерации под уведомлением о новой заявке.
+
+    Права проверяет бэкенд по telegram_user_id: общий секрет подтверждает лишь
+    то, что запрос пришёл от бота, а уведомления уходят в админский чат, где
+    кнопку может нажать любой участник группы.
+    """
+    try:
+        _, action, listing_id = callback.data.split(":", 2)
+    except ValueError:
+        await callback.answer("Некорректная кнопка")
+        return
+
+    result = await call_backend("moderate-listing", {
+        "telegram_user_id": callback.from_user.id,
+        "listing_id": listing_id,
+        "approve": action == "approve",
+    })
+
+    reply = (result or {}).get("reply") or "Не удалось выполнить, попробуйте позже."
+    await callback.answer(reply, show_alert=True)
+
+    # Убираем кнопки у обработанной заявки, чтобы её не одобрили повторно
+    # и чтобы в чате было видно, что решение принято
+    if result and result.get("status"):
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception as e:
+            logger.warning("Не удалось убрать кнопки: %s", e)
+
+
 @dp.message()
 async def on_relay_message(message: types.Message):
     """

@@ -14,6 +14,9 @@ import {
     MessageSquare,
     ShieldCheck,
     Handshake,
+    Radio,
+    Scale,
+    Share2,
     Settings as SettingsIcon
 } from 'lucide-react';
 
@@ -40,6 +43,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
         { path: '/users', icon: Users, label: 'Пользователи' },
         { path: '/moderation', icon: ShieldCheck, label: 'Модерация' },
         { path: '/deals', icon: Handshake, label: 'Сделки' },
+        { path: '/subscriptions', icon: Radio, label: 'Каналы' },
+        { path: '/referrals', icon: Share2, label: 'Рефералы' },
+        { path: '/finance', icon: Scale, label: 'Финансы' },
         { path: '/reviews', icon: MessageSquare, label: 'Отзывы' },
         { path: '/withdrawals', icon: Wallet, label: 'Выводы' },
         { path: '/settings', icon: SettingsIcon, label: 'Настройки' },

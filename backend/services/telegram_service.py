@@ -16,8 +16,20 @@ class TelegramService:
         self.admin_chat_ids = [c.strip() for c in settings.ADMIN_CHAT_ID.split(",") if c.strip()]
         print(f"[TELEGRAM] Initialized. Admin chat IDs to notify: {self.admin_chat_ids}")
     
-    async def send_message(self, chat_id: Union[int, str], text: str, parse_mode: str = "HTML") -> dict:
-        """Send message to user"""
+    async def send_message(
+        self,
+        chat_id: Union[int, str],
+        text: str,
+        parse_mode: str = "HTML",
+        reply_markup: dict | None = None,
+    ) -> dict:
+        """
+        Send message to user.
+
+        reply_markup передаётся готовым словарём Telegram API: на бэкенде нет
+        aiogram, а собирать клавиатуру из трёх ключей ради типизации отдельной
+        зависимости не стоит.
+        """
         print(f"[TELEGRAM] Sending message to {chat_id}...")
         async with httpx.AsyncClient() as client:
             try:
@@ -27,7 +39,9 @@ class TelegramService:
                 }
                 if parse_mode:
                     payload["parse_mode"] = parse_mode
-                    
+                if reply_markup:
+                    payload["reply_markup"] = reply_markup
+
                 response = await client.post(
                     f"{self.api_url}/sendMessage",
                     json=payload

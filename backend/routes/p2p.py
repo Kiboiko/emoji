@@ -398,6 +398,18 @@ async def submit_listing(
     await db.commit()
 
     from services.telegram_service import telegram_service
+
+    # Кнопки прямо в уведомлении: типовое решение по заявке — «да» или «нет»,
+    # и заставлять ради него открывать админку на телефоне незачем. Отказ
+    # кнопкой уходит без комментария, поэтому кнопка отказа ведёт в админку,
+    # где причину можно написать: без причины продавец не знает, что чинить.
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": "Одобрить", "callback_data": f"mod:approve:{listing.id}"},
+            {"text": "Отклонить", "callback_data": f"mod:reject:{listing.id}"},
+        ]]
+    }
+
     for chat_id in telegram_service.admin_chat_ids:
         try:
             await telegram_service.send_message(
@@ -405,9 +417,10 @@ async def submit_listing(
                 f"Новая заявка на размещение\n"
                 f"Продавец: {profile.display_name}\n"
                 f"Товар: {listing.name}\n"
-                f"Цена: ${listing.price_usd}\n\n"
-                f"Проверьте в админке",
+                f"Цена: ${listing.price_usd}\n"
+                f"Фото: {len(listing.images)}",
                 parse_mode=None,
+                reply_markup=keyboard,
             )
         except Exception as e:
             logger.warning("[P2P] Не удалось уведомить о заявке: %s", e)
@@ -700,6 +713,17 @@ async def open_dispute(
     await db.commit()
 
     from services.telegram_service import telegram_service
+
+    # Кнопка-ссылка, а не действие: решение по спору требует прочитать
+    # переписку, и одобрить его в один тап нельзя — деньги уходят необратимо.
+    # Telegram принимает только https, поэтому на локальном http кнопку не
+    # добавляем: с http-ссылкой он отклонит всё сообщение целиком.
+    admin_url = f"{settings.SITE_URL.rstrip('/')}/admin/deals"
+    keyboard = (
+        {"inline_keyboard": [[{"text": "Открыть в админке", "url": admin_url}]]}
+        if admin_url.startswith("https://") else None
+    )
+
     for chat_id in telegram_service.admin_chat_ids:
         try:
             await telegram_service.send_message(
@@ -707,9 +731,9 @@ async def open_dispute(
                 f"Открыт спор по сделке #{deal.number}\n"
                 f"Товар: {deal.product_name}\n"
                 f"Сумма: {from_minor(deal.amount_nano, 'TON')} TON\n"
-                f"Причина: {payload.reason[:300]}\n\n"
-                f"Разберите в админке",
+                f"Причина: {payload.reason[:300]}",
                 parse_mode=None,
+                reply_markup=keyboard,
             )
         except Exception as e:
             logger.warning("[P2P] Не удалось уведомить о споре: %s", e)

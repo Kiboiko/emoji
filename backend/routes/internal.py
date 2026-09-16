@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import hmac
 import logging
+import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import get_db
@@ -230,3 +232,57 @@ async def deal_action(payload: DealActionIn, db: AsyncSession = Depends(get_db))
 
     await db.commit()
     return {"reply": reply}
+
+
+class ModerationIn(BaseModel):
+    telegram_user_id: int
+    listing_id: uuid.UUID
+    approve: bool
+
+
+@router.post("/moderate-listing", dependencies=[Depends(require_internal_token)])
+async def moderate_listing_from_bot(
+    payload: ModerationIn, db: AsyncSession = Depends(get_db),
+):
+    """
+    Модерация заявки кнопкой в Telegram.
+
+    Права проверяются здесь, а не в боте: общий секрет подтверждает только то,
+    что запрос пришёл от нашего бота, но не то, что кнопку нажал администратор.
+    Уведомления уходят в админский чат, а он может быть групповым — там кнопку
+    видит и может нажать любой участник.
+
+    Отказ кнопкой не поддерживается намеренно: причину отказа в callback не
+    введёшь, а отказ без причины продавец не может исправить, и он же двигает
+    счётчик отказов подряд к автоматическому ограничению.
+    """
+    from models.p2p import ListingStatus, ProductListing
+
+    admin = (
+        await db.execute(select(User).where(User.telegram_id == payload.telegram_user_id))
+    ).scalars().first()
+    if admin is None or not admin.is_admin:
+        return {"reply": "Недостаточно прав"}
+
+    if not payload.approve:
+        return {"reply": "Для отказа откройте админку — нужна причина, её увидит продавец"}
+
+    listing = (
+        await db.execute(
+            select(ProductListing)
+            .options(selectinload(ProductListing.images), selectinload(ProductListing.seller))
+            .where(ProductListing.id == payload.listing_id)
+        )
+    ).scalars().first()
+    if listing is None:
+        return {"reply": "Заявка не найдена"}
+    if listing.status != ListingStatus.PENDING:
+        # Обычный случай: двое администраторов нажали одну и ту же кнопку
+        return {"reply": f"Заявка уже обработана (статус: {listing.status.value})"}
+
+    from routes.admin_p2p import moderate_listing, ModerationDecision
+
+    result = await moderate_listing(
+        listing.id, ModerationDecision(approve=True), admin=admin, db=db,
+    )
+    return {"reply": f"Товар «{listing.name}» опубликован", "status": result["status"]}
