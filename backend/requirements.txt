@@ -36,3 +36,5 @@ APScheduler>=3.10.4
 # Tests
 pytest>=8.4.0
 pytest-asyncio>=1.0.0
+# Покрытие: python -m pytest --cov=services --cov=routes --cov=utils
+pytest-cov>=6.0.0
