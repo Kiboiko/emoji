@@ -124,12 +124,23 @@ def build_transaction_request(payment: Payment) -> TransactionRequest:
 # Проверка оплаты
 # ---------------------------------------------------------------------------
 
-async def verify_payment(db: AsyncSession, payment: Payment) -> PaymentStatus:
+async def verify_payment(
+    db: AsyncSession,
+    payment: Payment,
+    txs: list | None = None,
+) -> PaymentStatus:
     """
     Проверяет платёж по данным блокчейна и, если он прошёл, зачитывает его.
 
     Возвращает актуальный статус. Идемпотентна: повторный вызов по уже
     подтверждённому платежу ничего не меняет.
+
+    `txs` — уже полученный список транзакций. Нужен поллеру: он забирает их
+    один раз на весь прогон и передаёт сюда. Без этого каждый платёж в пачке
+    тянул бы индексер заново, и на десяти одновременных оплатах прогон давал
+    одиннадцать запросов — при лимите toncenter около запроса в секунду это
+    упирается в лимит ровно тогда, когда покупателей много. При ручной
+    проверке («я оплатил») список не передаётся: там нужны свежие данные.
     """
     # Терминален только CONFIRMED. EXPIRED — НЕ повод перестать проверять:
     # пользователь вполне может отправить перевод через минуту после того,
@@ -139,7 +150,8 @@ async def verify_payment(db: AsyncSession, payment: Payment) -> PaymentStatus:
     if payment.status == PaymentStatus.CONFIRMED:
         return payment.status
 
-    txs = await ton_service.fetch_incoming_transactions()
+    if txs is None:
+        txs = await ton_service.fetch_incoming_transactions()
     window_start, window_end = ton_service.payment_window(
         payment.rate_locked_at, payment.expires_at
     )
@@ -383,7 +395,9 @@ async def poll_pending_payments(db: AsyncSession) -> int:
                 processed += 1
             continue
         try:
-            await verify_payment(db, payment)
+            # Список транзакций уже забран выше — передаём его, чтобы проверка
+            # не ходила в индексер повторно на каждый платёж
+            await verify_payment(db, payment, txs=txs)
             processed += 1
         except Exception as e:
             logger.exception("[PAY] Ошибка проверки платежа %s: %s", payment.id, e)

@@ -360,3 +360,269 @@ async def test_ledger_balances_after_payment(db, invoice):
     assert report.ok is True
     assert report.issues == []
     assert report.global_sum_by_currency[TON] == 0
+
+
+# ---------------------------------------------------------------------------
+# Выставление счёта
+# ---------------------------------------------------------------------------
+
+class TestInvoiceIssuing:
+    """
+    Счёт по заказу.
+
+    Главное здесь — не плодить счета. Два счёта по одному заказу означают два
+    разных комментария: покупатель заплатит по одному, а система будет ждать
+    второй и сочтёт заказ неоплаченным.
+    """
+
+    @staticmethod
+    def _stub_rate(monkeypatch, rate="3.000000000"):
+        from config import settings as cfg
+        from services import ton_service
+
+        monkeypatch.setattr(cfg, "TON_RECEIVING_ADDRESS", "0QPlatformWallet")
+
+        async def fake_rate(_db):
+            return Decimal(rate)
+
+        monkeypatch.setattr(ton_service, "get_rate", fake_rate)
+
+    async def test_issues_invoice_with_locked_rate(
+        self, db, user_factory, order_factory, monkeypatch
+    ):
+        self._stub_rate(monkeypatch)
+        order = await order_factory(await user_factory(username="inv_1"), total_usdt="30.00")
+
+        payment = await pay.create_or_refresh_payment(db, order)
+
+        assert payment.amount_nano == 10_000_000_000      # 30 USD по курсу 3
+        assert payment.rate_usd_per_ton == Decimal("3.000000000")
+        assert payment.payment_comment.startswith("MP-")
+        assert payment.status == PaymentStatus.PENDING
+
+    async def test_second_click_returns_the_same_invoice(
+        self, db, user_factory, order_factory, monkeypatch
+    ):
+        """
+        Двойное нажатие «Оплатить» не выставляет второй счёт.
+
+        Иначе человек платит по одному комментарию, а система ждёт другой.
+        """
+        self._stub_rate(monkeypatch)
+        order = await order_factory(await user_factory(username="inv_2"), total_usdt="30.00")
+
+        first = await pay.create_or_refresh_payment(db, order)
+        second = await pay.create_or_refresh_payment(db, order)
+
+        assert first.id == second.id
+        assert first.payment_comment == second.payment_comment
+
+    async def test_expired_invoice_is_replaced(
+        self, db, user_factory, order_factory, monkeypatch
+    ):
+        """
+        Просроченный счёт заменяется новым с актуальным курсом.
+
+        Старый помечается просроченным, а не остаётся висеть: иначе поллер
+        продолжал бы искать перевод по обоим комментариям.
+        """
+        self._stub_rate(monkeypatch)
+        order = await order_factory(await user_factory(username="inv_3"), total_usdt="30.00")
+
+        stale = await pay.create_or_refresh_payment(db, order)
+        stale.expires_at = datetime.utcnow() - timedelta(minutes=1)
+        await db.flush()
+
+        self._stub_rate(monkeypatch, rate="6.000000000")   # курс уехал вдвое
+        fresh = await pay.create_or_refresh_payment(db, order)
+
+        assert fresh.id != stale.id
+        assert stale.status == PaymentStatus.EXPIRED
+        assert fresh.amount_nano == 5_000_000_000          # 30 USD по курсу 6
+
+    async def test_paid_order_cannot_be_invoiced_again(
+        self, db, user_factory, order_factory, monkeypatch
+    ):
+        """По оплаченному заказу счёт не выставляется — иначе заплатят дважды."""
+        self._stub_rate(monkeypatch)
+        order = await order_factory(
+            await user_factory(username="inv_4"), total_usdt="30.00", status=OrderStatus.PAID
+        )
+
+        with pytest.raises(pay.PaymentError):
+            await pay.create_or_refresh_payment(db, order)
+
+
+# ---------------------------------------------------------------------------
+# Фоновый опрос
+# ---------------------------------------------------------------------------
+
+class TestPolling:
+
+    async def test_all_payments_checked_in_one_indexer_call(self, db, invoice):
+        """
+        Индексер опрашивается один раз на весь прогон, а не на каждый счёт.
+
+        Этим тестом обнаружено, что так было не всегда: поллер забирал список
+        транзакций, а затем на каждый найденный платёж звал verify_payment,
+        который тянул индексер заново. На двух платежах выходило три запроса,
+        на десяти — одиннадцать. При лимите toncenter около запроса в секунду
+        это упирается в лимит ровно тогда, когда покупателей много.
+        """
+        first, _, _ = await invoice()
+        second, _, _ = await invoice()
+        txs = [
+            make_tx(comment=first.payment_comment, value_nano=PRICE_NANO, tx_hash="tx-a"),
+            make_tx(comment=second.payment_comment, value_nano=PRICE_NANO, tx_hash="tx-b"),
+        ]
+        indexer = AsyncMock(return_value=txs)
+
+        with patch(INDEXER, new=indexer), patch(NOTIFY, new=AsyncMock()):
+            processed = await pay.poll_pending_payments(db)
+
+        assert processed == 2
+        assert indexer.await_count == 1
+        assert first.status == PaymentStatus.CONFIRMED
+        assert second.status == PaymentStatus.CONFIRMED
+
+    async def test_indexer_outage_is_not_treated_as_unpaid(self, db, invoice):
+        """
+        Недоступность индексера — не «не оплачено».
+
+        Молчание индексера нельзя толковать как отсутствие перевода: иначе при
+        сбое toncenter все живые счета уехали бы в просроченные.
+        """
+        payment, order, _ = await invoice()
+        failing = AsyncMock(side_effect=RuntimeError("toncenter 500"))
+
+        with patch(INDEXER, new=failing), patch(NOTIFY, new=AsyncMock()):
+            processed = await pay.poll_pending_payments(db)
+
+        assert processed == 0
+        assert payment.status == PaymentStatus.PENDING
+        await db.refresh(order)
+        assert order.status == OrderStatus.PENDING
+
+    async def test_expired_invoice_without_payment_is_closed(self, db, invoice):
+        payment, _, _ = await invoice(expires_in_min=-5)
+
+        with patch(INDEXER, new=AsyncMock(return_value=[])), patch(NOTIFY, new=AsyncMock()):
+            processed = await pay.poll_pending_payments(db)
+
+        assert processed == 1
+        assert payment.status == PaymentStatus.EXPIRED
+
+    async def test_payment_arriving_just_after_expiry_is_still_taken(self, db, invoice):
+        """
+        Перевод, ушедший через минуту после истечения счёта, всё равно зачитывается.
+
+        Деньги уже покинули кошелёк покупателя. Перестать их искать — значит
+        оставить их зависшими на кошельке площадки. Ровно так на тестнете был
+        потерян реальный платёж.
+        """
+        payment, _, _ = await invoice(expires_in_min=-1)
+        tx = make_tx(comment=payment.payment_comment, value_nano=PRICE_NANO)
+
+        with patch(INDEXER, new=AsyncMock(return_value=[tx])), patch(NOTIFY, new=AsyncMock()):
+            await pay.poll_pending_payments(db)
+
+        assert payment.status == PaymentStatus.CONFIRMED
+
+    async def test_long_dead_invoices_are_not_rescanned(self, db, invoice):
+        """
+        Давно протухшие счета из опроса выпадают.
+
+        Без ограничения окна поллер перебирал бы всю историю просроченных
+        счетов каждые пятнадцать секунд.
+        """
+        payment, _, _ = await invoice(expires_in_min=-24 * 60)
+
+        with patch(INDEXER, new=AsyncMock(return_value=[])), patch(NOTIFY, new=AsyncMock()):
+            processed = await pay.poll_pending_payments(db)
+
+        assert processed == 0
+        assert payment.status == PaymentStatus.PENDING
+
+
+# ---------------------------------------------------------------------------
+# Поиск незачтённых платежей
+# ---------------------------------------------------------------------------
+
+class TestUnmatchedScan:
+    """
+    Кнопка «Найти незачтённые платежи» в админке.
+
+    Это путь спасения денег, которые иначе зависнут: человек оплатил счёт через
+    несколько часов после истечения, а поллер такие уже не смотрит. Руководство
+    администратора отправляет сюда по жалобе «я оплатил, а заказ не закрылся».
+    """
+
+    async def test_forgotten_payment_is_settled(self, db, invoice):
+        payment, _, user = await invoice(
+            status=OrderStatus.CANCELLED, expires_in_min=-24 * 60
+        )
+        tx = make_tx(comment=payment.payment_comment, value_nano=PRICE_NANO)
+
+        with patch(INDEXER, new=AsyncMock(return_value=[tx])), patch(NOTIFY, new=AsyncMock()):
+            report = await pay.scan_unmatched_transactions(db)
+
+        assert len(report["settled"]) == 1
+        assert payment.status == PaymentStatus.CONFIRMED
+
+        # Заказ отменён, поэтому деньги ушли на внутренний баланс покупателя
+        account = (await db.execute(
+            select(Account).where(
+                Account.owner_type == AccountOwnerType.USER,
+                Account.owner_id == user.id,
+                Account.currency == TON,
+            )
+        )).scalars().first()
+        assert account.balance_minor == PRICE_NANO
+
+    async def test_already_confirmed_payment_is_not_paid_twice(self, db, invoice):
+        """Повторный запуск сканирования не начисляет второй раз."""
+        payment, _, _ = await invoice()
+        tx = make_tx(comment=payment.payment_comment, value_nano=PRICE_NANO)
+
+        with patch(INDEXER, new=AsyncMock(return_value=[tx])), patch(NOTIFY, new=AsyncMock()):
+            await pay.scan_unmatched_transactions(db)
+            before = await _platform_balance(db)
+            await pay.scan_unmatched_transactions(db)
+
+        assert await _platform_balance(db) == before
+
+    async def test_transaction_with_unknown_comment_is_reported(self, db):
+        """
+        Перевод с нашим форматом комментария, но без счёта, попадает в отчёт.
+
+        Молча игнорировать нельзя: это чьи-то реальные деньги на кошельке
+        площадки, и разбираться с ними придётся руками.
+        """
+        tx = make_tx(comment="MP-НЕИЗВЕСТНЫЙ", value_nano=PRICE_NANO)
+
+        with patch(INDEXER, new=AsyncMock(return_value=[tx])), patch(NOTIFY, new=AsyncMock()):
+            report = await pay.scan_unmatched_transactions(db)
+
+        assert report["orphans"] == ["MP-НЕИЗВЕСТНЫЙ"]
+        assert report["settled"] == []
+
+    async def test_foreign_transfers_are_ignored(self, db):
+        """Переводы с чужими комментариями площадки не касаются."""
+        tx = make_tx(comment="привет от бабушки", value_nano=PRICE_NANO)
+
+        with patch(INDEXER, new=AsyncMock(return_value=[tx])), patch(NOTIFY, new=AsyncMock()):
+            report = await pay.scan_unmatched_transactions(db)
+
+        assert report["matched"] == 0
+        assert report["orphans"] == []
+
+    async def test_underpaid_forgotten_transfer_does_not_release_goods(self, db, invoice):
+        """Недоплата остаётся недоплатой и при ручном поиске."""
+        payment, _, _ = await invoice(status=OrderStatus.CANCELLED, expires_in_min=-24 * 60)
+        tx = make_tx(comment=payment.payment_comment, value_nano=PRICE_NANO // 2)
+
+        with patch(INDEXER, new=AsyncMock(return_value=[tx])), patch(NOTIFY, new=AsyncMock()):
+            report = await pay.scan_unmatched_transactions(db)
+
+        assert report["settled"] == []
+        assert payment.status == PaymentStatus.UNDERPAID
