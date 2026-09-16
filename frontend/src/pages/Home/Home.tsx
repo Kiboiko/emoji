@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { PackageOpen } from 'lucide-react';
 import { Header } from '@/components/Header/Header';
 import { ProductCard } from '@/components/ProductCard/ProductCard';
+import { ProductCardSkeleton } from '@/components/ProductCard/ProductCardSkeleton';
 import { productsApi, categoriesApi, cartApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
@@ -199,7 +200,7 @@ export const Home: React.FC = () => {
                 <div className="products-grid">
                     {isLoading ? (
                         Array.from({ length: 6 }).map((_, i) => (
-                            <div key={i} className="product-skeleton shimmer" />
+                            <ProductCardSkeleton key={i} />
                         ))
                     ) : filteredProducts.length === 0 ? (
                         <div className="empty-state">

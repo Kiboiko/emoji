@@ -177,9 +177,13 @@ body {
   transition: all 0.3s ease;
 }
 
-.glass-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+/* Только для мыши: на сенсорных экранах :hover «залипает» после касания, и
+   карточка оставалась приподнятой, пока не тронешь другую. */
+@media (hover: hover) {
+  .glass-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
 }
 
 /* Gradient Button */

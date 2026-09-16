@@ -59,11 +59,6 @@
     }
 }
 
-.product-skeleton {
-    height: 360px;
-    border-radius: 16px;
-}
-
 /* Общий вид пустого состояния описан в index.css. Здесь только размещение:
    элемент должен занять всю ширину сетки, а не одну ячейку. */
 .products-grid .empty-state {

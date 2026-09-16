@@ -21,11 +21,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     };
 
     return (
+        // Появление карточки задаёт список (Home): здесь была вторая пара
+        // initial/animate, и карточка выезжала внутри уже выезжающей обёртки.
         <motion.div
             className="product-card glass-card"
             onClick={onClick}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
             whileHover={{ y: -4 }}
             whileTap={{ scale: 0.98 }}
         >

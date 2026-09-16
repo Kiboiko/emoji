@@ -22,7 +22,9 @@
     width: 100%;
     height: 200px;
     overflow: hidden;
-    border-radius: 12px 12px 0 0;
+    /* Совпадает с радиусом .glass-card: при 12px против 16px углы
+       картинки выпирали за скруглением карточки */
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     background: var(--bg-tertiary);
 }
 
@@ -33,8 +35,10 @@
     transition: transform 0.3s ease;
 }
 
-.product-card:hover .product-image img {
-    transform: scale(1.05);
+@media (hover: hover) {
+    .product-card:hover .product-image img {
+        transform: scale(1.05);
+    }
 }
 
 .product-info {
@@ -135,9 +139,11 @@
     }
 
     .btn-add-cart {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
+        /* 36px — меньше минимальной комфортной тап-цели; по кнопке
+           промахиваются, а промах здесь = переход на карточку товара */
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-md);
     }
 
     .btn-add-cart svg {
@@ -173,4 +179,64 @@
     gap: 2px;
     flex-shrink: 0;
     color: var(--accent-warning);
+}
+
+/* --- Скелетон карточки ------------------------------------------------
+   Повторяет структуру карточки, поэтому высота совпадает автоматически. */
+
+.product-card-skeleton {
+    cursor: default;
+    pointer-events: none;
+}
+
+.product-card-skeleton .product-image {
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.skeleton-line {
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-line-title {
+    height: 18px;
+    width: 80%;
+}
+
+.skeleton-line-text {
+    height: 14px;
+    width: 100%;
+    flex: 1;
+    max-height: 40px;
+}
+
+.skeleton-line-price {
+    height: 20px;
+    width: 70px;
+}
+
+.skeleton-line-button {
+    height: 44px;
+    width: 44px;
+    border-radius: var(--radius-md);
+}
+
+@media (max-width: 640px) {
+    .skeleton-line-title {
+        height: 14px;
+    }
+
+    .skeleton-line-text {
+        height: 12px;
+        max-height: 14px;
+    }
+
+    .skeleton-line-price {
+        height: 16px;
+        width: 54px;
+    }
+
+    .skeleton-line-button {
+        height: 40px;
+        width: 40px;
+    }
 }

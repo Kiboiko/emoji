@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, Plus, Minus } from 'lucide-react';
+import { Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
 import { cartApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
@@ -113,8 +113,14 @@ export const Cart: React.FC = () => {
             <div className="cart-page">
                 <div className="container">
                     <div className="empty-cart">
+                        <ShoppingBag size={44} className="empty-state-icon" />
                         <h2>{language === 'ru' ? 'Корзина пуста' : 'Cart is empty'}</h2>
                         <p>{language === 'ru' ? 'Добавьте товары из каталога' : 'Add products from catalog'}</p>
+                        {/* Раньше пустая корзина была тупиком: сообщение без
+                            единого способа что-то сделать */}
+                        <button className="btn-gradient" onClick={() => navigate('/')}>
+                            {language === 'ru' ? 'В каталог' : 'Browse catalog'}
+                        </button>
                     </div>
                 </div>
             </div>

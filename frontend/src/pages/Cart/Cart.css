@@ -236,3 +236,14 @@ html[data-platform="android"] .cart-items {
     color: var(--text-tertiary);
     margin-bottom: 20px;
 }
+/* Пустая корзина: иконка и кнопка выхода в каталог */
+.empty-cart {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.empty-cart .btn-gradient {
+    margin-top: var(--space-2);
+}

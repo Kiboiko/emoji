@@ -834,3 +834,14 @@ html[data-platform="android"] .referral-balance-card {
     cursor: not-allowed;
     transform: none;
 }
+/* Заглушка баланса: высота как у реальной суммы, чтобы блок не прыгал */
+.balance-skeleton {
+    height: 40px;
+    width: 140px;
+    margin: var(--space-2) auto;
+}
+
+.btn-withdraw:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

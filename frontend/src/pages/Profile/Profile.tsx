@@ -250,11 +250,22 @@ export const Profile: React.FC = () => {
                         <span className="balance-label">{language === 'ru' ? 'Реферальный Баланс' : 'Referral Balance'}</span>
                     </div>
 
-                    <div className="balance-amount">
-                        ${(stats?.total_earnings || 0).toFixed(2)}
-                    </div>
+                    {/* Пока статистика не пришла, показывать $0.00 нельзя:
+                        человек с балансом видит ноль и решает, что деньги
+                        пропали. Скелетон честнее — «ещё не знаем». */}
+                    {stats === null ? (
+                        <div className="skeleton balance-skeleton" />
+                    ) : (
+                        <div className="balance-amount">
+                            ${stats.total_earnings.toFixed(2)}
+                        </div>
+                    )}
 
-                    <button className="btn-withdraw" onClick={openWithdrawModal}>
+                    <button
+                        className="btn-withdraw"
+                        onClick={openWithdrawModal}
+                        disabled={stats === null}
+                    >
                         {language === 'ru' ? 'Вывести' : 'Withdraw'}
                         <Download size={18} />
                     </button>
