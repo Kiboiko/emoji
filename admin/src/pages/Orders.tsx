@@ -1,208 +1,344 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import axiosInstance from '../api/axios';
-import { Loader2 } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Search, X, ExternalLink } from 'lucide-react';
+import { ordersApi, type AdminOrder } from '../api/admin';
+import { DataTable, type Column } from '../components/ui/DataTable';
+import { Pagination } from '../components/ui/Pagination';
+import { Badge, StatusBadge } from '../components/ui/Badge';
+import { useToast, errorText } from '../components/ui/Toast';
 
-interface Order {
-    id: string;
-    user_id: string;
-    user_telegram_id: number;
-    user_name: string;
-    total_usdt: number;
-    total_ton: number | null;
-    currency: string;
-    status: string;
-    created_at: string;
-    paid_at: string | null;
-    items: Array<{
-        product_name: string;
-        quantity: number;
-        price_usdt: number;
-    }>;
-}
+const LIMIT = 25;
+
+const STATUS_OPTIONS = [
+    { value: 'all', label: 'Все' },
+    { value: 'paid', label: 'Оплаченные' },
+    { value: 'pending', label: 'Ожидают оплаты' },
+    { value: 'completed', label: 'Завершённые' },
+    { value: 'cancelled', label: 'Отменённые' },
+];
 
 export const Orders: React.FC = () => {
-    const [orders, setOrders] = useState<Order[]>([]);
+    const [rows, setRows] = useState<AdminOrder[]>([]);
+    const [total, setTotal] = useState(0);
+    const [skip, setSkip] = useState(0);
+    const [status, setStatus] = useState('all');
+    const [search, setSearch] = useState('');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<'all' | 'paid' | 'pending' | 'cancelled'>('paid');  // Default to paid
+    const [error, setError] = useState<string | null>(null);
+    const [cardId, setCardId] = useState<string | null>(null);
 
-    const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 10;
-
-    const fetchOrders = useCallback(async () => {
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError(null);
         try {
-            setLoading(true);
-            const response = await axiosInstance.get('/api/admin/orders', {
-                params: { status: filter }
+            const page = await ordersApi.list({
+                status,
+                search: search || undefined,
+                date_from: dateFrom || undefined,
+                // Конец дня, иначе фильтр «по сегодня» отсекает сегодняшние заказы
+                date_to: dateTo ? `${dateTo}T23:59:59` : undefined,
+                skip,
+                limit: LIMIT,
             });
-            setOrders(response.data);
-            setCurrentPage(1); // Reset to first page on new fetch
-        } catch (error) {
-            console.error('Failed to fetch orders:', error);
+            setRows(page.items);
+            setTotal(page.total);
+        } catch (e) {
+            setError(errorText(e, 'Не удалось загрузить заказы'));
         } finally {
             setLoading(false);
         }
-    }, [filter]);
+    }, [status, search, dateFrom, dateTo, skip]);
 
     useEffect(() => {
-        fetchOrders();
-    }, [fetchOrders]);
+        const timer = setTimeout(load, search ? 350 : 0);
+        return () => clearTimeout(timer);
+    }, [load, search]);
 
-    const getStatusColor = (status: string) => {
-        switch (status.toLowerCase()) {
-            case 'paid':
-            case 'completed':
-                return 'bg-green-500/10 text-green-400';
-            case 'pending':
-                return 'bg-yellow-500/10 text-yellow-400';
-            case 'cancelled':
-                return 'bg-red-500/10 text-red-400';
-            default:
-                return 'bg-gray-500/10 text-gray-400';
-        }
-    };
-
-    // Pagination Logic
-    const totalPages = Math.ceil(orders.length / ITEMS_PER_PAGE);
-    const paginatedOrders = orders.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
-
-    if (loading) return (
-        <div className="flex justify-center items-center h-64">
-            <Loader2 className="animate-spin text-blue-500" size={48} />
-        </div>
-    );
+    const columns: Column<AdminOrder>[] = [
+        {
+            key: 'created_at',
+            title: 'Дата',
+            render: (o) => (
+                <div className="whitespace-nowrap">
+                    <div>{new Date(o.created_at).toLocaleDateString('ru-RU')}</div>
+                    <div className="text-xs text-gray-500">
+                        {new Date(o.created_at).toLocaleTimeString('ru-RU', {
+                            hour: '2-digit', minute: '2-digit',
+                        })}
+                    </div>
+                </div>
+            ),
+        },
+        {
+            key: 'user',
+            title: 'Покупатель',
+            render: (o) => (
+                <div>
+                    <div className="text-white">{o.user_name}</div>
+                    <div className="text-xs text-gray-400">
+                        {o.user_username ? `@${o.user_username}` : o.user_telegram_id}
+                    </div>
+                </div>
+            ),
+        },
+        {
+            key: 'items',
+            title: 'Состав',
+            render: (o) => (
+                <div className="space-y-0.5 max-w-xs">
+                    {o.items.slice(0, 3).map((item, index) => (
+                        <div key={index} className="text-xs flex items-center gap-1.5">
+                            <span className="truncate">{item.product_name}</span>
+                            {item.quantity > 1 && <span className="text-gray-500">×{item.quantity}</span>}
+                            {item.is_p2p && <Badge tone="info">P2P</Badge>}
+                        </div>
+                    ))}
+                    {o.items.length > 3 && (
+                        <div className="text-xs text-gray-500">…ещё {o.items.length - 3}</div>
+                    )}
+                </div>
+            ),
+        },
+        {
+            key: 'total',
+            title: 'Сумма',
+            render: (o) => (
+                <div className="whitespace-nowrap">
+                    <div className="text-white font-medium">${o.total_usdt.toFixed(2)}</div>
+                    {o.total_ton && <div className="text-xs text-gray-500">{o.total_ton} TON</div>}
+                </div>
+            ),
+        },
+        {
+            key: 'status',
+            title: 'Статус',
+            render: (o) => <StatusBadge status={o.status} />,
+        },
+        {
+            key: 'actions',
+            title: '',
+            render: (o) => (
+                <button
+                    onClick={(e) => { e.stopPropagation(); setCardId(o.id); }}
+                    className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300"
+                >
+                    <ExternalLink size={14} />
+                </button>
+            ),
+            className: 'text-right',
+        },
+    ];
 
     return (
-        <div>
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                <h1 className="text-3xl font-bold">Заказы</h1>
+        <div className="p-4 md:p-8">
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Заказы</h1>
 
-                <div className="flex gap-4 border-b border-gray-800">
-                    <button
-                        onClick={() => setFilter('paid')}
-                        className={`pb-3 px-2 text-sm font-medium transition-colors relative ${filter === 'paid'
-                            ? 'text-green-400 border-b-2 border-green-500'
-                            : 'text-gray-400 hover:text-white'
-                            }`}
-                    >
-                        Оплаченные
-                    </button>
-                    <button
-                        onClick={() => setFilter('pending')}
-                        className={`pb-3 px-2 text-sm font-medium transition-colors relative ${filter === 'pending'
-                            ? 'text-yellow-400 border-b-2 border-yellow-500'
-                            : 'text-gray-400 hover:text-white'
-                            }`}
-                    >
-                        Ожидание
-                    </button>
-                    <button
-                        onClick={() => setFilter('cancelled')}
-                        className={`pb-3 px-2 text-sm font-medium transition-colors relative ${filter === 'cancelled'
-                            ? 'text-red-400 border-b-2 border-red-500'
-                            : 'text-gray-400 hover:text-white'
-                            }`}
-                    >
-                        Отмененные
-                    </button>
-                    <button
-                        onClick={() => setFilter('all')}
-                        className={`pb-3 px-2 text-sm font-medium transition-colors relative ${filter === 'all'
-                            ? 'text-blue-400 border-b-2 border-blue-500'
-                            : 'text-gray-400 hover:text-white'
-                            }`}
-                    >
-                        Все
-                    </button>
+            <div className="flex flex-wrap gap-3 mb-4">
+                <div className="relative flex-1 min-w-[200px]">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                        value={search}
+                        onChange={(e) => { setSearch(e.target.value); setSkip(0); }}
+                        placeholder="Покупатель"
+                        className="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                    />
                 </div>
+
+                <select
+                    value={status}
+                    onChange={(e) => { setStatus(e.target.value); setSkip(0); }}
+                    className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500"
+                >
+                    {STATUS_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                </select>
+
+                <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => { setDateFrom(e.target.value); setSkip(0); }}
+                    className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500"
+                />
+                <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => { setDateTo(e.target.value); setSkip(0); }}
+                    className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500"
+                />
             </div>
 
-            {/* Table */}
-            <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-x-auto">
-                <table className="w-full text-left min-w-[800px]">
-                    <thead className="bg-gray-700/50 text-gray-400">
-                        <tr>
-                            <th className="p-4">ID</th>
-                            <th className="p-4">Пользователь</th>
-                            <th className="p-4">Товары</th>
-                            <th className="p-4">Сумма</th>
-                            <th className="p-4">Статус</th>
-                            <th className="p-4">Дата</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                        {paginatedOrders.length === 0 ? (
-                            <tr>
-                                <td colSpan={6} className="p-8 text-center text-gray-500">
-                                    Заказов нет
-                                </td>
-                            </tr>
-                        ) : (
-                            paginatedOrders.map((order) => (
-                                <tr key={order.id} className="hover:bg-gray-700/50 transition-colors">
-                                    <td className="p-4 text-sm font-mono text-gray-400">
-                                        #{order.id.substring(0, 8)}...
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="font-medium text-white">{order.user_name}</div>
-                                        <div className="text-xs text-gray-500">TG ID: {order.user_telegram_id}</div>
-                                    </td>
-                                    <td className="p-4">
-                                        {order.items.map((item, idx) => (
-                                            <div key={idx} className="text-sm text-gray-300">
-                                                • {item.product_name} x{item.quantity}
-                                            </div>
-                                        ))}
-                                    </td>
-                                    <td className="p-4">
-                                        <span className="text-green-400 font-medium">
-                                            {order.currency === 'TON' && order.total_ton ? (
-                                                `${order.total_ton} TON`
-                                            ) : (
-                                                `$${order.total_usdt}`
-                                            )}
-                                        </span>
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-xs ${getStatusColor(order.status)}`}>
-                                            {order.status.toUpperCase()}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-sm text-gray-400">
-                                        {new Date(order.created_at).toLocaleString('ru-RU')}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            <DataTable
+                columns={columns}
+                rows={rows}
+                rowKey={(o) => o.id}
+                loading={loading}
+                error={error}
+                emptyText="Заказов не найдено"
+            />
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-                <div className="flex justify-center gap-2 mt-8">
-                    <button
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                        className="px-4 py-2 bg-gray-800 text-white rounded-lg disabled:opacity-50 hover:bg-gray-700"
-                    >
-                        Назад
-                    </button>
-                    <span className="px-4 py-2 text-gray-400">
-                        Страница {currentPage} из {totalPages}
-                    </span>
-                    <button
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-4 py-2 bg-gray-800 text-white rounded-lg disabled:opacity-50 hover:bg-gray-700"
-                    >
-                        Вперед
-                    </button>
-                </div>
+            <Pagination total={total} skip={skip} limit={LIMIT} onChange={setSkip} />
+
+            {cardId && (
+                <OrderCard
+                    orderId={cardId}
+                    onClose={() => setCardId(null)}
+                    onChanged={load}
+                />
             )}
         </div>
     );
 };
+
+/* ------------------------------------------------------------------ */
+
+const OrderCard: React.FC<{
+    orderId: string;
+    onClose: () => void;
+    onChanged: () => void;
+}> = ({ orderId, onClose, onChanged }) => {
+    const toast = useToast();
+    const [data, setData] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const load = useCallback(() => {
+        ordersApi.card(orderId).then(setData).catch((e) => setError(errorText(e)));
+    }, [orderId]);
+
+    useEffect(load, [load]);
+
+    const cancel = async () => {
+        if (!window.confirm('Отменить заказ?')) return;
+        setBusy(true);
+        try {
+            await ordersApi.setStatus(orderId, 'cancelled', 'отменён администратором');
+            toast.success('Заказ отменён');
+            load();
+            onChanged();
+        } catch (e) {
+            toast.fromError(e);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center overflow-y-auto p-4">
+            <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-2xl my-8">
+                <div className="flex items-center justify-between p-5 border-b border-gray-700">
+                    <h2 className="text-lg font-semibold text-white">Заказ</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div className="p-5 space-y-5">
+                    {error && <div className="text-red-400 text-sm">{error}</div>}
+
+                    {data && (
+                        <>
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <StatusBadge status={data.status} />
+                                <span className="text-white text-lg font-semibold">
+                                    ${data.total_usdt.toFixed(2)}
+                                </span>
+                                <span className="text-gray-400 text-sm">
+                                    {new Date(data.created_at).toLocaleString('ru-RU')}
+                                </span>
+                            </div>
+
+                            {data.user && (
+                                <Block title="Покупатель">
+                                    <Row label="Имя" value={data.user.first_name} />
+                                    <Row
+                                        label="Telegram"
+                                        value={data.user.username ? `@${data.user.username}` : data.user.telegram_id}
+                                    />
+                                </Block>
+                            )}
+
+                            <Block title="Состав">
+                                {data.items.map((item: any) => (
+                                    <div key={item.id} className="flex items-start justify-between gap-3 text-sm py-1">
+                                        <div className="flex-1">
+                                            <div className="text-gray-200">
+                                                {item.product_name}
+                                                {item.quantity > 1 && ` ×${item.quantity}`}
+                                            </div>
+                                            {item.is_p2p && <Badge tone="info">товар пользователя</Badge>}
+                                            {Object.keys(item.user_data).length > 0 && (
+                                                <pre className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">
+                                                    {JSON.stringify(item.user_data, null, 2)}
+                                                </pre>
+                                            )}
+                                        </div>
+                                        <span className="text-gray-300">${item.price_usdt.toFixed(2)}</span>
+                                    </div>
+                                ))}
+                            </Block>
+
+                            {data.payment && (
+                                <Block title="Платёж">
+                                    <Row label="Статус" value={<StatusBadge status={data.payment.status} />} />
+                                    <Row label="Комментарий" value={data.payment.comment} mono />
+                                    <Row
+                                        label="Ожидалось"
+                                        value={`${(Number(data.payment.amount_nano) / 1e9).toFixed(9)} TON`}
+                                    />
+                                    <Row
+                                        label="Получено"
+                                        value={`${(Number(data.payment.received_nano) / 1e9).toFixed(9)} TON`}
+                                    />
+                                    {data.payment.tx_hash && (
+                                        <Row label="Транзакция" value={data.payment.tx_hash} mono />
+                                    )}
+                                </Block>
+                            )}
+
+                            {data.deals.length > 0 && (
+                                <Block title="Сделки">
+                                    {data.deals.map((d: any) => (
+                                        <div key={d.id} className="flex items-center gap-3 text-sm py-1">
+                                            <span className="text-gray-300">№{d.number} {d.product_name}</span>
+                                            <StatusBadge status={d.status} />
+                                        </div>
+                                    ))}
+                                </Block>
+                            )}
+
+                            {data.status !== 'cancelled' && data.status !== 'completed' && (
+                                <button
+                                    onClick={cancel}
+                                    disabled={busy}
+                                    className="px-4 py-2 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 text-sm disabled:opacity-50"
+                                >
+                                    Отменить заказ
+                                </button>
+                            )}
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const Block: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+    <div>
+        <h3 className="text-sm font-semibold text-gray-400 mb-2">{title}</h3>
+        <div className="bg-gray-900/50 rounded-lg p-3">{children}</div>
+    </div>
+);
+
+const Row: React.FC<{ label: string; value: React.ReactNode; mono?: boolean }> = ({
+    label, value, mono,
+}) => (
+    <div className="flex items-start justify-between gap-4 text-sm py-0.5">
+        <span className="text-gray-500">{label}</span>
+        <span className={`text-gray-200 text-right break-all ${mono ? 'font-mono text-xs' : ''}`}>
+            {value}
+        </span>
+    </div>
+);

@@ -11,7 +11,10 @@ import {
     X,
     Zap,
     Wallet,
-    MessageSquare
+    MessageSquare,
+    ShieldCheck,
+    Handshake,
+    Settings as SettingsIcon
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -35,8 +38,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
         { path: '/categories', icon: ListTree, label: 'Категории' },
         { path: '/orders', icon: ShoppingCart, label: 'Заказы' },
         { path: '/users', icon: Users, label: 'Пользователи' },
+        { path: '/moderation', icon: ShieldCheck, label: 'Модерация' },
+        { path: '/deals', icon: Handshake, label: 'Сделки' },
         { path: '/reviews', icon: MessageSquare, label: 'Отзывы' },
         { path: '/withdrawals', icon: Wallet, label: 'Выводы' },
+        { path: '/settings', icon: SettingsIcon, label: 'Настройки' },
     ];
 
     return (

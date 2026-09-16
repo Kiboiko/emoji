@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './components/ui/Toast';
 import { Login } from './pages/Login';
 import { AdminLayout } from './layouts/AdminLayout';
 import { Dashboard } from './pages/Dashboard';
@@ -11,11 +12,15 @@ import { Orders } from './pages/Orders';
 import { Withdrawals } from './pages/Withdrawals';
 import { Reviews } from './pages/Reviews';
 import ProcessingPage from './pages/ProcessingPage';
+import { Settings } from './pages/Settings';
+import { Moderation } from './pages/Moderation';
+import { Deals } from './pages/Deals';
 const queryClient = new QueryClient();
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ToastProvider>
       <AuthProvider>
         <BrowserRouter basename="/admin">
           <Routes>
@@ -30,10 +35,14 @@ function App() {
               <Route path="users" element={<Users />} />
               <Route path="reviews" element={<Reviews />} />
               <Route path="withdrawals" element={<Withdrawals />} />
+              <Route path="moderation" element={<Moderation />} />
+              <Route path="deals" element={<Deals />} />
+              <Route path="settings" element={<Settings />} />
             </Route>
           </Routes>
         </BrowserRouter>
       </AuthProvider>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }
