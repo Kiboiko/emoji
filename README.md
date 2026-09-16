@@ -163,6 +163,11 @@ TARGET_DB=marketplace_restore_test ./scripts/restore-db.sh backups/<файл>
 | `docs/STAGE-2-REPORT.md` | Финансовый слой: счета, журнал, сверка, настройки |
 | `docs/STAGE-3-REPORT.md` | Оплата в TON через TON Connect |
 | `docs/STAGE-4-REPORT.md` | Подписки на закрытые каналы |
+| `docs/STAGE-5-REPORT.md` | P2P с escrow, релей-чат, условия площадки |
+| `docs/STAGE-6-REPORT.md` | Настраиваемая реферальная программа |
+| `docs/STAGE-7-REPORT.md` | Админ-панель |
+| `docs/STAGE-8-REPORT.md` | Дизайн витрины |
+| `docs/STAGE-9-REPORT.md` | **Приёмка: покрытие тестами, бэкапы, что осталось** |
 | `docs/db/` | Дампы схемы: до и после этапа 1 |
 
 ---
