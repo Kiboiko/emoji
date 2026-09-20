@@ -1,3 +1,7 @@
+// Должен идти первым: TON-библиотеки ниже читают глобальный Buffer при
+// инициализации, а в браузере его без этого файла не существует.
+import './lib/polyfills'
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { TonConnectUIProvider } from '@tonconnect/ui-react'
