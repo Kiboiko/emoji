@@ -251,8 +251,14 @@ export const p2pApi = {
     uploadListingImage: async (listingId: string, file: File) => {
         const form = new FormData();
         form.append('image', file);
-        // Content-Type не ставим руками: браузер сам добавит boundary
-        return (await apiClient.post(`/p2p/seller/listings/${listingId}/images`, form)).data;
+        // Content-Type СНИМАЕМ явно. У инстанса он выставлен в application/json
+        // (см. создание apiClient), и без этого JSON-заголовок уезжает вместе
+        // с multipart-телом: браузер не добавляет boundary, FastAPI не может
+        // разобрать тело и отвечает 422 «поле image отсутствует».
+        // Загрузка фото из интерфейса не работала из-за этого вообще никогда.
+        return (await apiClient.post(`/p2p/seller/listings/${listingId}/images`, form, {
+            headers: { 'Content-Type': undefined },
+        })).data;
     },
 
     submitListing: async (listingId: string) =>

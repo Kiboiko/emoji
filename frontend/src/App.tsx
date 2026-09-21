@@ -7,6 +7,7 @@ import { useAuthStore } from './store/authStore';
 import { useCartStore } from './store/cartStore';
 import { authApi } from './api/client';
 import { BottomNav } from './components/BottomNav/BottomNav';
+import { ToastHost } from './components/Toast/Toast';
 import { Home } from './pages/Home/Home';
 import { Cart } from './pages/Cart/Cart';
 import { Checkout } from './pages/Checkout/Checkout';
@@ -151,6 +152,7 @@ export const App: React.FC = () => {
             <div className="app relative">
                 <AppContent />
                 <NavigationWrapper />
+                <ToastHost />
             </div>
         </BrowserRouter>
     );

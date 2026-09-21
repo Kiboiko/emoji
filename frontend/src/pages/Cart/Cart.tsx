@@ -5,6 +5,7 @@ import { Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
 import { cartApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
+import { errorText, useToastStore } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import './Cart.css';
 
@@ -12,6 +13,7 @@ export const Cart: React.FC = () => {
     const navigate = useNavigate();
     const { language } = useAuthStore();
     const { cart, setCart } = useCartStore();
+    const showToast = useToastStore((s) => s.show);
     const { haptic } = useTelegram();
     const [isLoading, setIsLoading] = useState(true);
 
@@ -58,6 +60,15 @@ export const Cart: React.FC = () => {
         } catch (error) {
             console.error('Failed to update quantity:', error);
             haptic.notification('error');
+            // Откат без объяснения выглядит как глюк: число прыгает обратно, и
+            // непонятно почему. Чаще всего это товар пользователя — он штучный,
+            // и сервер отвечает «максимум 1».
+            showToast(
+                errorText(error, language === 'ru'
+                    ? 'Не удалось изменить количество'
+                    : 'Failed to update quantity'),
+                'error',
+            );
             // Revert on error (oldCart is guaranteed non-null because of check above)
             if (oldCart) setCart(oldCart);
         }

@@ -1,0 +1,55 @@
+.toast-host {
+    position: fixed;
+    /* Над нижней навигацией, плюс безопасная зона жестовой полосы */
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px) + var(--space-3));
+    left: var(--space-4);
+    right: var(--space-4);
+    z-index: var(--z-toast);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2, 8px);
+    align-items: center;
+
+    /* Контейнер не должен перехватывать тапы по интерфейсу под ним */
+    pointer-events: none;
+}
+
+.toast {
+    pointer-events: auto;
+    max-width: 100%;
+    padding: var(--space-3) var(--space-4);
+
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-lg);
+
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.4;
+    text-align: left;
+
+    cursor: pointer;
+}
+
+/* Цветом помечаем только левый край: заливать весь тост красным на
+   мелком экране слишком громко для «нельзя больше одной штуки». */
+.toast--error {
+    border-left: 3px solid var(--accent-error);
+}
+
+.toast--success {
+    border-left: 3px solid var(--accent-success);
+}
+
+.toast--info {
+    border-left: 3px solid var(--accent-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast {
+        transition: none;
+    }
+}

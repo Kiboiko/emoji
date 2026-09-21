@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Clock, Download, X, Wallet, ChevronDown, ChevronUp, Star, Check } from 'lucide-react';
 import { usersApi, ordersApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
+import { useToastStore } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { MySubscriptions } from '@/components/MySubscriptions/MySubscriptions';
 import { MyDeals } from '@/components/MyDeals/MyDeals';
@@ -123,6 +124,7 @@ const ReviewForm: React.FC<{
 
 export const Profile: React.FC = () => {
     const { user, language } = useAuthStore();
+    const showToast = useToastStore((s) => s.show);
     const { haptic } = useTelegram();
     const [stats, setStats] = useState<ReferralStats | null>(null);
     const [orders, setOrders] = useState<Order[]>([]);
@@ -150,11 +152,36 @@ export const Profile: React.FC = () => {
         }
     };
 
-    const copyReferralLink = () => {
+    const copyReferralLink = async () => {
         const botUsername = import.meta.env.VITE_BOT_USERNAME || 'your_bot';
         const link = `https://t.me/${botUsername}?start=ref_${user?.referral_code}`;
-        navigator.clipboard.writeText(link);
-        haptic.notification('success');
+
+        // navigator.clipboard есть не везде: внутри Telegram WebView он может
+        // отсутствовать или отклонить вызов. Промис раньше не ожидался, поэтому
+        // отказ уходил в никуда — ссылка молча не копировалась.
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(link);
+            } else {
+                const field = document.createElement('textarea');
+                field.value = link;
+                field.setAttribute('readonly', '');
+                field.style.position = 'fixed';
+                field.style.opacity = '0';
+                document.body.appendChild(field);
+                field.select();
+                document.execCommand('copy');
+                document.body.removeChild(field);
+            }
+            haptic.notification('success');
+            showToast(language === 'ru' ? 'Ссылка скопирована' : 'Link copied', 'success');
+        } catch {
+            haptic.notification('error');
+            showToast(
+                language === 'ru' ? 'Не удалось скопировать ссылку' : 'Failed to copy link',
+                'error',
+            );
+        }
     };
 
     const openWithdrawModal = () => {
