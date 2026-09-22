@@ -51,8 +51,16 @@ export const Withdrawals: React.FC = () => {
         loadWithdrawals();
     }, [loadWithdrawals]);
 
-    const handleComplete = async (id: string) => {
-        if (!window.confirm('Пометить как выполненное?')) return;
+    const handleComplete = async (id: string, amount: number, currency: string) => {
+        // Нажатие списывает деньги со счёта и уведомляет человека. Отменить
+        // нельзя, поэтому спрашиваем не «пометить?», а проверяем порядок:
+        // сначала перевод со своего кошелька, потом отметка здесь.
+        const ok = window.confirm(
+            `Вы уже перевели ${amount} ${currency} на кошелёк получателя?\n\n` +
+            'Нажатие спишет сумму со счёта и отправит человеку уведомление. ' +
+            'Отменить это действие нельзя.'
+        );
+        if (!ok) return;
 
         try {
             await adminApi.updateWithdrawalStatus(id, 'completed');
@@ -68,8 +76,10 @@ export const Withdrawals: React.FC = () => {
     return (
         <div className="p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                {/* Раздел давно не только про реферальный баланс: сюда же
+                    приходят выводы заработка продавцов и авторов каналов в TON */}
                 <h1 className="text-3xl font-bold text-white">
-                    Выводы реф. баланса
+                    Заявки на вывод
                 </h1>
 
                 <div className="flex gap-4 border-b border-gray-800">
@@ -158,12 +168,15 @@ export const Withdrawals: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         {w.status === 'pending' ? (
+                                            /* Подпись в повелительном наклонении: «Выполнено»
+                                               в колонке «Действие» читается как статус, и
+                                               админ решает, что выплата уже проведена. */
                                             <button
-                                                onClick={() => handleComplete(w.id)}
-                                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ml-auto"
+                                                onClick={() => handleComplete(w.id, w.amount, w.currency || 'USD')}
+                                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ml-auto whitespace-nowrap"
                                             >
                                                 <CheckCircle size={16} />
-                                                Выполнено
+                                                Отметить выплаченным
                                             </button>
                                         ) : (
                                             <div className="text-gray-500 flex items-center gap-2 justify-end">
