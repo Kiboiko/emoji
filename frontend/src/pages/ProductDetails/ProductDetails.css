@@ -10,6 +10,17 @@
     overflow-x: hidden;
     touch-action: pan-y;
     user-select: none;
+
+    /* Полосу прокрутки здесь убираем совсем: фото товара идёт от края до
+       края, а обычный скроллбар занимает 8px и отрезает от него вертикальную
+       полосу — выглядит как незакрашенный кусок макета. Прокрутка колесом и
+       жестом работает как обычно. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.product-details-page::-webkit-scrollbar {
+    display: none;
 }
 
 .back-button {
