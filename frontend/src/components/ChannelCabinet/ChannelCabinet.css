@@ -1,0 +1,330 @@
+/* Визуально зеркалит кабинет продавца: это соседние блоки в одном профиле,
+   и расходиться им незачем. */
+
+.channel-section {
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.channel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-primary);
+    font-size: var(--font-lg);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+}
+
+.channel-head-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.channel-intro {
+    margin: 0 0 var(--space-1);
+    font-size: var(--font-sm);
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+/* --- подсказка про права бота -------------------------------------- */
+
+.channel-hint {
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.channel-hint strong {
+    display: block;
+    margin-bottom: var(--space-1-5);
+    color: var(--text-primary);
+}
+
+.channel-hint ol {
+    margin: 0 0 var(--space-2);
+    padding-left: var(--space-4);
+}
+
+.channel-hint-note {
+    display: block;
+    font-size: var(--font-xs, 12px);
+    opacity: 0.85;
+}
+
+/* --- формы ---------------------------------------------------------- */
+
+.channel-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2-5);
+    margin-top: var(--space-3);
+}
+
+.channel-form-inline {
+    margin-top: var(--space-2-5);
+}
+
+.channel-label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1-5);
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+}
+
+.channel-input {
+    width: 100%;
+    padding: var(--space-2-5) var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: var(--font-md);
+    font-family: inherit;
+}
+
+.channel-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.channel-textarea {
+    min-height: 70px;
+    resize: vertical;
+}
+
+.channel-row {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.channel-row > * {
+    flex: 1;
+    min-width: 0;
+}
+
+/* --- кнопки --------------------------------------------------------- */
+
+.channel-btn,
+.channel-btn-secondary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1-5);
+    padding: var(--space-2-5) var(--space-3);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+
+.channel-btn {
+    background: var(--gradient-primary);
+    color: #fff;
+}
+
+.channel-btn-secondary {
+    margin-top: var(--space-2);
+    background: transparent;
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.channel-btn:disabled,
+.channel-btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.channel-btn-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm, 8px);
+    background: transparent;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: var(--font-xs, 12px);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* --- условия площадки ----------------------------------------------- */
+
+.channel-check {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.channel-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent-primary);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.channel-terms-text {
+    margin-top: var(--space-2);
+    padding: var(--space-2-5);
+    max-height: 160px;
+    overflow-y: auto;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* --- карточка канала ------------------------------------------------ */
+
+.channel-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+}
+
+.channel-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.channel-title {
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+    /* Название приходит из Telegram и может быть каким угодно */
+    overflow-wrap: anywhere;
+}
+
+.channel-username {
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+}
+
+.channel-badge {
+    flex-shrink: 0;
+    padding: 2px var(--space-2);
+    border-radius: 999px;
+    font-size: var(--font-xs, 12px);
+    white-space: nowrap;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+}
+
+.channel-badge--active {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-success);
+}
+
+.channel-badge--pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--accent-warning);
+}
+
+.channel-badge--rejected,
+.channel-badge--suspended {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-error);
+}
+
+/* --- права бота ----------------------------------------------------- */
+
+.channel-rights {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-2-5);
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    line-height: 1.35;
+}
+
+.channel-rights.ok {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--accent-success);
+}
+
+.channel-rights.bad {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--accent-error);
+}
+
+.channel-rights span {
+    overflow-wrap: anywhere;
+}
+
+/* --- тарифы --------------------------------------------------------- */
+
+.channel-plans {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1-5);
+}
+
+.channel-plans-title {
+    font-size: var(--font-sm);
+    font-weight: var(--weight-medium);
+    color: var(--text-primary);
+}
+
+.channel-plans-empty {
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+}
+
+.channel-plan {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    font-size: var(--font-sm);
+    color: var(--text-primary);
+}
+
+.channel-plan-meta {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+}
+
+.channel-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+}
+
+.channel-note--ok {
+    color: var(--accent-success);
+}

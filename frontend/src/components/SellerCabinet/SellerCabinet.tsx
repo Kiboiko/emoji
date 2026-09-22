@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { p2pApi, categoriesApi, termsApi, withdrawalsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
+import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import type { Category, Listing, SellerProfile } from '@/types';
 import './SellerCabinet.css';
@@ -30,6 +31,7 @@ const EMPTY_FORM: DraftForm = { name: '', description: '', price_usd: '', catego
 export const SellerCabinet: React.FC = () => {
     const { language } = useAuthStore();
     const { haptic } = useTelegram();
+    const showToast = useToastStore((s) => s.show);
 
     const [open, setOpen] = useState(false);
     const [profile, setProfile] = useState<SellerProfile | null>(null);
@@ -63,8 +65,10 @@ export const SellerCabinet: React.FC = () => {
 
     const fail = (e: any, fallback: string) => {
         haptic.notification('error');
-        const detail = e?.response?.data?.detail;
-        window.alert(typeof detail === 'string' ? detail : fallback);
+        // Был window.alert: системное окно поверх Mini App выглядит чужеродно
+        // и блокирует интерфейс до нажатия «ОК». Тосты появились позже, здесь
+        // просто приводим к общему виду.
+        showToast(errorText(e, fallback), 'error');
     };
 
     if (!profile) return null;

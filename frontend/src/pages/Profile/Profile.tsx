@@ -8,6 +8,7 @@ import { useTelegram } from '@/hooks/useTelegram';
 import { MySubscriptions } from '@/components/MySubscriptions/MySubscriptions';
 import { MyDeals } from '@/components/MyDeals/MyDeals';
 import { SellerCabinet } from '@/components/SellerCabinet/SellerCabinet';
+import { ChannelCabinet } from '@/components/ChannelCabinet/ChannelCabinet';
 import type { ReferralStats, Order } from '@/types';
 import './Profile.css';
 
@@ -326,6 +327,9 @@ export const Profile: React.FC = () => {
                 <MyDeals />
 
                 <SellerCabinet />
+
+                {/* Рядом с кабинетом продавца: оба — «что я продаю на площадке» */}
+                <ChannelCabinet />
 
                 <MySubscriptions />
 

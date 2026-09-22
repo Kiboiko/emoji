@@ -144,6 +144,32 @@ export interface MySubscription {
     invite_link: string | null;
 }
 
+/** Статусы канала автора — зеркало ChannelStatus на бэкенде */
+export type ChannelStatus = 'draft' | 'pending' | 'active' | 'suspended' | 'rejected';
+
+export interface ChannelPlan {
+    id: string;
+    product_id: string | null;
+    title_ru: string;
+    title_en: string;
+    duration_days: number;
+    price_usd: string;
+    is_active: boolean;
+}
+
+export interface AuthorChannel {
+    id: string;
+    title: string;
+    username: string | null;
+    description: string | null;
+    avatar_url: string | null;
+    status: ChannelStatus;
+    /** Без прав бота канал нельзя опубликовать: доступ невозможно ни выдать, ни отозвать */
+    bot_is_admin: boolean;
+    bot_check_error: string | null;
+    plans: ChannelPlan[];
+}
+
 export type DealStatus =
     | 'created' | 'paid_escrow' | 'chat_opened' | 'delivered_claimed'
     | 'confirmed' | 'released' | 'disputed' | 'refunded' | 'cancelled';

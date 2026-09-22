@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { AuthorChannel, ChannelStatus } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -295,6 +296,34 @@ export const subscriptionsApi = {
         const response = await apiClient.post(`/subscriptions/${subscriptionId}/invite`);
         return response.data;
     },
+
+    // --- кабинет автора канала ---------------------------------------
+
+    getMyChannels: async (): Promise<AuthorChannel[]> =>
+        (await apiClient.get('/subscriptions/author/channels')).data,
+
+    connectChannel: async (data: {
+        chat_identifier: string;
+        payout_wallet: string;
+        description?: string;
+        accept_terms: boolean;
+    }): Promise<AuthorChannel> =>
+        (await apiClient.post('/subscriptions/author/channels', data)).data,
+
+    // Автор жмёт после того, как добавил бота администратором
+    verifyChannel: async (channelId: string): Promise<{ bot_is_admin: boolean; error: string | null }> =>
+        (await apiClient.post(`/subscriptions/author/channels/${channelId}/verify`)).data,
+
+    createPlan: async (channelId: string, data: {
+        title_ru: string;
+        title_en: string;
+        duration_days: number;
+        price_usd: string;
+    }) =>
+        (await apiClient.post(`/subscriptions/author/channels/${channelId}/plans`, data)).data,
+
+    submitChannel: async (channelId: string): Promise<{ status: ChannelStatus }> =>
+        (await apiClient.post(`/subscriptions/author/channels/${channelId}/submit`)).data,
 };
 
 // Withdrawals API
