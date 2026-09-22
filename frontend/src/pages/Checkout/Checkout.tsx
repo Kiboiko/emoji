@@ -5,6 +5,7 @@ import { ArrowLeft, Wallet, Loader2, AlertCircle } from 'lucide-react';
 import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
+import { useToastStore } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { useTonPayment } from '@/hooks/useTonPayment';
 import { TermsGate } from '@/components/TermsGate/TermsGate';
@@ -16,8 +17,10 @@ export const Checkout: React.FC = () => {
     const { cart } = useCartStore();
     const { haptic } = useTelegram();
     const wallet = useTonWallet();
-    const { pay, phase, error, request, stopPolling } = useTonPayment();
+    const { pay, cancel, phase, error, request, orderId, stopPolling } = useTonPayment();
     const [termsAccepted, setTermsAccepted] = React.useState(false);
+    const [cancelling, setCancelling] = React.useState(false);
+    const showToast = useToastStore((s) => s.show);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
@@ -39,6 +42,23 @@ export const Checkout: React.FC = () => {
             haptic.notification('success');
             navigate('/profile');
         });
+    };
+
+    const handleCancel = async () => {
+        setCancelling(true);
+        haptic.impact('light');
+        const ok = await cancel();
+        setCancelling(false);
+
+        if (ok) {
+            showToast(
+                t('Заказ отменён, товар снова в продаже', 'Order cancelled, item is back on sale'),
+                'success',
+            );
+            navigate('/cart');
+        } else {
+            haptic.notification('error');
+        }
     };
 
     if (!cart || cart.items.length === 0) return null;
@@ -152,6 +172,30 @@ export const Checkout: React.FC = () => {
                             {t(
                                 'Не закрывайте страницу. Подтверждение обычно занимает несколько секунд.',
                                 'Keep this page open. Confirmation usually takes a few seconds.',
+                            )}
+                        </p>
+                    )}
+
+                    {/* Заказ создан в момент нажатия «Оплатить» и держит товар в
+                        резерве. Если оплата не прошла, без этой кнопки вещь
+                        пропадает с витрины до прогона планировщика. */}
+                    {orderId && phase !== 'paid' && (
+                        <button
+                            className="btn-cancel-order"
+                            onClick={handleCancel}
+                            disabled={cancelling || phase === 'confirming'}
+                        >
+                            {cancelling
+                                ? t('Отменяем...', 'Cancelling...')
+                                : t('Отменить заказ', 'Cancel order')}
+                        </button>
+                    )}
+
+                    {orderId && phase === 'confirming' && (
+                        <p className="confirm-hint">
+                            {t(
+                                'Пока идёт проверка платежа, отменить нельзя.',
+                                'Cannot cancel while the payment is being verified.',
                             )}
                         </p>
                     )}

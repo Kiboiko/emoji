@@ -290,3 +290,34 @@ html[data-platform="android"] .checkout-page {
 .checkout-bottom-spacer {
     height: 80px;
 }
+
+/* Отмена неоплаченного заказа. Намеренно сдержанная, не кнопка-призыв:
+   основное действие здесь — оплатить, а отмена нужна, когда что-то пошло
+   не так. Но и прятать её нельзя: без неё товар висит в резерве. */
+.btn-cancel-order {
+    width: 100%;
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+
+    color: var(--text-secondary, var(--text-primary));
+    font-family: inherit;
+    font-size: var(--font-sm, 14px);
+    cursor: pointer;
+    transition: border-color var(--transition-base), color var(--transition-base);
+}
+
+@media (hover: hover) {
+    .btn-cancel-order:hover:not(:disabled) {
+        border-color: var(--accent-error);
+        color: var(--accent-error);
+    }
+}
+
+.btn-cancel-order:disabled {
+    opacity: 0.5;
+    cursor: default;
+}

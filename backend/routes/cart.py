@@ -94,8 +94,25 @@ async def add_to_cart(
     existing_item = result.scalar_one_or_none()
     
     if existing_item:
-        # Update quantity
-        existing_item.quantity += item_data.quantity
+        # Проверять нужно ИТОГ, а не приходящую добавку: проверка выше видит
+        # только item_data.quantity. Без этого «добавить в корзину» дважды по
+        # одной штуке обходит лимит — в корзине оказывается две единицы товара
+        # с max_quantity=1. Для товара пользователя это вещь в единственном
+        # экземпляре, и заказ уходил бы на количество, которого не существует.
+        new_quantity = existing_item.quantity + item_data.quantity
+
+        if product.max_quantity and new_quantity > product.max_quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Maximum quantity is {product.max_quantity}",
+            )
+        if product.stock is not None and new_quantity > product.stock:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only {product.stock} left in stock",
+            )
+
+        existing_item.quantity = new_quantity
         await db.commit()
         return {"message": "Cart updated", "item_id": str(existing_item.id)}
     else:

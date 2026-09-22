@@ -146,6 +146,9 @@ export const ordersApi = {
         });
         return response.data;
     },
+
+    cancelOrder: async (orderId: string) =>
+        (await apiClient.post(`/orders/${orderId}/cancel`)).data,
 };
 
 // Payments API

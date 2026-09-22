@@ -41,6 +41,7 @@ function buildCommentPayload(comment: string): string {
 export function useTonPayment() {
     const [tonConnectUI] = useTonConnectUI();
     const [phase, setPhase] = useState<PaymentPhase>('idle');
+    const [orderId, setOrderId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [request, setRequest] = useState<TonPaymentRequest | null>(null);
     const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -111,6 +112,10 @@ export function useTonPayment() {
                 const orderId: string = created.order_id;
                 const payment: TonPaymentRequest = created.payment;
                 setRequest(payment);
+                // Запоминаем: заказ уже создан и держит товар в резерве. Если
+                // оплата не состоится, пользователю нужна возможность снять его
+                // самому, не дожидаясь планировщика.
+                setOrderId(orderId);
 
                 setPhase('awaiting_sign');
                 await tonConnectUI.sendTransaction({
@@ -151,11 +156,42 @@ export function useTonPayment() {
         [tonConnectUI, pollUntilPaid],
     );
 
+    /**
+     * Снимает созданный, но не оплаченный заказ и освобождает товар.
+     *
+     * Нужна, когда оплата не состоялась: кошелёк отклонил, не хватило
+     * средств, человек передумал. Без неё товар остаётся зарезервированным
+     * до прогона планировщика — для вещи в единственном экземпляре это значит,
+     * что она пропадает с витрины у всех.
+     */
+    const cancel = useCallback(async () => {
+        if (!orderId) return false;
+
+        stopPolling();
+        try {
+            await ordersApi.cancelOrder(orderId);
+            setOrderId(null);
+            setRequest(null);
+            setError(null);
+            setPhase('idle');
+            return true;
+        } catch (e: any) {
+            const detail = e?.response?.data?.detail;
+            setError(
+                (typeof detail === 'string' ? detail : detail?.message) ??
+                    'Не удалось отменить заказ',
+            );
+            return false;
+        }
+    }, [orderId, stopPolling]);
+
     return {
         pay,
+        cancel,
         phase,
         error,
         request,
+        orderId,
         isConnected: tonConnectUI.connected,
         stopPolling,
     };

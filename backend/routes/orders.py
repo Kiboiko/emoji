@@ -86,6 +86,88 @@ async def get_order(
     return order_data
 
 
+@router.post("/{order_id}/cancel", response_model=dict)
+async def cancel_order(
+    order_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Отмена покупателем своего неоплаченного заказа.
+
+    Без неё брошенный checkout держал товар до срабатывания планировщика —
+    до часа. Для товара пользователя это вещь в единственном экземпляре:
+    чужая неудачная оплата убирала её с витрины, и ни покупатель, ни
+    продавец ничего сделать не могли.
+
+    Отменяем ТОЛЬКО ожидающий оплаты заказ и только свой. Оплаченный заказ
+    отменить нельзя: деньги уже пришли, и возврат — это разбор через
+    поддержку, а не кнопка.
+    """
+    order = (
+        await db.execute(
+            select(Order).options(selectinload(Order.items)).where(Order.id == uuid.UUID(order_id))
+        )
+    ).scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if order.status == OrderStatus.CANCELLED:
+        # Повторное нажатие — не ошибка: кнопка могла не успеть исчезнуть
+        return {"message": "Order already cancelled", "status": order.status.value}
+
+    if order.status != OrderStatus.PENDING:
+        raise HTTPException(
+            status_code=400,
+            detail="Отменить можно только заказ, ожидающий оплаты",
+        )
+
+    # Платёж мог уже подтвердиться в блокчейне, пока пользователь жал кнопку.
+    # Проверяем перед отменой, иначе отменим оплаченный заказ и потеряем деньги.
+    payments = (
+        await db.execute(select(Payment).where(Payment.order_id == order.id))
+    ).scalars().all()
+    if any(p.status == PaymentStatus.CONFIRMED for p in payments):
+        raise HTTPException(
+            status_code=400,
+            detail="Платёж уже подтверждён, заказ отменить нельзя",
+        )
+
+    order.status = OrderStatus.CANCELLED
+    for payment in payments:
+        if payment.status in (PaymentStatus.PENDING, PaymentStatus.SEEN):
+            payment.status = PaymentStatus.EXPIRED
+
+    # Возврат резервов — та же логика, что у планировщика (cleanup_reservations)
+    released: dict[uuid.UUID, int] = {}
+
+    reserved_items = (
+        await db.execute(select(DigitalItem).where(DigitalItem.order_id == order.id))
+    ).scalars().all()
+    for digital in reserved_items:
+        digital.order_id = None
+        digital.reserved_until = None
+        released[digital.product_id] = released.get(digital.product_id, 0) + 1
+
+    for position in order.items:
+        if position.product_snapshot.get("is_p2p") and position.product_id:
+            released[position.product_id] = released.get(position.product_id, 0) + position.quantity
+
+    for product_id, count in released.items():
+        product = await db.get(Product, product_id)
+        if product and product.stock is not None:
+            product.stock += count
+
+    await db.commit()
+    logger.info("[ORDER] Заказ %s отменён покупателем, освобождено позиций: %s",
+                order.id, len(released))
+
+    return {"message": "Order cancelled", "status": order.status.value}
+
+
 @router.post("", response_model=dict)
 async def create_order(
     order_data: OrderCreate,
