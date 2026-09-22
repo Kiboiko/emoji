@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Handshake, Clock, MessageCircle, AlertTriangle, Check, Send } from 'lucide-react';
-import { p2pApi } from '@/api/client';
+import { Handshake, Clock, MessageCircle, AlertTriangle, Check, Send, Star } from 'lucide-react';
+import { p2pApi, reviewsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
+import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import type { Deal } from '@/types';
 import './MyDeals.css';
@@ -157,6 +158,24 @@ export const MyDeals: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* Отзыв о продавце — здесь, а не в списке заказов.
+                                Покупатель товара с рук думает о сделке, а не о
+                                заказе, и искать оценку продавца идёт сюда. */}
+                            {isBuyer && deal.status === 'released' && (
+                                deal.reviewed ? (
+                                    <div className="deal-reviewed">
+                                        <Check size={13} />
+                                        {t('Отзыв оставлен', 'Review left')}
+                                    </div>
+                                ) : (
+                                    <DealReview
+                                        deal={deal}
+                                        language={language}
+                                        onDone={load}
+                                    />
+                                )
+                            )}
+
                             {isBuyer && open && (
                                 <p className="deal-hint">
                                     {t(
@@ -170,5 +189,96 @@ export const MyDeals: React.FC = () => {
                 })}
             </div>
         </div>
+    );
+};
+
+/**
+ * Отзыв о продавце по завершённой сделке.
+ *
+ * Бэкенд принимает его только после статуса released и только от покупателя
+ * — после возврата по спору оценивать нечего, сделка не состоялась.
+ */
+const DealReview: React.FC<{
+    deal: Deal;
+    language: string;
+    onDone: () => Promise<unknown>;
+}> = ({ deal, language, onDone }) => {
+    const { haptic } = useTelegram();
+    const showToast = useToastStore((s) => s.show);
+    const [open, setOpen] = useState(false);
+    const [rating, setRating] = useState(5);
+    const [text, setText] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
+
+    const submit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setBusy(true);
+        try {
+            await reviewsApi.createReview({
+                product_id: deal.product_id,
+                order_id: deal.order_id,
+                text: text.trim(),
+                rating,
+            });
+            haptic.notification('success');
+            showToast(t('Спасибо за отзыв', 'Thanks for the review'), 'success');
+            await onDone();
+        } catch (err) {
+            haptic.notification('error');
+            showToast(errorText(err, t('Не удалось отправить отзыв', 'Failed to submit review')), 'error');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (!open) {
+        return (
+            <button className="deal-btn deal-btn-ghost" onClick={() => setOpen(true)}>
+                <Star size={14} />
+                {t('Оценить продавца', 'Rate the seller')}
+            </button>
+        );
+    }
+
+    return (
+        <form className="deal-review" onSubmit={submit}>
+            <div className="deal-stars">
+                {[1, 2, 3, 4, 5].map((value) => (
+                    <button
+                        key={value}
+                        type="button"
+                        className={`deal-star ${value <= rating ? 'on' : ''}`}
+                        onClick={() => setRating(value)}
+                        aria-label={`${value}`}
+                    >
+                        <Star size={20} fill={value <= rating ? 'currentColor' : 'none'} />
+                    </button>
+                ))}
+            </div>
+
+            <textarea
+                className="deal-review-text"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={t('Как прошла сделка?', 'How did it go?')}
+                maxLength={500}
+                rows={2}
+            />
+
+            <div className="deal-review-actions">
+                <button className="deal-btn" type="submit" disabled={busy}>
+                    {busy ? t('Отправляем...', 'Sending...') : t('Отправить', 'Submit')}
+                </button>
+                <button
+                    className="deal-btn deal-btn-ghost"
+                    type="button"
+                    onClick={() => setOpen(false)}
+                >
+                    {t('Отмена', 'Cancel')}
+                </button>
+            </div>
+        </form>
     );
 };

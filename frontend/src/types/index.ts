@@ -178,6 +178,11 @@ export interface Deal {
     id: string;
     number: number;
     product_name: string;
+    /** Нужны форме отзыва: эндпоинт опознаёт покупку по заказу и товару */
+    order_id: string;
+    product_id: string;
+    /** Покупатель уже оценил продавца по этой сделке */
+    reviewed: boolean;
     role: 'buyer' | 'seller';
     status: DealStatus;
     amount_ton: string;

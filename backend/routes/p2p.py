@@ -603,11 +603,17 @@ async def _own_listing(
 # Сделки
 # ---------------------------------------------------------------------------
 
-def _deal_dto(deal: Deal, viewer: User) -> dict:
+def _deal_dto(deal: Deal, viewer: User, *, reviewed: bool = False) -> dict:
+    # order_id и product_id нужны форме отзыва: она обращается к эндпоинту
+    # отзывов, а тот опознаёт покупку по заказу и товару. Без них оценить
+    # продавца можно было только из списка заказов, где искать её никто не
+    # станет — покупатель товара с рук думает о сделке, а не о заказе.
     return {
         "id": str(deal.id),
         "number": deal.number,
         "product_name": deal.product_name,
+        "order_id": str(deal.order_id),
+        "product_id": str(deal.product_id),
         "role": "buyer" if deal.buyer_id == viewer.id else "seller",
         "status": deal.status.value,
         "amount_ton": str(from_minor(deal.amount_nano, "TON")),
@@ -617,6 +623,7 @@ def _deal_dto(deal: Deal, viewer: User) -> dict:
         ),
         "chat_closed": deal.chat_closed,
         "dispute_reason": deal.dispute_reason,
+        "reviewed": reviewed,
         "created_at": deal.created_at.isoformat(),
     }
 
@@ -633,7 +640,24 @@ async def my_deals(
             .order_by(Deal.created_at.desc())
         )
     ).scalars().all()
-    return [_deal_dto(d, user) for d in deals]
+
+    # Одним запросом, а не по отзыву на сделку: список открывается на каждом
+    # заходе в профиль, и запрос на строку вернул бы сюда N+1
+    reviewed_ids: set[uuid.UUID] = set()
+    if deals:
+        from models.review import Review
+
+        rows = (
+            await db.execute(
+                select(Review.deal_id).where(
+                    Review.user_id == user.id,
+                    Review.deal_id.in_([d.id for d in deals]),
+                )
+            )
+        ).scalars().all()
+        reviewed_ids = {r for r in rows if r is not None}
+
+    return [_deal_dto(d, user, reviewed=d.id in reviewed_ids) for d in deals]
 
 
 async def _participant_deal(db: AsyncSession, deal_id: uuid.UUID, user: User) -> Deal:
