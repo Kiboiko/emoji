@@ -44,16 +44,22 @@
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
+/* minmax(0, 1fr), а не 1fr: у колонки `1fr` нижняя граница — auto, то есть
+   min-content. Одно длинное слово без пробелов в названии или описании
+   (а его вводит продавец, и запретить это нельзя) распирает колонку до
+   своей ширины, и вся сетка уезжает за край экрана вместе с горизонтальной
+   прокруткой. Нули позволяют колонке сжиматься, а перенос слова описан
+   в ProductCard.css. */
 .products-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
     gap: 16px;
     padding: 0 16px;
 }
 
 @media (max-width: 640px) {
     .products-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
         padding: 0 12px;
     }

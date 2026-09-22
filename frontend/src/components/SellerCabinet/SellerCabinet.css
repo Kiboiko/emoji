@@ -335,6 +335,9 @@
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+    /* Своё же название продавец видит здесь — без переноса длинное слово
+       распирает карточку заявки так же, как карточку товара на витрине */
+    overflow-wrap: anywhere;
 }
 
 .listing-badge {

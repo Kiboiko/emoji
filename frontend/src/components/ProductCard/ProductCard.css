@@ -49,6 +49,11 @@
     flex: 1;
 }
 
+/* line-clamp обрезает текст по ВЫСОТЕ и ничего не делает с шириной: одно
+   длинное слово без пробелов остаётся неразрывным и распирает карточку,
+   а вместе с ней и всю сетку. Перенос внутри слова здесь обязателен —
+   название и описание пишет продавец, и «бурмалдабурмалдабурмалда» или
+   ссылка без пробелов ломали бы витрину у всех посетителей. */
 .product-name {
     font-size: 18px;
     font-weight: 600;
@@ -58,6 +63,7 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    overflow-wrap: anywhere;
 }
 
 .product-description {
@@ -68,6 +74,7 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    overflow-wrap: anywhere;
     flex: 1;
 }
 

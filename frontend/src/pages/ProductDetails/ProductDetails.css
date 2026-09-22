@@ -115,6 +115,9 @@
     color: var(--text-secondary);
     line-height: 1.6;
     font-size: 15px;
+    /* Описание пишет продавец: длинное слово без пробелов иначе растянет
+       страницу вширь и даст горизонтальную прокрутку */
+    overflow-wrap: anywhere;
 }
 
 .action-bar {
