@@ -336,6 +336,13 @@ export const withdrawalsApi = {
         return response.data;
     },
 
+    // Доступно к выводу по валютам. Нужен автору канала: его заработок лежит
+    // на том же счёте, но кабинет продавца показывает баланс только
+    // зарегистрированным продавцам, а в профиле — реферальный баланс в USD.
+    getBalances: async (): Promise<Record<string, {
+        available: string; available_minor: number; hold_minor: number;
+    }>> => (await apiClient.get('/withdrawals/balance')).data,
+
     getMyWithdrawals: async () => {
         const response = await apiClient.get('/withdrawals/my');
         return response.data;

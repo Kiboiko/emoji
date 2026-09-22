@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Optional
 
 from database import get_db
-from models.finance import Account, LedgerEntryType, LedgerRefType
+from models.finance import Account, AccountOwnerType, LedgerEntryType, LedgerRefType
 from models.user import User
 from models.withdrawal import Withdrawal, WithdrawalStatus
 from schemas.withdrawal import WithdrawalCreate, WithdrawalUpdate, WithdrawalResponse
@@ -42,6 +42,49 @@ def _sync_balance_cache(user: User, account: Account) -> None:
     user.referral_earnings = float(
         from_minor(account.available_minor, WITHDRAWAL_CURRENCY)
     )
+
+
+@router.get("/balance")
+async def my_balances(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Доступные к выводу суммы по валютам.
+
+    Нужен тем, у кого нет профиля продавца: заработок автора канала лежит на
+    том же счёте, но увидеть его было негде — кабинет продавца показывает
+    баланс только зарегистрированным продавцам, а в профиле выводится
+    реферальный баланс в USD. Автор, продавший подписки, своих денег не видел.
+
+    Счета читаем напрямую и НЕ заводим отсутствующие: GET-запрос не должен
+    ничего создавать, иначе у каждого заглянувшего появлялся бы пустой счёт.
+    """
+    rows = (
+        await db.execute(
+            select(Account).where(
+                Account.owner_type == AccountOwnerType.USER,
+                Account.owner_id == user.id,
+                Account.currency.in_(ALLOWED_CURRENCIES),
+            )
+        )
+    ).scalars().all()
+
+    by_currency = {a.currency: a for a in rows}
+
+    return {
+        currency: {
+            "available": str(from_minor(
+                by_currency[currency].available_minor if currency in by_currency else 0,
+                currency,
+            )),
+            "available_minor": (
+                by_currency[currency].available_minor if currency in by_currency else 0
+            ),
+            "hold_minor": by_currency[currency].hold_minor if currency in by_currency else 0,
+        }
+        for currency in ALLOWED_CURRENCIES
+    }
 
 
 @router.post("", response_model=WithdrawalResponse)

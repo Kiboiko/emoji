@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     Radio, Plus, Send, ShieldCheck, ShieldAlert, RefreshCw,
-    ChevronDown, ChevronUp, Check,
+    ChevronDown, ChevronUp, Check, Wallet,
 } from 'lucide-react';
-import { subscriptionsApi, termsApi } from '@/api/client';
+import { subscriptionsApi, termsApi, withdrawalsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
@@ -74,6 +74,8 @@ export const ChannelCabinet: React.FC = () => {
 
             {open && channels !== null && (
                 <>
+                    {hasChannels && <AuthorPayout language={language} onError={fail} />}
+
                     {channels.map((channel) => (
                         <ChannelCard
                             key={channel.id}
@@ -105,6 +107,135 @@ export const ChannelCabinet: React.FC = () => {
                         </button>
                     )}
                 </>
+            )}
+        </div>
+    );
+};
+
+/* ------------------------------------------------------------------ */
+/* Заработок автора                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Баланс и заявка на вывод.
+ *
+ * Заработок автора канала лежит на том же счёте в TON, что и заработок
+ * продавца, но показывался только в кабинете продавца — то есть человек,
+ * продающий подписки и не торгующий вещами, своих денег не видел вообще.
+ * В профиле сверху выводится реферальный баланс в USD, и на него легко
+ * посмотреть и решить, что заработка нет.
+ */
+const AuthorPayout: React.FC<{
+    language: string;
+    onError: (e: unknown, fallback: string) => void;
+}> = ({ language, onError }) => {
+    const { haptic } = useTelegram();
+    const showToast = useToastStore((s) => s.show);
+
+    const [available, setAvailable] = useState<string>('0');
+    const [hold, setHold] = useState(0);
+    const [formOpen, setFormOpen] = useState(false);
+    const [amount, setAmount] = useState('');
+    const [wallet, setWallet] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
+
+    const load = useCallback(async () => {
+        try {
+            const data = await withdrawalsApi.getBalances();
+            setAvailable(data.TON?.available ?? '0');
+            setHold(data.TON?.hold_minor ?? 0);
+        } catch {
+            setAvailable('0');
+        }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const submit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setBusy(true);
+        try {
+            await withdrawalsApi.requestWithdrawal({
+                amount: amount.trim(),
+                wallet: wallet.trim(),
+                currency: 'TON',
+            });
+            haptic.notification('success');
+            showToast(t('Заявка на вывод отправлена', 'Withdrawal requested'), 'success');
+            setFormOpen(false);
+            setAmount('');
+            await load();
+        } catch (err) {
+            onError(err, t('Не удалось отправить заявку', 'Failed to request withdrawal'));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="channel-payout">
+            <div className="channel-payout-row">
+                <span className="channel-payout-label">{t('Заработано, TON', 'Earned, TON')}</span>
+                <span className="channel-payout-value">{available}</span>
+            </div>
+
+            {hold > 0 && (
+                <span className="channel-note">
+                    {t('Заморожено по заявкам на вывод: ', 'On hold for withdrawals: ')}
+                    {(hold / 1e9).toFixed(9)} TON
+                </span>
+            )}
+
+            {formOpen ? (
+                <form className="channel-form channel-form-inline" onSubmit={submit}>
+                    <label className="channel-label">
+                        {t('Сумма к выводу', 'Amount')}
+                        <input
+                            className="channel-input"
+                            type="number"
+                            step="0.000000001"
+                            min="0.000000001"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            placeholder={available}
+                            required
+                        />
+                    </label>
+                    <label className="channel-label">
+                        {t('Кошелёк TON', 'TON wallet')}
+                        <input
+                            className="channel-input"
+                            value={wallet}
+                            onChange={(e) => setWallet(e.target.value)}
+                            placeholder="UQ..."
+                            minLength={10}
+                            required
+                        />
+                    </label>
+                    <div className="channel-row">
+                        <button className="channel-btn" type="submit" disabled={busy}>
+                            {busy ? t('Отправляем...', 'Sending...') : t('Отправить заявку', 'Send request')}
+                        </button>
+                        <button
+                            className="channel-btn-secondary"
+                            type="button"
+                            onClick={() => setFormOpen(false)}
+                        >
+                            {t('Отмена', 'Cancel')}
+                        </button>
+                    </div>
+                </form>
+            ) : (
+                <button
+                    className="channel-btn-secondary"
+                    onClick={() => setFormOpen(true)}
+                    disabled={Number(available) <= 0}
+                >
+                    <Wallet size={16} />
+                    {t('Вывести', 'Withdraw')}
+                </button>
             )}
         </div>
     );

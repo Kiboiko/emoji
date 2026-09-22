@@ -328,3 +328,33 @@
 .channel-note--ok {
     color: var(--accent-success);
 }
+
+/* --- заработок автора ----------------------------------------------- */
+
+.channel-payout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: var(--bg-secondary);
+}
+
+.channel-payout-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.channel-payout-label {
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+}
+
+.channel-payout-value {
+    font-size: var(--font-lg);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+}
