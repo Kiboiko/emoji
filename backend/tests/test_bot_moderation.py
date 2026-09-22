@@ -115,6 +115,9 @@ async def test_reject_sends_to_admin_panel(db, user_factory, pending_listing):
     result = await _moderate(db, admin.telegram_id, pending_listing.id, approve=False)
 
     assert "админку" in result["reply"]
+    # Флаг, а не разбор текста reply: бот решает по нему, слать ли сообщение
+    # со ссылкой на модерацию. Текст reply может измениться независимо.
+    assert result["open_admin"] is True
     await db.refresh(pending_listing)
     assert pending_listing.status == ListingStatus.PENDING
 

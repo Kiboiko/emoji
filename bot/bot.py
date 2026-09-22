@@ -252,6 +252,19 @@ async def on_moderation_action(callback: types.CallbackQuery):
     reply = (result or {}).get("reply") or "Не удалось выполнить, попробуйте позже."
     await callback.answer(reply, show_alert=True)
 
+    # answerCallbackQuery умеет показать только текст — Telegram не даёт
+    # открыть из него произвольную ссылку (url там принимает только t.me и
+    # игры бота, не любой https). Отдельным сообщением с inline-кнопкой это
+    # ограничение не действует, поэтому для отказа шлём сообщение с прямой
+    # ссылкой на модерацию, а не просто говорим "откройте админку сами".
+    if result and result.get("open_admin") and WEBAPP_URL:
+        link = InlineKeyboardBuilder()
+        link.button(text="Открыть модерацию", url=f"{WEBAPP_URL}/admin/moderation")
+        await callback.message.answer(
+            "Отклонить с причиной можно в админке:",
+            reply_markup=link.as_markup(),
+        )
+
     # Убираем кнопки у обработанной заявки, чтобы её не одобрили повторно
     # и чтобы в чате было видно, что решение принято
     if result and result.get("status"):
