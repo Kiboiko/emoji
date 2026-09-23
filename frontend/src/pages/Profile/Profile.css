@@ -55,12 +55,12 @@ html[data-platform="android"] .refwallet-card {
    важен: человек заходит сюда узнать «сколько у меня» и «как забрать»,
    остальное вторично. */
 
+/* Поверхность, рамку и скругление даёт .glass-card — тот же класс, что у
+   соседних секций. Своя подложка делала карточку чуть иной по цвету и с
+   другим радиусом, из-за чего углы не совпадали с блоками ниже. */
 .refwallet-card {
-    margin: 0 var(--space-4) var(--space-3);
-    padding: var(--space-5);
-    border-radius: var(--radius-xl);
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
+    margin: 0 0 var(--space-3);
+    padding: var(--space-4);
 }
 
 .refwallet-head {
@@ -175,7 +175,7 @@ html[data-platform="android"] .refwallet-card {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-2);
-    margin: 0 var(--space-4) var(--space-3);
+    margin: 0 0 var(--space-3);
 }
 
 .stat-tile {
@@ -213,11 +213,8 @@ html[data-platform="android"] .refwallet-card {
 /* --- Реферальная ссылка ----------------------------------------------- */
 
 .reflink {
-    margin: 0 var(--space-4) var(--space-4);
+    margin: 0 0 var(--space-3);
     padding: var(--space-4);
-    border-radius: var(--radius-lg);
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
 }
 
 .reflink-head {
@@ -310,10 +307,13 @@ html[data-platform="android"] .refwallet-card {
     }
 }
 
+/* Горизонтального отступа здесь нет намеренно: его задаёт .container.
+   Пока он стоял и там и тут, блок отодвигался от края на 32px, а соседние
+   секции — на 16, и колонка шла лесенкой. */
 .referral-section,
 .orders-section {
-    padding: 20px;
-    margin: 0 16px 20px;
+    padding: var(--space-4);
+    margin: 0 0 var(--space-3);
 }
 
 .orders-section h2 {
@@ -468,8 +468,8 @@ html[data-platform="android"] .refwallet-card {
 
 /* Referrals List */
 .referrals-list {
-    padding: 20px;
-    margin: 0 16px;
+    padding: var(--space-4);
+    margin: 0 0 var(--space-3);
 }
 
 .referrals-list h2 {

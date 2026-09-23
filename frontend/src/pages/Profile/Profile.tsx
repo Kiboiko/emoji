@@ -273,7 +273,7 @@ export const Profile: React.FC = () => {
                 </div>
 
                 {/* Баланс реферальной программы */}
-                <section className="refwallet-card">
+                <section className="refwallet-card glass-card">
                     <div className="refwallet-head">
                         <span className="refwallet-label">
                             <span className="refwallet-dot" aria-hidden="true" />
@@ -337,7 +337,7 @@ export const Profile: React.FC = () => {
                     </div>
                 </div>
 
-                <section className="reflink">
+                <section className="reflink glass-card">
                     <div className="reflink-head">
                         <span className="reflink-title">
                             {language === 'ru' ? 'Моя реферальная ссылка' : 'My referral link'}
