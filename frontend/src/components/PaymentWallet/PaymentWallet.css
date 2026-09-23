@@ -1,0 +1,171 @@
+/* --- Кошелёк для оплаты ------------------------------------------------
+   Живёт в профиле по той же сетке, что и соседние блоки: край даёт
+   .container, здесь только внутренние поля и шаг вниз. */
+
+.paywallet {
+    padding: var(--space-4);
+    margin: 0 0 var(--space-3);
+}
+
+.paywallet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.paywallet-title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-md, 16px);
+    font-weight: var(--weight-semibold, 600);
+    color: var(--text-primary);
+}
+
+.paywallet-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-shrink: 0;
+    padding: 3px var(--space-2);
+    border-radius: 999px;
+    background: rgba(var(--accent-rgb), 0.15);
+    color: var(--accent-primary);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+}
+
+/* --- подключённый ---------------------------------------------------- */
+
+.paywallet-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+}
+
+/* Адрес моноширинным: так видно, что это машинная строка, и одинаковые
+   символы не пляшут по ширине */
+.paywallet-address {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--font-sm, 13px);
+    color: var(--text-primary);
+}
+
+.paywallet-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-shrink: 0;
+    padding: var(--space-1-5) var(--space-2);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm, 8px);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: var(--font-xs, 12px);
+    cursor: pointer;
+}
+
+.paywallet-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    font-size: var(--font-xs, 12px);
+    color: var(--text-secondary);
+}
+
+.paywallet-chain {
+    padding: 2px var(--space-1-5);
+    border-radius: var(--radius-sm, 8px);
+    background: var(--bg-tertiary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Сеть кошелька не совпала с сетью площадки — платёж просто не дойдёт */
+.paywallet-chain.bad {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-error);
+}
+
+/* --- не подключён ---------------------------------------------------- */
+
+.paywallet-empty {
+    margin-bottom: var(--space-3);
+    font-size: var(--font-sm, 13px);
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.paywallet-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: var(--accent-warning);
+    font-size: var(--font-xs, 12px);
+    line-height: 1.5;
+}
+
+.paywallet-warn svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* --- действия -------------------------------------------------------- */
+
+.paywallet-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+}
+
+.paywallet-disconnect {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--accent-error);
+    font-family: inherit;
+    font-size: var(--font-sm, 13px);
+    cursor: pointer;
+}
+
+/* Подсветка при переходе из оформления заказа по якорю #wallet: без неё
+   человек попадает в середину длинной страницы и не понимает, что ему
+   показали */
+.paywallet.highlight {
+    animation: paywallet-flash 1.6s ease-out;
+}
+
+@keyframes paywallet-flash {
+    0%, 40% {
+        box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.55);
+    }
+    100% {
+        box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .paywallet.highlight {
+        animation: none;
+        box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.55);
+    }
+}

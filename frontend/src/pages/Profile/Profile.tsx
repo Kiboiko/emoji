@@ -9,6 +9,7 @@ import { MySubscriptions } from '@/components/MySubscriptions/MySubscriptions';
 import { MyDeals } from '@/components/MyDeals/MyDeals';
 import { SellerCabinet } from '@/components/SellerCabinet/SellerCabinet';
 import { ChannelCabinet } from '@/components/ChannelCabinet/ChannelCabinet';
+import { PaymentWallet } from '@/components/PaymentWallet/PaymentWallet';
 import type { ReferralStats, Order } from '@/types';
 import './Profile.css';
 
@@ -361,6 +362,10 @@ export const Profile: React.FC = () => {
                         </button>
                     </div>
                 </section>
+
+                {/* Кошелёк, которым платят. Стоит до всего «что я продаю»:
+                    это условие покупки, а не часть кабинета продавца. */}
+                <PaymentWallet />
 
                 {/* Orders Section */}
                 <MyDeals />

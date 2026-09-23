@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Wallet, Loader2, AlertCircle } from 'lucide-react';
-import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
+import { ArrowLeft, Wallet, Loader2, AlertCircle, Check, ChevronRight } from 'lucide-react';
+import { useTonAddress, useTonWallet } from '@tonconnect/ui-react';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
@@ -11,12 +11,20 @@ import { useTonPayment } from '@/hooks/useTonPayment';
 import { TermsGate } from '@/components/TermsGate/TermsGate';
 import './Checkout.css';
 
+/** Адрес в 48 символов не читается и ломает узкие экраны */
+function shortAddress(address: string): string {
+    if (address.length <= 16) return address;
+    return `${address.slice(0, 6)}…${address.slice(-6)}`;
+}
+
 export const Checkout: React.FC = () => {
     const navigate = useNavigate();
     const { language } = useAuthStore();
     const { cart } = useCartStore();
     const { haptic } = useTelegram();
     const wallet = useTonWallet();
+    // Человекочитаемый вид UQ…, а не сырой 0:abc… из wallet.account
+    const friendlyAddress = useTonAddress();
     const { pay, cancel, phase, error, request, orderId, stopPolling } = useTonPayment();
     const [termsAccepted, setTermsAccepted] = React.useState(false);
     const [cancelling, setCancelling] = React.useState(false);
@@ -103,17 +111,36 @@ export const Checkout: React.FC = () => {
                 <div className="payment-section glass-card">
                     <h2>{t('Оплата', 'Payment')}</h2>
 
-                    <div className="wallet-row">
-                        <div className="wallet-label">
-                            <Wallet size={18} />
-                            <span>
-                                {wallet
-                                    ? t('Кошелёк подключён', 'Wallet connected')
-                                    : t('Подключите кошелёк TON', 'Connect your TON wallet')}
+                    {/* Кошелёк подключается в профиле, а не здесь: перед самой
+                        оплатой это ещё один шаг с уходом в другое приложение.
+                        Здесь только состояние и дорога туда, если кошелька нет. */}
+                    {wallet ? (
+                        <div className="wallet-row wallet-row--ok">
+                            <div className="wallet-label">
+                                <Check size={18} />
+                                <span>{t('Кошелёк подключён', 'Wallet connected')}</span>
+                            </div>
+                            <span className="wallet-address">
+                                {shortAddress(friendlyAddress)}
                             </span>
                         </div>
-                        <TonConnectButton />
-                    </div>
+                    ) : (
+                        <button
+                            className="wallet-row wallet-row--empty"
+                            onClick={() => navigate('/profile#wallet')}
+                        >
+                            <div className="wallet-label">
+                                <Wallet size={18} />
+                                <span>
+                                    {t(
+                                        'Кошелёк не подключён — подключить в профиле',
+                                        'No wallet connected — connect it in your profile',
+                                    )}
+                                </span>
+                            </div>
+                            <ChevronRight size={18} />
+                        </button>
+                    )}
 
                     <TermsGate onChange={setTermsAccepted} />
 
@@ -159,7 +186,7 @@ export const Checkout: React.FC = () => {
                                 {statusText[phase]}
                             </span>
                         ) : !wallet ? (
-                            t('Сначала подключите кошелёк', 'Connect wallet first')
+                            t('Сначала подключите кошелёк в профиле', 'Connect a wallet in your profile first')
                         ) : !termsAccepted ? (
                             t('Примите условия площадки', 'Accept the terms first')
                         ) : (

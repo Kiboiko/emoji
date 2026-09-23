@@ -188,22 +188,63 @@ html[data-platform="android"] .checkout-page {
     padding-top: calc(env(safe-area-inset-top, 0px) + 110px);
 }
 
-/* --- TON Connect ----------------------------------------------------- */
+/* --- Кошелёк ----------------------------------------------------------
+   Подключается в профиле — здесь только состояние. Два вида:
+   спокойная строка, когда всё готово, и кнопка-переход, когда нет. */
 
 .wallet-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
+    gap: var(--space-3);
+    width: 100%;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    text-align: left;
+}
+
+.wallet-row--ok .wallet-label {
+    color: var(--accent-primary);
+}
+
+/* Это кнопка, а не строка: сбрасываем собственные стили браузера */
+.wallet-row--empty {
+    border: 1px solid rgba(var(--accent-rgb), 0.35);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.wallet-row--empty .wallet-label {
+    color: var(--text-primary);
+}
+
+.wallet-row--empty > svg {
+    flex-shrink: 0;
+    color: var(--accent-primary);
 }
 
 .wallet-label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
+    min-width: 0;
     color: var(--text-secondary);
     font-size: 14px;
+}
+
+.wallet-label svg {
+    flex-shrink: 0;
+}
+
+/* Адрес моноширинным — так же, как в профиле */
+.wallet-address {
+    flex-shrink: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    color: var(--text-secondary);
 }
 
 .rate-note {
