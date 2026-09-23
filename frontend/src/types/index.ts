@@ -111,6 +111,10 @@ export interface ReferralStats {
     total_earnings: number;
     /** Заработок со второго уровня. 0, когда второй уровень выключен. */
     level2_earnings?: number;
+    /** Процент первого уровня: без него непонятно, от чего считается сумма */
+    referral_percent?: number;
+    /** Сколько оплаченных заказов сделали приглашённые */
+    paid_orders_count?: number;
     referrals: Array<{
         user_id: string;
         telegram_id: number;

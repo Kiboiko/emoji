@@ -42,4 +42,10 @@ class ReferralStats(BaseModel):
     referral_code: str
     referral_count: int
     total_earnings: float
+    level2_earnings: float = 0.0
+    # Процент первого уровня: реферер должен понимать, от чего считается
+    # его вознаграждение, иначе сумму начисления нечем проверить
+    referral_percent: float = 0.0
+    # Сколько оплаченных заказов сделали приглашённые
+    paid_orders_count: int = 0
     referrals: list[dict]  # List of referrals with their purchases

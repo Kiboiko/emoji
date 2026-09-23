@@ -15,13 +15,26 @@
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
 
-  --accent-primary: #6366f1;
-  --accent-secondary: #8b5cf6;
+  /* Акцент мятный. В светлой теме он глубже: яркий мятный на белом даёт
+     нечитаемый текст, а здесь этим цветом пишут (цены, ссылки, активные
+     состояния). На самом акценте текст всегда тёмный — см. --accent-contrast. */
+  --accent-primary: #0f9d76;
+  --accent-secondary: #12b886;
   --accent-success: #10b981;
   --accent-warning: #f59e0b;
   --accent-error: #ef4444;
 
-  --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  /* Чернила поверх акцентной заливки. Белый на мятном не проходит по
+     контрасту ни в одной из тем, поэтому кнопки с акцентным фоном пишем
+     тёмным — так же, как в присланных образцах. */
+  --accent-contrast: #04241a;
+
+  /* Составляющие акцента отдельно: нужны для полупрозрачных подложек и
+     свечения. Держать их числами, а не цветом, — единственный способ
+     подставлять акцент внутрь rgba() и не зашивать его в двадцати местах. */
+  --accent-rgb: 18, 184, 134;
+
+  --gradient-primary: linear-gradient(135deg, #12b886 0%, #0f9d76 100%);
   --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
   --gradient-card: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
 }
@@ -43,6 +56,13 @@
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
 
+  /* В тёмной теме акцент яркий: на почти чёрном фоне глубокий мятный
+     выглядит грязным и плохо читается */
+  --accent-primary: #3ddc97;
+  --accent-secondary: #2fe0a0;
+  --accent-rgb: 61, 220, 151;
+
+  --gradient-primary: linear-gradient(135deg, #3ddc97 0%, #2fc98a 100%);
   --gradient-card: linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(26, 26, 26, 0.7) 100%);
 }
 
@@ -211,7 +231,7 @@ body::-webkit-scrollbar {
 /* Gradient Button */
 .btn-gradient {
   background: var(--gradient-primary);
-  color: white;
+  color: var(--accent-contrast);
   border: none;
   padding: 12px 24px;
   border-radius: 12px;
@@ -219,12 +239,12 @@ body::-webkit-scrollbar {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.3);
 }
 
 .btn-gradient:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 8px 24px rgba(var(--accent-rgb), 0.4);
 }
 
 .btn-gradient:active {
@@ -245,8 +265,8 @@ body::-webkit-scrollbar {
 
 .badge-primary {
   background: var(--gradient-primary);
-  color: white;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  color: var(--accent-contrast);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.4);
   font-weight: 700;
 }
 

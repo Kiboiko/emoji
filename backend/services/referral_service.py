@@ -252,10 +252,16 @@ async def get_referral_statistics(db: AsyncSession, user: User) -> dict:
             "commission_earned": float(commission_by_user.get(referral.id, Decimal(0))),
         })
 
+    # Ставку показываем самому рефереру: без неё он видит начисления, но не
+    # понимает, от чего они считаются, и не может проверить сумму.
+    percent_bp = await settings_service.get_int(db, "referral_l1_bp")
+
     return {
         "referral_code": user.referral_code,
         "referral_count": len(referrals),
         "total_earnings": user.referral_earnings,
         "level2_earnings": float(level2_total),
+        "referral_percent": percent_bp / 100,
+        "paid_orders_count": len(orders),
         "referrals": referral_details,
     }

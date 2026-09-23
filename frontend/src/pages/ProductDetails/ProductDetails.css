@@ -175,14 +175,14 @@
     align-items: center;
     gap: 8px;
     background: var(--gradient-primary);
-    color: white;
+    color: var(--accent-contrast);
     border: none;
     padding: 12px 24px;
     border-radius: 12px;
     font-weight: 600;
     font-size: 16px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
 }
 
 .btn-back {
@@ -310,7 +310,7 @@
     height: 24px;
     border-radius: 50%;
     background: var(--gradient-primary);
-    color: white;
+    color: var(--accent-contrast);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -392,7 +392,7 @@
 
 .service-input:focus {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.1);
 }
 
 .service-input.error {

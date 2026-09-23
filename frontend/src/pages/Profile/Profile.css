@@ -15,82 +15,9 @@
     font-weight: 600;
 }
 
-.user-card {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 20px;
-    margin: 0 16px 20px;
-}
-
-.user-avatar {
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    background: var(--gradient-primary);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    font-weight: 700;
-}
-
-.user-info h2 {
-    margin-bottom: 4px;
-}
-
-.user-info p {
-    color: var(--text-secondary);
-    font-size: 14px;
-}
-
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    padding: 0 16px;
-    margin-bottom: 20px;
-}
-
-.stat-card {
-    padding: 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.stat-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-}
-
-.stat-content {
-    flex: 1;
-}
-
-.stat-label {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin-bottom: 4px;
-}
-
-.stat-value {
-    font-size: 24px;
-    font-weight: 700;
-}
-
-/* Referral Balance Card */
-.referral-balance-card {
-    padding: 24px;
-    margin: 0 16px 20px;
-    background: var(--bg-card);
-}
+/* Блок карточки пользователя и старой сетки показателей удалён: ни один из
+   его классов не встречался в разметке, а .stat-label/.stat-value ещё и
+   спорили с новой плиткой показателей ниже. */
 
 /* Mobile fullscreen spacing */
 .profile-title-mobile {
@@ -118,110 +45,269 @@ html[data-platform="android"] .profile-title-mobile h1 {
     margin: 0;
 }
 
-html[data-platform="ios"] .referral-balance-card,
-html[data-platform="android"] .referral-balance-card {
+html[data-platform="ios"] .refwallet-card,
+html[data-platform="android"] .refwallet-card {
     margin-top: 32px;
 }
 
-.balance-header {
-    margin-bottom: 8px;
+/* --- Кошелёк реферальной программы -----------------------------------
+   Крупная сумма, над ней мелкая подпись, под ней одно действие. Порядок
+   важен: человек заходит сюда узнать «сколько у меня» и «как забрать»,
+   остальное вторично. */
+
+.refwallet-card {
+    margin: 0 var(--space-4) var(--space-3);
+    padding: var(--space-5);
+    border-radius: var(--radius-xl);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
 }
 
-.balance-label {
-    font-size: 14px;
+.refwallet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.refwallet-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-md);
     color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
 }
 
-.balance-amount {
-    font-size: 36px;
-    font-weight: 800;
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 16px;
+.refwallet-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    flex-shrink: 0;
 }
 
-.btn-withdraw {
-    width: 100%;
-    padding: 12px 20px;
-    border-radius: 10px;
-    border: none;
-    background: var(--bg-tertiary);
+.refwallet-pill {
+    flex-shrink: 0;
+    padding: 3px var(--space-2-5);
+    border-radius: var(--radius-pill);
+    background: rgba(var(--accent-rgb), 0.15);
+    color: var(--accent-primary);
+    font-size: var(--font-xs);
+    letter-spacing: 0.04em;
+}
+
+/* Цифра набрана светлым начертанием и крупно — так она читается как сумма,
+   а не как заголовок. Табличные цифры не дают строке дёргаться при смене
+   значения. */
+.refwallet-amount {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-size: 44px;
+    font-weight: var(--weight-medium);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
     color: var(--text-primary);
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-bottom: 16px;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.refwallet-currency {
+    font-size: var(--font-xl);
+    font-weight: var(--weight-normal);
+    color: var(--text-tertiary);
+}
+
+.refwallet-skeleton {
+    height: 46px;
+    width: 60%;
+    border-radius: var(--radius-md);
+}
+
+.refwallet-note {
+    margin-top: var(--space-2);
+    font-size: var(--font-md);
+    color: var(--text-secondary);
+}
+
+.refwallet-cta {
+    width: 100%;
+    margin-top: var(--space-4);
+    padding: var(--space-4);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--space-2);
+    border: none;
+    border-radius: var(--radius-lg);
+    background: var(--gradient-primary);
+    color: var(--accent-contrast);
+    font-family: inherit;
+    font-size: var(--font-lg);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.28);
+    transition: box-shadow var(--transition-base), transform var(--transition-fast);
 }
 
-.btn-withdraw:hover {
-    background: var(--bg-secondary);
-    transform: translateY(-1px);
+@media (hover: hover) {
+    .refwallet-cta:hover:not(:disabled) {
+        box-shadow: 0 10px 28px rgba(var(--accent-rgb), 0.38);
+    }
 }
 
-.invited-count {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin-bottom: 20px;
+.refwallet-cta:active:not(:disabled) {
+    transform: scale(0.99);
 }
 
-.referral-link-box {
-    padding: 16px;
-    background: var(--bg-secondary);
-    border-radius: 12px;
+/* Выводить нечего — кнопка гаснет и теряет свечение: светящаяся кнопка,
+   которая ничего не делает, выглядит как поломка. */
+.refwallet-cta:disabled {
+    opacity: 0.45;
+    box-shadow: none;
+    cursor: default;
 }
 
-.link-label {
-    font-size: 12px;
-    color: var(--text-tertiary);
-    margin-bottom: 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+/* --- Плитка показателей ---------------------------------------------- */
+
+.stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+    margin: 0 var(--space-4) var(--space-3);
 }
 
-.link-content {
+.stat-tile {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    min-width: 0;
 }
 
-.link-text {
-    flex: 1;
-    font-size: 13px;
-    color: var(--text-primary);
+.stat-label {
+    font-size: var(--font-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: monospace;
 }
 
-.btn-copy-link {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: none;
-    background: var(--bg-tertiary);
+.stat-value {
+    font-size: var(--font-xl);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-value.accent {
     color: var(--accent-primary);
+}
+
+/* --- Реферальная ссылка ----------------------------------------------- */
+
+.reflink {
+    margin: 0 var(--space-4) var(--space-4);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+}
+
+.reflink-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.reflink-title {
+    font-size: var(--font-md);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+}
+
+.reflink-hint {
+    flex-shrink: 0;
+    font-size: var(--font-sm);
+    color: var(--text-tertiary);
+}
+
+.reflink-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
+    gap: var(--space-2);
+    padding: var(--space-2-5) var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
 }
 
-.btn-copy-link:hover {
-    background: var(--accent-primary);
-    color: white;
-    transform: scale(1.05);
+/* Моноширинный: ссылку сверяют символ в символ, и в пропорциональном
+   шрифте похожие знаки сливаются. */
+.reflink-text {
+    flex: 1;
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--font-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Приглушаем общую часть, выделяем код: именно он у каждого свой. */
+.reflink-prefix {
+    color: var(--text-tertiary);
+}
+
+.reflink-code {
+    color: var(--accent-primary);
+    font-weight: var(--weight-semibold);
+}
+
+.reflink-copy {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: var(--font-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+@media (hover: hover) {
+    .reflink-copy:hover {
+        background: rgba(var(--accent-rgb), 0.15);
+        color: var(--accent-primary);
+    }
+}
+
+@media (max-width: 380px) {
+    .refwallet-amount {
+        font-size: 36px;
+    }
+
+    /* Подписи вроде «РЕФЕРАЛОВ» на узком экране не влезают в треть строки */
+    .stat-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .reflink-copy span {
+        display: none;
+    }
 }
 
 .referral-section,
@@ -331,7 +417,7 @@ html[data-platform="android"] .referral-balance-card {
 }
 
 .status-paid {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+    background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.2) 0%, rgba(var(--accent-rgb), 0.2) 100%);
     color: var(--accent-primary);
 }
 
@@ -410,7 +496,7 @@ html[data-platform="android"] .referral-balance-card {
     height: 40px;
     border-radius: 50%;
     background: var(--gradient-primary);
-    color: white;
+    color: var(--accent-contrast);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -619,7 +705,7 @@ html[data-platform="android"] .referral-balance-card {
     border: none;
     border-radius: 14px;
     padding: 16px;
-    color: white;
+    color: var(--accent-contrast);
     font-weight: 700;
     font-size: 16px;
     display: flex;
@@ -809,7 +895,7 @@ html[data-platform="android"] .referral-balance-card {
     margin-top: 12px;
     width: 100%;
     background: var(--gradient-primary);
-    color: white;
+    color: var(--accent-contrast);
     font-size: 14px;
     font-weight: 700;
     padding: 12px;
@@ -825,7 +911,7 @@ html[data-platform="android"] .referral-balance-card {
 
 .btn-submit-review:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
 }
 
 .btn-submit-review:disabled {
@@ -833,15 +919,4 @@ html[data-platform="android"] .referral-balance-card {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
-}
-/* Заглушка баланса: высота как у реальной суммы, чтобы блок не прыгал */
-.balance-skeleton {
-    height: 40px;
-    width: 140px;
-    margin: var(--space-2) auto;
-}
-
-.btn-withdraw:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }

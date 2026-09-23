@@ -39,9 +39,9 @@
 
 .category-chip.active {
     background: var(--gradient-primary);
-    color: white;
+    color: var(--accent-contrast);
     border-color: transparent;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
 }
 
 /* minmax(0, 1fr), а не 1fr: у колонки `1fr` нижняя граница — auto, то есть

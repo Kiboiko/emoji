@@ -46,7 +46,7 @@
 .search-input:focus {
     border-color: var(--accent-primary);
     background: var(--bg-card);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
 }
 
 .header-actions {

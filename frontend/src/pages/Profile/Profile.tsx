@@ -272,56 +272,95 @@ export const Profile: React.FC = () => {
                     <h1>{language === 'ru' ? 'Профиль' : 'Profile'}</h1>
                 </div>
 
-                {/* Referral Balance Block */}
-                <div className="referral-balance-card glass-card">
-                    <div className="balance-header">
-                        <span className="balance-label">{language === 'ru' ? 'Реферальный Баланс' : 'Referral Balance'}</span>
+                {/* Баланс реферальной программы */}
+                <section className="refwallet-card">
+                    <div className="refwallet-head">
+                        <span className="refwallet-label">
+                            <span className="refwallet-dot" aria-hidden="true" />
+                            {language === 'ru' ? 'Доступно к выводу' : 'Available to withdraw'}
+                        </span>
+                        {stats !== null && stats.total_earnings > 0 && (
+                            <span className="refwallet-pill">
+                                {language === 'ru' ? 'готово' : 'ready'}
+                            </span>
+                        )}
                     </div>
 
                     {/* Пока статистика не пришла, показывать $0.00 нельзя:
                         человек с балансом видит ноль и решает, что деньги
                         пропали. Скелетон честнее — «ещё не знаем». */}
                     {stats === null ? (
-                        <div className="skeleton balance-skeleton" />
+                        <div className="skeleton refwallet-skeleton" />
                     ) : (
-                        <div className="balance-amount">
-                            ${stats.total_earnings.toFixed(2)}
+                        <div className="refwallet-amount">
+                            {stats.total_earnings.toFixed(2)}
+                            <span className="refwallet-currency">$</span>
                         </div>
                     )}
-
-                    <button
-                        className="btn-withdraw"
-                        onClick={openWithdrawModal}
-                        disabled={stats === null}
-                    >
-                        {language === 'ru' ? 'Вывести' : 'Withdraw'}
-                        <Download size={18} />
-                    </button>
-
-                    <div className="invited-count">
-                        {language === 'ru' ? 'Приглашено' : 'Invited'}: {stats?.referral_count || 0} {language === 'ru' ? 'пользователей' : 'users'}
-                    </div>
 
                     {/* Второй уровень включается настройкой и чаще выключен —
                         показываем строку, только когда по нему что-то есть */}
                     {!!stats?.level2_earnings && (
-                        <div className="invited-count">
+                        <div className="refwallet-note">
                             {language === 'ru'
-                                ? 'Из них со второго уровня'
-                                : 'Of which from level 2'}: ${stats.level2_earnings.toFixed(2)}
+                                ? 'из них со второго уровня'
+                                : 'of which from level 2'}: ${stats.level2_earnings.toFixed(2)}
                         </div>
                     )}
 
-                    <div className="referral-link-box">
-                        <div className="link-label">{language === 'ru' ? 'Реферальная ссылка' : 'Referral Link'}</div>
-                        <div className="link-content">
-                            <span className="link-text">https://t.me/{import.meta.env.VITE_BOT_USERNAME || 'your_bot'}?start=ref_{user?.referral_code || user?.telegram_id}</span>
-                            <button className="btn-copy-link" onClick={copyReferralLink}>
-                                <Copy size={16} />
-                            </button>
-                        </div>
+                    <button
+                        className="refwallet-cta"
+                        onClick={openWithdrawModal}
+                        disabled={stats === null || stats.total_earnings <= 0}
+                    >
+                        <Download size={18} />
+                        {language === 'ru' ? 'Вывести средства' : 'Withdraw funds'}
+                    </button>
+                </section>
+
+                {/* Показываем только то, что действительно считается на сервере:
+                    выдумывать «прирост за неделю» без таких данных нельзя. */}
+                <div className="stat-row">
+                    <div className="stat-tile">
+                        <span className="stat-label">{language === 'ru' ? 'Рефералов' : 'Referrals'}</span>
+                        <span className="stat-value">{stats?.referral_count ?? '—'}</span>
+                    </div>
+                    <div className="stat-tile">
+                        <span className="stat-label">{language === 'ru' ? 'Ставка' : 'Rate'}</span>
+                        <span className="stat-value accent">
+                            {stats ? `${stats.referral_percent ?? 0}%` : '—'}
+                        </span>
+                    </div>
+                    <div className="stat-tile">
+                        <span className="stat-label">{language === 'ru' ? 'Покупок' : 'Purchases'}</span>
+                        <span className="stat-value">{stats?.paid_orders_count ?? '—'}</span>
                     </div>
                 </div>
+
+                <section className="reflink">
+                    <div className="reflink-head">
+                        <span className="reflink-title">
+                            {language === 'ru' ? 'Моя реферальная ссылка' : 'My referral link'}
+                        </span>
+                        <span className="reflink-hint">
+                            {language === 'ru' ? 'копируйте и делитесь' : 'copy and share'}
+                        </span>
+                    </div>
+                    <div className="reflink-row">
+                        <span className="reflink-text">
+                            <span className="reflink-prefix">
+                                t.me/{import.meta.env.VITE_BOT_USERNAME || 'your_bot'}?start=ref_
+                            </span>
+                            <span className="reflink-code">
+                                {user?.referral_code || user?.telegram_id}
+                            </span>
+                        </span>
+                        <button className="reflink-copy" onClick={copyReferralLink}>
+                            <Copy size={14} />
+                            {language === 'ru' ? 'Копировать' : 'Copy'}
+                        </button>
+                    </div>
+                </section>
 
                 {/* Orders Section */}
                 <MyDeals />

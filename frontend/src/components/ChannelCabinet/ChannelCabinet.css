@@ -132,7 +132,7 @@
 
 .channel-btn {
     background: var(--gradient-primary);
-    color: #fff;
+    color: var(--accent-contrast);
 }
 
 .channel-btn-secondary {
