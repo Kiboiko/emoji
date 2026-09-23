@@ -70,7 +70,13 @@ async def add_to_cart(
     product = await db.get(Product, item_data.product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-        
+
+    # Снятый с продажи в корзину не кладём. Каталог такие не показывает, но
+    # ссылка на товар могла остаться открытой, а карточка — висеть в чужой
+    # вкладке с прошлого захода.
+    if not product.is_active:
+        raise HTTPException(status_code=400, detail="Товар снят с продажи")
+
     # Validate quantity limits
     if product.min_quantity and item_data.quantity < product.min_quantity:
         raise HTTPException(status_code=400, detail=f"Minimum quantity is {product.min_quantity}")

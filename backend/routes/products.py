@@ -41,7 +41,10 @@ async def get_products(
     db: AsyncSession = Depends(get_db)
 ):
     """Get products with pagination, search and filtering"""
-    stmt = select(Product)
+    # Снятые с продажи в каталог не попадают. До этого такого состояния не
+    # было вовсе, и подписки висели в витрине с момента создания тарифа —
+    # то есть до модерации канала.
+    stmt = select(Product).where(Product.is_active.is_(True))
     
     if category_id:
         stmt = stmt.where(Product.category_id == uuid.UUID(category_id))
@@ -99,18 +102,10 @@ async def get_products(
     result = await db.execute(stmt)
     products = result.scalars().all()
 
-    # Продавцы нужны, чтобы показать на карточке «товар пользователя» с именем
-    # и рейтингом. Одним запросом, а не по товару в цикле.
-    seller_ids = {p.owner_user_id for p in products if p.owner_user_id}
-    sellers: dict = {}
-    if seller_ids:
-        from models.p2p import SellerProfile
-        rows = (
-            await db.execute(
-                select(SellerProfile).where(SellerProfile.user_id.in_(seller_ids))
-            )
-        ).scalars().all()
-        sellers = {s.user_id: s for s in rows}
+    # Авторы нужны, чтобы показать на карточке, чей это товар. Двумя
+    # запросами на весь каталог, а не по товару в цикле.
+    sellers = await _sellers_by_user(db, products)
+    channels = await _channels_by_product(db, products)
 
     localized = []
     for p in products:
@@ -127,18 +122,86 @@ async def get_products(
             min_quantity=p.min_quantity,
             max_quantity=p.max_quantity,
             created_at=p.created_at,
+            is_active=p.is_active,
             is_p2p=p.is_p2p,
-            seller_name=(sellers[p.owner_user_id].display_name
-                         if p.owner_user_id in sellers else None),
-            seller_rating=(sellers[p.owner_user_id].rating
-                           if p.owner_user_id in sellers else None),
-            seller_deals=(sellers[p.owner_user_id].deals_completed
-                          if p.owner_user_id in sellers else 0),
             # content_data is NOT included in ProductLocalized purposefully to hide instructions
+            **_author_fields(p, sellers, channels),
         )
         localized.append(item)
         
     return localized
+
+
+# ---------------------------------------------------------------------------
+# Автор товара
+# ---------------------------------------------------------------------------
+
+async def _sellers_by_user(db: AsyncSession, products: list) -> dict:
+    """Профили продавцов для товаров пользователей — одним запросом."""
+    seller_ids = {p.owner_user_id for p in products if p.owner_user_id}
+    if not seller_ids:
+        return {}
+
+    from models.p2p import SellerProfile
+    rows = (
+        await db.execute(
+            select(SellerProfile).where(SellerProfile.user_id.in_(seller_ids))
+        )
+    ).scalars().all()
+    return {s.user_id: s for s in rows}
+
+
+async def _channels_by_product(db: AsyncSession, products: list) -> dict:
+    """
+    Каналы для товаров-подписок — одним запросом.
+
+    Прямой связи «товар → канал» нет: товар заводится под тариф, и связь
+    живёт в subscription_plans.product_id. Идём оттуда.
+    """
+    product_ids = [p.id for p in products if p.type == "subscription"]
+    if not product_ids:
+        return {}
+
+    from models.subscription import Channel, SubscriptionPlan
+    rows = (
+        await db.execute(
+            select(SubscriptionPlan.product_id, Channel)
+            .join(Channel, Channel.id == SubscriptionPlan.channel_id)
+            .where(SubscriptionPlan.product_id.in_(product_ids))
+        )
+    ).all()
+    return {product_id: channel for product_id, channel in rows}
+
+
+def _author_fields(product, sellers: dict, channels: dict) -> dict:
+    """
+    Кто стоит за товаром — в виде, одинаковом для витрины.
+
+    Три источника и один набор полей: продавец, автор канала и сама площадка.
+    До этого подписка приходила вообще без автора, и покупатель не видел, в
+    чей канал он платит.
+    """
+    channel = channels.get(product.id)
+    if channel is not None:
+        return {
+            "author_kind": "channel",
+            "author_name": channel.title,
+            "author_verified": channel.is_verified,
+            "author_link": channel.username,
+        }
+
+    seller = sellers.get(product.owner_user_id)
+    if seller is not None:
+        return {
+            "author_kind": "seller",
+            "author_name": seller.display_name,
+            "author_verified": seller.is_verified,
+            "author_rating": seller.rating,
+            "author_deals": seller.deals_completed,
+        }
+
+    # Товар площадки: автора нет, и выдумывать его не надо
+    return {}
 
 # Admin Endpoint for raw products table
 @router.get("/admin", response_model=dict)
@@ -217,15 +280,12 @@ async def get_product(
     product = await db.get(Product, uuid.UUID(product_id))
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    
-    seller = None
-    if product.owner_user_id:
-        from models.p2p import SellerProfile
-        seller = (
-            await db.execute(
-                select(SellerProfile).where(SellerProfile.user_id == product.owner_user_id)
-            )
-        ).scalars().first()
+
+    # Снятый с продажи товар отдаём, а не прячем: на него ведут ссылки из
+    # истории заказов и из чата сделки. Купить его не дадут в корзине, а
+    # витрина по is_active нарисует «снято с продажи».
+    sellers = await _sellers_by_user(db, [product])
+    channels = await _channels_by_product(db, [product])
 
     return ProductLocalized(
         id=product.id,
@@ -240,10 +300,9 @@ async def get_product(
         min_quantity=product.min_quantity,
         max_quantity=product.max_quantity,
         created_at=product.created_at,
+        is_active=product.is_active,
         is_p2p=product.is_p2p,
-        seller_name=seller.display_name if seller else None,
-        seller_rating=seller.rating if seller else None,
-        seller_deals=seller.deals_completed if seller else 0,
+        **_author_fields(product, sellers, channels),
     )
 
 @router.post("")
@@ -335,6 +394,7 @@ async def update_product(
     price_usdt: Optional[float] = Form(None),
     category_id: Optional[str] = Form(None),
     is_top: Optional[bool] = Form(None),
+    is_active: Optional[bool] = Form(None),
     type: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     digital_file: Optional[UploadFile] = File(None),
@@ -353,6 +413,7 @@ async def update_product(
     if price_usdt is not None: product.price_usdt = price_usdt
     if category_id: product.category_id = uuid.UUID(category_id)
     if is_top is not None: product.is_top = is_top
+    if is_active is not None: product.is_active = is_active
     if type: product.type = type
     
     # Handle content data for instructions

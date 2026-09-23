@@ -66,6 +66,13 @@ class SellerProfile(Base):
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     payout_wallet: Mapped[str] = mapped_column(String(80), nullable=False)
 
+    # Галочка проверенного продавца. Ставит только администратор: смысл её в
+    # том, что площадка подтвердила личность, а не в том, что продавец сам
+    # себя отметил.
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+
     status: Mapped[SellerStatus] = mapped_column(
         Enum(SellerStatus, native_enum=False, length=20),
         default=SellerStatus.ACTIVE, nullable=False,

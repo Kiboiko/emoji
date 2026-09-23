@@ -32,6 +32,10 @@ class ModerationDecision(BaseModel):
     comment: Optional[str] = None
 
 
+class VerificationDecision(BaseModel):
+    verified: bool
+
+
 @router.get("/channels")
 async def list_channels(
     status: Optional[ChannelStatus] = Query(None),
@@ -70,6 +74,7 @@ async def list_channels(
                 "username": c.username,
                 "telegram_chat_id": c.telegram_chat_id,
                 "status": c.status.value,
+                "is_verified": c.is_verified,
                 "bot_is_admin": c.bot_is_admin,
                 "bot_check_error": c.bot_check_error,
                 "bot_checked_at": c.bot_checked_at.isoformat() if c.bot_checked_at else None,
@@ -120,9 +125,36 @@ async def moderate_channel(
 
     channel.moderation_comment = decision.comment
     channel.moderated_at = datetime.utcnow()
+
+    # Решение модератора и определяет, продаются подписки или нет: товары
+    # тарифов заведены ещё до модерации и до этого момента погашены.
+    await subscription_service.sync_plan_products(db, channel)
     await db.commit()
 
     return {"status": channel.status.value}
+
+
+@router.post("/channels/{channel_id}/verify")
+async def set_channel_verified(
+    channel_id: uuid.UUID,
+    decision: VerificationDecision,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Ставит или снимает галочку проверенного автора.
+
+    Отдельно от модерации канала: одобрение означает «подписки можно
+    продавать», галочка — «площадка подтвердила, кто за каналом стоит». Это
+    разные решения, и второе принимается реже.
+    """
+    channel = await db.get(Channel, channel_id)
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    channel.is_verified = decision.verified
+    await db.commit()
+    return {"is_verified": channel.is_verified}
 
 
 @router.post("/channels/{channel_id}/suspend")
@@ -137,6 +169,7 @@ async def suspend_channel(
 
     channel.status = ChannelStatus.SUSPENDED
     channel.moderated_at = datetime.utcnow()
+    await subscription_service.sync_plan_products(db, channel)
     await db.commit()
     return {"status": channel.status.value}
 

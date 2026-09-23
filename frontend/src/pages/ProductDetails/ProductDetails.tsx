@@ -8,6 +8,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import type { Product, Review } from '@/types';
+import { AuthorTag } from '@/components/ProductCard/AuthorTag';
 import './ProductDetails.css';
 
 export const ProductDetails: React.FC = () => {
@@ -261,6 +262,18 @@ export const ProductDetails: React.FC = () => {
                         )}
                         <h1>{product.name}</h1>
 
+                        {/* Чей это товар. У подписки здесь канал — до этого
+                            покупатель не видел, в какой канал он платит. */}
+                        <AuthorTag product={product} size="md" />
+
+                        {product.is_active === false && (
+                            <div className="product-unavailable">
+                                {language === 'ru'
+                                    ? 'Товар снят с продажи'
+                                    : 'This item is no longer for sale'}
+                            </div>
+                        )}
+
                         <div className="reviews-badge" onClick={handleBadgeClick}>
                             <div className="badge-left">
                                 <MessageSquare size={16} />
@@ -464,6 +477,10 @@ export const ProductDetails: React.FC = () => {
                     className="btn-add-to-cart"
                     onClick={handleAddToCart}
                     whileTap={{ scale: 0.95 }}
+                    /* Снятый с продажи товар открывается по старой ссылке, но
+                       корзина его всё равно не примет — кнопку гасим здесь,
+                       чтобы человек не упирался в ошибку после нажатия */
+                    disabled={product.is_active === false}
                 >
                     <span>{language === 'ru' ? 'В корзину' : 'Add to Cart'}</span>
                     <ShoppingCart size={20} />

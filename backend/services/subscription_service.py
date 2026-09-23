@@ -21,11 +21,15 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
+import aiofiles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from models.finance import LedgerEntryType, LedgerRefType
+from models.product import Product
 from models.subscription import (
     AccessAction, Channel, ChannelStatus, Subscription, SubscriptionAccessLog,
     SubscriptionPlan, SubscriptionStatus,
@@ -82,10 +86,77 @@ async def verify_channel(db: AsyncSession, channel: Channel) -> tuple[bool, str 
             chat = await channel_access.get_chat(channel.telegram_chat_id)
             channel.title = chat.get("title") or channel.title
             channel.username = chat.get("username")
+            await refresh_avatar(channel, chat)
         except TelegramApiError as e:
             logger.warning("[SUB] Не удалось обновить данные канала: %s", e)
 
+    # Название и аватар видны в каталоге, поэтому после каждой проверки
+    # подтягиваем их в товары тарифов: иначе канал переименовали, а в витрине
+    # висит старое имя.
+    await sync_plan_products(db, channel)
+
     return ok, error
+
+
+async def refresh_avatar(channel: Channel, chat: dict) -> None:
+    """
+    Кладёт аватар канала в uploads и прописывает путь каналу.
+
+    Имя файла — id канала, а не случайный uuid: при переименовании аватара в
+    Telegram файл перезаписывается, и старые копии не копятся в томе.
+    Суффикс времени в ссылке заставляет браузер и nginx (uploads отдаются с
+    immutable на 30 дней) забрать новую картинку.
+    """
+    content = await channel_access.download_chat_photo(chat)
+    if not content:
+        return
+
+    directory = Path(settings.UPLOAD_DIR) / "channels"
+    directory.mkdir(parents=True, exist_ok=True)
+    name = f"{channel.id}.jpg"
+
+    async with aiofiles.open(directory / name, "wb") as out:
+        await out.write(content)
+
+    channel.avatar_url = f"/uploads/channels/{name}?v={int(datetime.utcnow().timestamp())}"
+
+
+async def sync_plan_products(db: AsyncSession, channel: Channel) -> None:
+    """
+    Приводит товары тарифов в соответствие каналу.
+
+    Главное здесь — is_active. Товар тарифа заводится в момент создания
+    тарифа, то есть до модерации, и без этой связки подписка попадала в
+    каталог, пока канал ещё лежал в черновике. Продаваться она должна ровно
+    тогда, когда канал опубликован.
+    """
+    plans = (
+        await db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.channel_id == channel.id)
+        )
+    ).scalars().all()
+
+    product_ids = [p.product_id for p in plans if p.product_id]
+    if not product_ids:
+        return
+
+    products = (
+        await db.execute(select(Product).where(Product.id.in_(product_ids)))
+    ).scalars().all()
+    by_id = {p.id: p for p in products}
+
+    live = channel.status == ChannelStatus.ACTIVE
+
+    for plan in plans:
+        product = by_id.get(plan.product_id)
+        if product is None:
+            continue
+        # Тариф могли отключить отдельно от канала
+        product.is_active = live and plan.is_active
+        product.name_ru = f"{channel.title} — {plan.title_ru}"
+        product.name_en = f"{channel.title} — {plan.title_en}"
+        if channel.avatar_url:
+            product.image_url = channel.avatar_url
 
 
 # ---------------------------------------------------------------------------

@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     Radio, Plus, Send, ShieldCheck, ShieldAlert, RefreshCw,
-    ChevronDown, ChevronUp, Check, Wallet,
+    ChevronDown, ChevronUp, Check, Wallet, Pencil, Trash2, EyeOff, BadgeCheck,
 } from 'lucide-react';
 import { subscriptionsApi, termsApi, withdrawalsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
-import type { AuthorChannel, ChannelStatus } from '@/types';
+import type { AuthorChannel, ChannelPlan, ChannelStatus } from '@/types';
 import './ChannelCabinet.css';
 
 /** Статусы, в которых канал ещё можно отправить на модерацию */
@@ -395,9 +395,26 @@ const ChannelCard: React.FC<{
     const showToast = useToastStore((s) => s.show);
     const [busy, setBusy] = useState(false);
     const [addingPlan, setAddingPlan] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
     const [labelRu, labelEn] = STATUS_LABEL[channel.status];
+
+    /** Действие с подтверждением и перезагрузкой — как в кабинете продавца */
+    const act = async (fn: () => Promise<unknown>, confirmText?: string) => {
+        if (confirmText && !window.confirm(confirmText)) return;
+        setBusy(true);
+        try {
+            await fn();
+            haptic.notification('success');
+            await reload();
+        } catch (e) {
+            onError(e, t('Не удалось', 'Failed'));
+        } finally {
+            setBusy(false);
+        }
+    };
 
     const verify = async () => {
         setBusy(true);
@@ -435,13 +452,84 @@ const ChannelCard: React.FC<{
     return (
         <div className="channel-card">
             <div className="channel-card-head">
+                {/* Аватар тянется из Telegram: своей картинки у канала нет и
+                    заводить её незачем — она уже есть у автора */}
+                {channel.avatar_url && (
+                    <img className="channel-avatar" src={channel.avatar_url} alt="" />
+                )}
                 <span className="channel-title">{channel.title}</span>
+                {channel.is_verified && (
+                    <BadgeCheck
+                        className="channel-verified"
+                        size={16}
+                        aria-label={t('Проверенный автор', 'Verified author')}
+                    />
+                )}
                 <span className={`channel-badge channel-badge--${channel.status}`}>
                     {t(labelRu, labelEn)}
                 </span>
             </div>
 
             {channel.username && <span className="channel-username">@{channel.username}</span>}
+
+            {channel.moderation_comment && (
+                <div className="channel-note channel-note--warn">
+                    {channel.moderation_comment}
+                </div>
+            )}
+
+            {editing ? (
+                <ChannelEditForm
+                    channel={channel}
+                    language={language}
+                    onDone={async () => {
+                        setEditing(false);
+                        await reload();
+                    }}
+                    onCancel={() => setEditing(false)}
+                    onError={onError}
+                />
+            ) : (
+                <div className="channel-row-btns">
+                    <button
+                        className="channel-btn-inline"
+                        onClick={() => setEditing(true)}
+                        disabled={busy}
+                    >
+                        <Pencil size={14} />
+                        {t('Править', 'Edit')}
+                    </button>
+
+                    {channel.status === 'active' && (
+                        <button
+                            className="channel-btn-inline"
+                            disabled={busy}
+                            onClick={() => act(
+                                () => subscriptionsApi.unpublishChannel(channel.id),
+                                t(
+                                    'Снять канал с продажи? Уже купленные подписки продолжат действовать.',
+                                    'Take the channel off sale? Existing subscriptions keep working.',
+                                ),
+                            )}
+                        >
+                            <EyeOff size={14} />
+                            {t('Снять с продажи', 'Unlist')}
+                        </button>
+                    )}
+
+                    <button
+                        className="channel-btn-inline channel-btn-danger"
+                        disabled={busy}
+                        onClick={() => act(
+                            () => subscriptionsApi.deleteChannel(channel.id),
+                            t('Удалить канал?', 'Delete this channel?'),
+                        )}
+                    >
+                        <Trash2 size={14} />
+                        {t('Удалить', 'Delete')}
+                    </button>
+                </div>
+            )}
 
             {/* Состояние прав бота — главный признак работоспособности канала */}
             <div className={`channel-rights ${channel.bot_is_admin ? 'ok' : 'bad'}`}>
@@ -466,12 +554,63 @@ const ChannelCard: React.FC<{
                     </span>
                 )}
                 {channel.plans.map((plan) => (
-                    <div key={plan.id} className="channel-plan">
-                        <span>{language === 'ru' ? plan.title_ru : plan.title_en}</span>
-                        <span className="channel-plan-meta">
-                            {plan.duration_days} {t('дн.', 'days')} · ${plan.price_usd}
-                        </span>
-                    </div>
+                    editingPlanId === plan.id ? (
+                        <PlanForm
+                            key={plan.id}
+                            channelId={channel.id}
+                            plan={plan}
+                            language={language}
+                            onDone={async () => {
+                                setEditingPlanId(null);
+                                await reload();
+                            }}
+                            onCancel={() => setEditingPlanId(null)}
+                            onError={onError}
+                        />
+                    ) : (
+                        <div
+                            key={plan.id}
+                            className={`channel-plan ${plan.is_active ? '' : 'channel-plan--off'}`}
+                        >
+                            <span className="channel-plan-name">
+                                {language === 'ru' ? plan.title_ru : plan.title_en}
+                            </span>
+                            <span className="channel-plan-meta">
+                                {plan.duration_days} {t('дн.', 'days')} · ${plan.price_usd}
+                            </span>
+
+                            <span className="channel-plan-actions">
+                                <button
+                                    className="channel-btn-inline"
+                                    disabled={busy}
+                                    onClick={() => setEditingPlanId(plan.id)}
+                                    aria-label={t('Править тариф', 'Edit plan')}
+                                >
+                                    <Pencil size={13} />
+                                </button>
+                                <button
+                                    className="channel-btn-inline"
+                                    disabled={busy}
+                                    onClick={() => act(() => subscriptionsApi.updatePlan(
+                                        channel.id, plan.id, { is_active: !plan.is_active },
+                                    ))}
+                                >
+                                    {plan.is_active ? t('Отключить', 'Disable') : t('Включить', 'Enable')}
+                                </button>
+                                <button
+                                    className="channel-btn-inline channel-btn-danger"
+                                    disabled={busy}
+                                    onClick={() => act(
+                                        () => subscriptionsApi.deletePlan(channel.id, plan.id),
+                                        t('Удалить тариф?', 'Delete this plan?'),
+                                    )}
+                                    aria-label={t('Удалить тариф', 'Delete plan')}
+                                >
+                                    <Trash2 size={13} />
+                                </button>
+                            </span>
+                        </div>
+                    )
                 ))}
 
                 {addingPlan ? (
@@ -521,20 +660,124 @@ const ChannelCard: React.FC<{
 };
 
 /* ------------------------------------------------------------------ */
-/* Добавление тарифа                                                   */
+/* Правка канала                                                       */
 /* ------------------------------------------------------------------ */
 
-const PlanForm: React.FC<{
-    channelId: string;
+/**
+ * Описание и кошелёк.
+ *
+ * Название и аватар сюда не входят: и то и другое берётся из Telegram и
+ * обновляется по кнопке «Проверить». Своё поле под них означало бы два
+ * источника правды и расхождение между каналом и карточкой в каталоге.
+ */
+const ChannelEditForm: React.FC<{
+    channel: AuthorChannel;
     language: string;
     onDone: () => Promise<void>;
     onCancel: () => void;
     onError: (e: unknown, fallback: string) => void;
-}> = ({ channelId, language, onDone, onCancel, onError }) => {
+}> = ({ channel, language, onDone, onCancel, onError }) => {
     const { haptic } = useTelegram();
-    const [titleRu, setTitleRu] = useState('');
-    const [days, setDays] = useState('30');
-    const [price, setPrice] = useState('');
+    const showToast = useToastStore((s) => s.show);
+    const [description, setDescription] = useState(channel.description ?? '');
+    const [wallet, setWallet] = useState(channel.payout_wallet ?? '');
+    const [busy, setBusy] = useState(false);
+
+    const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
+
+    const descriptionChanged = description.trim() !== (channel.description ?? '').trim();
+    const willUnpublish = channel.status === 'active' && descriptionChanged;
+
+    const submit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setBusy(true);
+        try {
+            await subscriptionsApi.updateChannel(channel.id, {
+                description: description.trim(),
+                payout_wallet: wallet.trim(),
+            });
+            haptic.notification('success');
+            if (willUnpublish) {
+                showToast(
+                    t(
+                        'Описание изменено — канал снят с публикации до повторной проверки',
+                        'Description changed — the channel is unlisted pending review',
+                    ),
+                    'info',
+                );
+            }
+            await onDone();
+        } catch (err) {
+            onError(err, t('Не удалось сохранить', 'Failed to save'));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <form className="channel-form channel-form-inline" onSubmit={submit}>
+            <label className="channel-label">
+                {t('Описание', 'Description')}
+                <textarea
+                    className="channel-input channel-textarea"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    maxLength={2000}
+                />
+            </label>
+
+            <label className="channel-label">
+                {t('Кошелёк TON для выплат', 'TON payout wallet')}
+                <input
+                    className="channel-input"
+                    value={wallet}
+                    onChange={(e) => setWallet(e.target.value)}
+                    placeholder="UQ..."
+                    minLength={10}
+                    maxLength={80}
+                />
+            </label>
+
+            {/* Предупреждаем до нажатия, а не тостом после: снятие с продажи —
+                не то, что человек ожидает от правки опечатки */}
+            {willUnpublish && (
+                <span className="channel-note channel-note--warn">
+                    {t(
+                        'Описание проверяет модератор, поэтому канал уйдёт на повторную проверку и пропадёт из каталога.',
+                        'The description is moderated, so the channel will go back for review and leave the catalog.',
+                    )}
+                </span>
+            )}
+
+            <div className="channel-row">
+                <button className="channel-btn" type="submit" disabled={busy}>
+                    {busy ? t('Сохраняем...', 'Saving...') : t('Сохранить', 'Save')}
+                </button>
+                <button className="channel-btn-secondary" type="button" onClick={onCancel}>
+                    {t('Отмена', 'Cancel')}
+                </button>
+            </div>
+        </form>
+    );
+};
+
+/* ------------------------------------------------------------------ */
+/* Тариф: создание и правка                                            */
+/* ------------------------------------------------------------------ */
+
+const PlanForm: React.FC<{
+    channelId: string;
+    /** Есть — правим существующий тариф, нет — заводим новый */
+    plan?: ChannelPlan;
+    language: string;
+    onDone: () => Promise<void>;
+    onCancel: () => void;
+    onError: (e: unknown, fallback: string) => void;
+}> = ({ channelId, plan, language, onDone, onCancel, onError }) => {
+    const { haptic } = useTelegram();
+    const [titleRu, setTitleRu] = useState(plan?.title_ru ?? '');
+    const [days, setDays] = useState(String(plan?.duration_days ?? 30));
+    const [price, setPrice] = useState(plan?.price_usd ?? '');
     const [busy, setBusy] = useState(false);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
@@ -543,7 +786,7 @@ const PlanForm: React.FC<{
         e.preventDefault();
         setBusy(true);
         try {
-            await subscriptionsApi.createPlan(channelId, {
+            const payload = {
                 title_ru: titleRu.trim(),
                 // Отдельного поля под английское название намеренно нет: форма
                 // и так на четыре поля, а авторы здесь пишут по-русски.
@@ -553,11 +796,19 @@ const PlanForm: React.FC<{
                 title_en: titleRu.trim(),
                 duration_days: Number(days),
                 price_usd: price.trim(),
-            });
+            };
+
+            if (plan) {
+                await subscriptionsApi.updatePlan(channelId, plan.id, payload);
+            } else {
+                await subscriptionsApi.createPlan(channelId, payload);
+            }
             haptic.notification('success');
             await onDone();
         } catch (err) {
-            onError(err, t('Не удалось создать тариф', 'Failed to create the plan'));
+            onError(err, plan
+                ? t('Не удалось сохранить тариф', 'Failed to save the plan')
+                : t('Не удалось создать тариф', 'Failed to create the plan'));
         } finally {
             setBusy(false);
         }

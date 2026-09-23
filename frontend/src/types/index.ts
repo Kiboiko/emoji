@@ -29,11 +29,19 @@ export interface Product {
     min_quantity?: number;
     max_quantity?: number;
     created_at: string;
+    /** Снят с продажи: в каталоге такого нет, но по старой ссылке открыть можно */
+    is_active?: boolean;
     /** Товар пользователя, а не площадки: оплата уходит в escrow */
     is_p2p?: boolean;
-    seller_name?: string | null;
-    seller_rating?: number | null;
-    seller_deals?: number;
+
+    /** Кто стоит за товаром: продавец, канал или (если пусто) сама площадка */
+    author_kind?: 'seller' | 'channel' | null;
+    author_name?: string | null;
+    author_verified?: boolean;
+    author_rating?: number | null;
+    author_deals?: number;
+    /** @username канала — у продавца такого адреса нет */
+    author_link?: string | null;
 }
 
 export interface CartItem {
@@ -168,6 +176,10 @@ export interface AuthorChannel {
     description: string | null;
     avatar_url: string | null;
     status: ChannelStatus;
+    /** Галочку проверенного автора ставит только администратор */
+    is_verified: boolean;
+    moderation_comment: string | null;
+    payout_wallet: string | null;
     /** Без прав бота канал нельзя опубликовать: доступ невозможно ни выдать, ни отозвать */
     bot_is_admin: boolean;
     bot_check_error: string | null;

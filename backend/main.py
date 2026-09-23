@@ -7,6 +7,7 @@ import logging
 
 from config import settings
 from database import engine
+from utils.placeholder import ensure_placeholder
 
 # Импорт всех моделей: нужен, чтобы SQLAlchemy успела зарегистрировать мапперы
 # до первого обращения (строковые ссылки в relationship разрешаются только
@@ -65,6 +66,12 @@ async def lifespan(app: FastAPI):
     # Create upload directories
     upload_dir = Path(settings.UPLOAD_DIR)
     (upload_dir / "products").mkdir(parents=True, exist_ok=True)
+    (upload_dir / "listings").mkdir(parents=True, exist_ok=True)
+    (upload_dir / "channels").mkdir(parents=True, exist_ok=True)
+
+    # Заглушка для товаров без фото. Том uploads при первом запуске пуст, и
+    # файл из образа туда не попадает, поэтому рисуем на месте.
+    ensure_placeholder()
     
     # Схема БД управляется ТОЛЬКО Alembic: `alembic upgrade head`.
     #

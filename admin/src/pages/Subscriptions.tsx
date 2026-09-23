@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, X, Ban, RefreshCw, AlertTriangle, Link2 } from 'lucide-react';
+import { Check, X, Ban, RefreshCw, AlertTriangle, Link2, BadgeCheck } from 'lucide-react';
 import { subscriptionsApi } from '../api/admin';
 import { DataTable, type Column } from '../components/ui/DataTable';
 import { Pagination } from '../components/ui/Pagination';
@@ -110,6 +110,21 @@ const ChannelsTab: React.FC = () => {
         }
     };
 
+    // Галочка не связана с модерацией: одобрение значит «подписки можно
+    // продавать», галочка — «площадка подтвердила, кто за каналом стоит»
+    const toggleVerified = async (channel: any) => {
+        setBusy(channel.id);
+        try {
+            await subscriptionsApi.setChannelVerified(channel.id, !channel.is_verified);
+            toast.success(channel.is_verified ? 'Галочка снята' : 'Автор отмечен как проверенный');
+            await load();
+        } catch (e) {
+            toast.fromError(e);
+        } finally {
+            setBusy(null);
+        }
+    };
+
     const suspend = async (channel: any) => {
         const reason = window.prompt('Причина снятия канала:');
         if (!reason?.trim()) return;
@@ -134,6 +149,9 @@ const ChannelsTab: React.FC = () => {
                 <div>
                     <div className="text-white font-medium flex items-center gap-2">
                         {c.title}
+                        {c.is_verified && (
+                            <BadgeCheck size={14} className="text-violet-400" aria-label="Проверенный автор" />
+                        )}
                         {c.username && (
                             <a
                                 href={`https://t.me/${c.username}`}
@@ -190,6 +208,19 @@ const ChannelsTab: React.FC = () => {
             title: '',
             render: (c) => (
                 <div className="flex gap-2 justify-end">
+                    <button
+                        onClick={() => toggleVerified(c)}
+                        disabled={busy === c.id}
+                        className={`p-2 rounded-lg disabled:opacity-50 ${
+                            c.is_verified
+                                ? 'bg-violet-600/20 text-violet-300 hover:bg-violet-600/30'
+                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                        }`}
+                        title={c.is_verified ? 'Снять галочку' : 'Отметить проверенным'}
+                    >
+                        <BadgeCheck size={16} />
+                    </button>
+
                     {c.status === 'pending' && (
                         <>
                             <button

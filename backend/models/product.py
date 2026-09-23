@@ -35,6 +35,14 @@ class Product(Base):
     # Display settings
     is_top: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Товар существует, но не продаётся. Нужен подпискам: тариф заводит товар
+    # сразу, а продаваться он должен только пока канал опубликован. Гасить
+    # стоком тут нельзя — у подписки он NULL, то есть «не кончается».
+    # Удалять тоже нельзя: на товар ссылаются прошлые заказы и отзывы.
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False
+    )
     
     # Stock (optional)
     stock: Mapped[int | None] = mapped_column(Integer, nullable=True)

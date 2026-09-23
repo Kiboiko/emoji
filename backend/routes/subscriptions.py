@@ -14,11 +14,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database import get_db
+from models.order import OrderItem
 from models.product import Product
 from models.subscription import (
     Channel, ChannelStatus, Subscription, SubscriptionPlan, SubscriptionStatus,
@@ -31,6 +32,11 @@ from utils.auth import get_current_user
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/subscriptions", tags=["Subscriptions"])
+
+# Картинка на случай канала без аватара. Файл создаётся при старте бэкенда
+# (см. utils/placeholder.py): раньше сюда ссылались все товары подписок, а
+# самого файла на диске не было — карточка выходила пустой.
+PLACEHOLDER_IMAGE = "/uploads/products/placeholder.png"
 
 
 # ---------------------------------------------------------------------------
@@ -45,11 +51,24 @@ class ChannelCreate(BaseModel):
     accept_terms: bool
 
 
+class ChannelUpdate(BaseModel):
+    description: Optional[str] = Field(None, max_length=2000)
+    payout_wallet: Optional[str] = Field(None, min_length=10, max_length=80)
+
+
 class PlanCreate(BaseModel):
     title_ru: str = Field(..., min_length=1, max_length=255)
     title_en: str = Field(..., min_length=1, max_length=255)
     duration_days: int = Field(..., ge=1, le=3650)
     price_usd: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2)
+
+
+class PlanUpdate(BaseModel):
+    title_ru: Optional[str] = Field(None, min_length=1, max_length=255)
+    title_en: Optional[str] = Field(None, min_length=1, max_length=255)
+    duration_days: Optional[int] = Field(None, ge=1, le=3650)
+    price_usd: Optional[Decimal] = Field(None, gt=0, max_digits=10, decimal_places=2)
+    is_active: Optional[bool] = None
 
 
 def _channel_dto(channel: Channel, plans: list[SubscriptionPlan] | None = None) -> dict:
@@ -60,6 +79,9 @@ def _channel_dto(channel: Channel, plans: list[SubscriptionPlan] | None = None) 
         "description": channel.description,
         "avatar_url": channel.avatar_url,
         "status": channel.status.value,
+        "is_verified": channel.is_verified,
+        "moderation_comment": channel.moderation_comment,
+        "payout_wallet": channel.payout_wallet,
         "bot_is_admin": channel.bot_is_admin,
         "bot_check_error": channel.bot_check_error,
         "plans": [
@@ -102,6 +124,7 @@ async def list_channels(
         _channel_dto(c, [p for p in c.plans if p.is_active])
         for c in channels
     ]
+
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +287,9 @@ async def connect_channel(
     db.add(channel)
     await db.flush()
 
+    # Аватар забираем из того же ответа getChat, что уже в руках: своего поля
+    # под картинку у канала нет — автор её уже загрузил в Telegram.
+    await subscription_service.refresh_avatar(channel, chat)
     await subscription_service.verify_channel(db, channel)
     await db.commit()
 
@@ -348,11 +374,15 @@ async def create_plan(
         description_ru=channel.description or f"Доступ в закрытый канал на {payload.duration_days} дн.",
         description_en=channel.description or f"Private channel access for {payload.duration_days} days",
         price_usdt=payload.price_usd,
-        image_url=channel.avatar_url or "/uploads/products/placeholder.png",
+        image_url=channel.avatar_url or PLACEHOLDER_IMAGE,
         category_id=category_id,
         type="subscription",
         min_quantity=1,
         stock=None,  # подписка не кончается
+        # Товар заводится вместе с тарифом, то есть ДО модерации канала.
+        # Без этой привязки подписка попадала в каталог, пока канал ещё лежал
+        # в черновике, — продавать её можно только у опубликованного канала.
+        is_active=channel.status == ChannelStatus.ACTIVE,
         # Ключ, по которому complete_order находит тариф при выдаче доступа
         content_data={"subscription_plan_id": str(plan.id)},
     )
@@ -363,6 +393,212 @@ async def create_plan(
     await db.commit()
 
     return {"id": str(plan.id), "product_id": str(product.id)}
+
+
+@router.patch("/author/channels/{channel_id}")
+async def update_channel(
+    channel_id: uuid.UUID,
+    payload: ChannelUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Правка канала.
+
+    Кошелёк меняется когда угодно: он не публичный и покупателя не касается.
+    Описание — публичный текст, он и есть предмет модерации, поэтому правка
+    описания у опубликованного канала возвращает его в черновик. Иначе можно
+    подать безобидный текст, дождаться одобрения и подменить его на что
+    угодно — ровно от этого защищён и путь объявлений (см. _assert_editable
+    в routes/p2p.py).
+    """
+    channel = await _own_channel(db, channel_id, user)
+
+    if payload.payout_wallet is not None:
+        channel.payout_wallet = payload.payout_wallet.strip()
+
+    if payload.description is not None:
+        new_description = payload.description.strip() or None
+        if new_description != channel.description:
+            channel.description = new_description
+            if channel.status == ChannelStatus.ACTIVE:
+                channel.status = ChannelStatus.DRAFT
+                channel.moderation_comment = (
+                    "Описание изменено — канал снят с публикации до повторной проверки"
+                )
+
+    await subscription_service.sync_plan_products(db, channel)
+    await db.commit()
+
+    plans = (
+        await db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.channel_id == channel.id)
+        )
+    ).scalars().all()
+    return _channel_dto(channel, plans)
+
+
+@router.post("/author/channels/{channel_id}/unpublish")
+async def unpublish_channel(
+    channel_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Снимает канал с продажи по воле автора.
+
+    Уже купленные подписки не трогаем: человек заплатил за срок и должен его
+    отходить. Снимается только возможность купить новую.
+    """
+    channel = await _own_channel(db, channel_id, user)
+    if channel.status != ChannelStatus.ACTIVE:
+        raise HTTPException(status_code=400, detail="Канал и так не опубликован")
+
+    channel.status = ChannelStatus.DRAFT
+    await subscription_service.sync_plan_products(db, channel)
+    await db.commit()
+    return {"status": channel.status.value}
+
+
+@router.delete("/author/channels/{channel_id}")
+async def delete_channel(
+    channel_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Удаляет канал, который ничего не продал.
+
+    Если подписки были — удалять нельзя ни в каком виде: Subscription висит на
+    канале с ondelete=CASCADE, и удаление стёрло бы историю оплат вместе с
+    журналом выдачи доступа. Для этого случая есть «снять с продажи».
+    """
+    channel = await _own_channel(db, channel_id, user)
+
+    sold = (
+        await db.execute(
+            select(func.count()).select_from(Subscription)
+            .where(Subscription.channel_id == channel.id)
+        )
+    ).scalar() or 0
+    if sold:
+        raise HTTPException(
+            status_code=400,
+            detail=f"По каналу есть подписки ({sold}) — удалить нельзя, "
+                   f"историю оплат нужно сохранить. Снимите канал с продажи.",
+        )
+
+    # Товары тарифов гасим, а не удаляем: по ним могли быть неоплаченные
+    # заказы, и удаление оставило бы битые строки в истории.
+    channel.status = ChannelStatus.SUSPENDED
+    await subscription_service.sync_plan_products(db, channel)
+    await db.flush()
+
+    await db.delete(channel)
+    await db.commit()
+    return {"deleted": True}
+
+
+@router.patch("/author/channels/{channel_id}/plans/{plan_id}")
+async def update_plan(
+    channel_id: uuid.UUID,
+    plan_id: uuid.UUID,
+    payload: PlanUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Правка тарифа: название, срок, цена, продаётся или нет.
+
+    Повторной модерации не требует, в отличие от описания канала: здесь нечего
+    подменить — цена это число, срок это число, а название видно в каталоге
+    рядом с именем канала, которое берётся из Telegram.
+
+    Срок меняется только для будущих покупок. Уже выданным подпискам дата
+    окончания не пересчитывается: человек купил конкретный срок.
+    """
+    channel = await _own_channel(db, channel_id, user)
+    plan = await db.get(SubscriptionPlan, plan_id)
+    if plan is None or plan.channel_id != channel.id:
+        raise HTTPException(status_code=404, detail="Тариф не найден")
+
+    if payload.title_ru is not None:
+        plan.title_ru = payload.title_ru.strip()
+    if payload.title_en is not None:
+        plan.title_en = payload.title_en.strip()
+    if payload.duration_days is not None:
+        plan.duration_days = payload.duration_days
+    if payload.price_usd is not None:
+        plan.price_usd = payload.price_usd
+    if payload.is_active is not None:
+        plan.is_active = payload.is_active
+
+    if plan.product_id:
+        product = await db.get(Product, plan.product_id)
+        if product is not None:
+            product.price_usdt = plan.price_usd
+
+    # Название и активность товара приводит в порядок общий синхронизатор —
+    # он же знает про статус канала
+    await subscription_service.sync_plan_products(db, channel)
+    await db.commit()
+
+    return {"id": str(plan.id), "is_active": plan.is_active}
+
+
+@router.delete("/author/channels/{channel_id}/plans/{plan_id}")
+async def delete_plan(
+    channel_id: uuid.UUID,
+    plan_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Удаляет тариф, по которому никто не покупал.
+
+    Проданный тариф удалить нельзя — на него ссылаются подписки и заказы.
+    Такой отключается: из каталога пропадает, история остаётся.
+    """
+    channel = await _own_channel(db, channel_id, user)
+    plan = await db.get(SubscriptionPlan, plan_id)
+    if plan is None or plan.channel_id != channel.id:
+        raise HTTPException(status_code=404, detail="Тариф не найден")
+
+    sold = (
+        await db.execute(
+            select(func.count()).select_from(Subscription)
+            .where(Subscription.plan_id == plan.id)
+        )
+    ).scalar() or 0
+    if sold:
+        raise HTTPException(
+            status_code=400,
+            detail=f"По тарифу есть подписки ({sold}) — удалить нельзя. "
+                   f"Отключите его, чтобы он пропал из каталога.",
+        )
+
+    product_id = plan.product_id
+    await db.delete(plan)
+    await db.flush()
+
+    if product_id:
+        ordered = (
+            await db.execute(
+                select(func.count()).select_from(OrderItem)
+                .where(OrderItem.product_id == product_id)
+            )
+        ).scalar() or 0
+        product = await db.get(Product, product_id)
+        if product is not None:
+            # В заказах товар мог остаться даже без подписки: заказ создали,
+            # но не оплатили. Такой товар гасим, а не удаляем.
+            if ordered:
+                product.is_active = False
+            else:
+                await db.delete(product)
+
+    await db.commit()
+    return {"deleted": True}
 
 
 async def _own_channel(db: AsyncSession, channel_id: uuid.UUID, user: User) -> Channel:

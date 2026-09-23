@@ -1,7 +1,10 @@
 import httpx
+import logging
 import time
 from typing import List, Union
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 class TelegramService:
     """Service for Telegram Bot operations"""
@@ -307,6 +310,46 @@ class ChannelAccessService:
 
     async def get_chat(self, chat_id: int | str) -> dict:
         return await _call("getChat", {"chat_id": chat_id})
+
+    async def download_chat_photo(self, chat: dict) -> bytes | None:
+        """
+        Забирает аватар канала из Telegram.
+
+        Своего поля под картинку у канала нет и быть не должно: у автора она
+        уже есть в Telegram, и заставлять его грузить вторую — лишний шаг,
+        который он пропустит. Без этого товар подписки уходил в каталог со
+        ссылкой на заглушку, которой на диске нет, и карточка выходила пустой.
+
+        Берём small_file_id, а не big: в каталоге картинка показывается
+        размером с ноготь, а большая — это лишние сотни килобайт на карточку.
+
+        Возвращает None на любой осечке: канал без аватара, Telegram отдал
+        ошибку, файл не скачался. Картинка — украшение, из-за неё
+        подключение канала падать не должно.
+        """
+        photo = (chat or {}).get("photo") or {}
+        file_id = photo.get("small_file_id") or photo.get("big_file_id")
+        if not file_id:
+            return None
+
+        try:
+            file_info = await _call("getFile", {"file_id": file_id})
+            file_path = file_info.get("file_path")
+            if not file_path:
+                return None
+
+            url = (
+                f"https://api.telegram.org/file/"
+                f"bot{settings.TELEGRAM_BOT_TOKEN}/{file_path}"
+            )
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.get(url)
+            if response.status_code != 200:
+                return None
+            return response.content
+        except (TelegramApiError, httpx.HTTPError) as e:
+            logger.warning("[CHANNEL] Аватар канала не скачался: %s", e)
+            return None
 
     async def check_bot_is_admin(self, chat_id: int | str) -> tuple[bool, str | None]:
         """

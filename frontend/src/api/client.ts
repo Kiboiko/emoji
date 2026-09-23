@@ -324,6 +324,36 @@ export const subscriptionsApi = {
 
     submitChannel: async (channelId: string): Promise<{ status: ChannelStatus }> =>
         (await apiClient.post(`/subscriptions/author/channels/${channelId}/submit`)).data,
+
+    updateChannel: async (channelId: string, data: {
+        description?: string;
+        payout_wallet?: string;
+    }): Promise<AuthorChannel> =>
+        (await apiClient.patch(`/subscriptions/author/channels/${channelId}`, data)).data,
+
+    // Снять с продажи: купленные подписки продолжают действовать, новые
+    // купить нельзя
+    unpublishChannel: async (channelId: string): Promise<{ status: ChannelStatus }> =>
+        (await apiClient.post(`/subscriptions/author/channels/${channelId}/unpublish`)).data,
+
+    deleteChannel: async (channelId: string): Promise<{ deleted: boolean }> =>
+        (await apiClient.delete(`/subscriptions/author/channels/${channelId}`)).data,
+
+    updatePlan: async (channelId: string, planId: string, data: {
+        title_ru?: string;
+        title_en?: string;
+        duration_days?: number;
+        price_usd?: string;
+        is_active?: boolean;
+    }) =>
+        (await apiClient.patch(
+            `/subscriptions/author/channels/${channelId}/plans/${planId}`, data,
+        )).data,
+
+    deletePlan: async (channelId: string, planId: string): Promise<{ deleted: boolean }> =>
+        (await apiClient.delete(
+            `/subscriptions/author/channels/${channelId}/plans/${planId}`,
+        )).data,
 };
 
 // Withdrawals API

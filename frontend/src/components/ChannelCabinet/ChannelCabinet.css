@@ -152,7 +152,6 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
-    margin-left: auto;
     padding: var(--space-1) var(--space-2);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm, 8px);
@@ -357,4 +356,77 @@
     font-size: var(--font-lg);
     font-weight: var(--weight-semibold);
     color: var(--text-primary);
+}
+
+/* В строке прав бота кнопка одна и должна прижиматься к краю — раньше
+   это делал margin-left:auto на самой кнопке, но теперь таких кнопок ряды */
+.channel-rights .channel-btn-inline {
+    margin-left: auto;
+}
+
+.channel-btn-inline:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.channel-btn-danger {
+    color: var(--accent-error);
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+/* --- шапка карточки канала -------------------------------- */
+
+/* Аватар тянется из Telegram: своё поле под картинку означало бы
+   два источника правды */
+.channel-avatar {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--bg-tertiary);
+}
+
+.channel-verified {
+    flex-shrink: 0;
+    color: var(--accent-primary);
+}
+
+/* Название занимает свободное место, бейдж статуса остаётся справа */
+.channel-card-head .channel-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.channel-row-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+/* --- тарифы ---------------------------------------------------- */
+
+.channel-plan-name {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.channel-plan-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--space-1);
+}
+
+/* Отключённый тариф остаётся виден автору, но не продаётся */
+.channel-plan--off {
+    opacity: 0.55;
+}
+
+.channel-plan--off .channel-plan-name {
+    text-decoration: line-through;
+}
+
+.channel-note--warn {
+    color: var(--accent-warning);
 }

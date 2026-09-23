@@ -54,6 +54,7 @@ class ProductUpdate(BaseModel):
     type: Optional[str] = None
     min_quantity: Optional[int] = None
     max_quantity: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
 class ProductResponse(ProductBase):
@@ -63,6 +64,7 @@ class ProductResponse(ProductBase):
     id: UUID
     image_url: str
     created_at: datetime
+    is_active: bool = True
 
 
 class ProductLocalized(BaseModel):
@@ -82,8 +84,25 @@ class ProductLocalized(BaseModel):
     max_quantity: Optional[int] = None
     created_at: datetime
 
+    # Товар существует, но снят с продажи. Каталог такие не отдаёт вовсе;
+    # поле нужно странице товара, куда можно прийти по старой ссылке.
+    is_active: bool = True
+
     # Товар пользователя: витрина рисует пометку, а покупка уходит в escrow
     is_p2p: bool = False
-    seller_name: Optional[str] = None
-    seller_rating: Optional[float] = None
-    seller_deals: int = 0
+
+    # --- Автор товара ---------------------------------------------------
+    # Одна пара полей на два разных источника: продавца и канал. Раньше тут
+    # были только seller_*, и подписка приходила в витрину вообще без автора —
+    # покупатель не видел, чей это канал.
+    #
+    # author_kind: "seller" — товар пользователя, "channel" — доступ в канал,
+    # None — товар самой площадки.
+    author_kind: Optional[str] = None
+    author_name: Optional[str] = None
+    author_verified: bool = False
+    author_rating: Optional[float] = None
+    author_deals: int = 0
+    # @username канала: по нему покупатель может посмотреть витрину автора до
+    # покупки. У продавца такого адреса нет — там None.
+    author_link: Optional[str] = None

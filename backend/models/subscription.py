@@ -67,6 +67,11 @@ class Channel(Base):
     # Кошелёк автора для выплат. Заполняется при подключении канала.
     payout_wallet: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
+    # Галочка проверенного автора — см. SellerProfile.is_verified
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+
     bot_is_admin: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )

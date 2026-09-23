@@ -589,3 +589,22 @@
 .review-item {
     margin-top: var(--space-3);
 }
+
+/* Товар, который больше не продаётся. Страница остаётся доступной: на неё
+   ведут ссылки из истории заказов и из чата сделки. */
+.product-unavailable {
+    margin-top: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--accent-error);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.btn-add-to-cart:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+}

@@ -123,15 +123,52 @@ async def test_edit_blocked_after_submit(db, seller_user, listing_factory):
     assert exc.value.status_code == 400
 
 
-async def test_edit_blocked_after_approval(db, seller_user, listing_factory):
+async def test_edit_after_approval_returns_to_moderation(db, seller_user, listing_factory):
+    """
+    Правка опубликованного товара разрешена, но стоит публикации.
+
+    Раньше правка после одобрения была запрещена совсем, и опечатка в
+    названии означала «заводи заявку заново» с потерей отзывов. Защита от
+    подмены осталась другой: товар уходит с витрины до повторной проверки, а не
+    показывает непроверенный текст под одобренной карточкой.
+    """
     listing = await listing_factory(status=ListingStatus.APPROVED, with_product=True)
 
-    with pytest.raises(HTTPException) as exc:
-        await p2p.update_listing(
-            listing.id, p2p.ListingUpdate(description="Подменённое описание товара"),
-            user=seller_user, db=db,
-        )
-    assert exc.value.status_code == 400
+    result = await p2p.update_listing(
+        listing.id, p2p.ListingUpdate(description="Подменённое описание товара"),
+        user=seller_user, db=db,
+    )
+
+    assert result["remoderating"] is True
+    await db.refresh(listing)
+    assert listing.status == ListingStatus.PENDING
+
+    product = await db.get(Product, listing.product_id)
+    assert product.is_active is False, "товар с непроверенным текстом остался в каталоге"
+
+
+async def test_untouched_edit_does_not_unpublish(db, seller_user, listing_factory):
+    """
+    Открытая и сразу закрытая форма не должна снимать товар с продажи.
+
+    Фронт присылает все поля формы целиком, а не только изменённые, так что
+    без сравнения со старыми значениями любое сохранение убирало бы товар из
+    каталога на ровном месте.
+    """
+    listing = await listing_factory(status=ListingStatus.APPROVED, with_product=True)
+
+    result = await p2p.update_listing(
+        listing.id,
+        p2p.ListingUpdate(name=listing.name, description=listing.description),
+        user=seller_user, db=db,
+    )
+
+    assert result["remoderating"] is False
+    await db.refresh(listing)
+    assert listing.status == ListingStatus.APPROVED
+
+    product = await db.get(Product, listing.product_id)
+    assert product.is_active is True
 
 
 async def test_foreign_listing_is_not_found(db, listing_factory, user_factory):

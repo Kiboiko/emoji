@@ -20,13 +20,14 @@ from fastapi import (
 )
 from PIL import Image
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import get_db
 from models.finance import Account, AccountOwnerType
+from models.order import OrderItem
 from models.p2p import (
     Deal, DealStatus, ListingImage, ListingStatus, ProductListing,
     SellerProfile, SellerStatus,
@@ -107,10 +108,19 @@ def _assert_can_sell(profile: SellerProfile) -> None:
             )
 
 
-# Статусы, в которых заявку ещё можно править. После отправки на модерацию
-# правка запрещена: иначе можно отправить безобидный текст, дождаться
-# одобрения и подменить его на что угодно.
-EDITABLE_STATUSES = (ListingStatus.DRAFT, ListingStatus.REJECTED)
+# Статусы, в которых заявку можно править.
+#
+# PENDING сюда не входит намеренно: пока модератор смотрит заявку, текст под
+# ним меняться не должен. APPROVED входит — но правка опубликованного товара
+# снимает его с витрины и отправляет на повторную проверку (см.
+# _apply_edit_side_effects). Иначе получалась бы подмена: отправить
+# безобидный текст, дождаться одобрения и заменить его на что угодно.
+EDITABLE_STATUSES = (
+    ListingStatus.DRAFT,
+    ListingStatus.REJECTED,
+    ListingStatus.APPROVED,
+    ListingStatus.WITHDRAWN,
+)
 
 
 def _assert_editable(listing: ProductListing) -> None:
@@ -119,6 +129,27 @@ def _assert_editable(listing: ProductListing) -> None:
             status_code=400,
             detail=f"Заявка в статусе «{listing.status.value}» — правка недоступна",
         )
+
+
+async def _apply_edit_side_effects(db: AsyncSession, listing: ProductListing) -> bool:
+    """
+    Что происходит с товаром, когда правят уже одобренную заявку.
+
+    Товар уходит с витрины, заявка — на повторную модерацию. Возвращает True,
+    если это произошло: вызывающему нужно сказать об этом продавцу, иначе он
+    решит, что товар просто пропал.
+    """
+    if listing.status != ListingStatus.APPROVED:
+        return False
+
+    if listing.product_id:
+        product = await db.get(Product, listing.product_id)
+        if product is not None:
+            product.is_active = False
+
+    listing.status = ListingStatus.PENDING
+    listing.moderation_comment = None
+    return True
 
 
 async def _seller_balance_nano(db: AsyncSession, user: User) -> int:
@@ -202,6 +233,7 @@ async def seller_profile(
         "display_name": profile.display_name,
         "payout_wallet": profile.payout_wallet,
         "status": profile.status.value,
+        "is_verified": profile.is_verified,
         "restricted_until": (
             profile.restricted_until.isoformat() if profile.restricted_until else None
         ),
@@ -363,8 +395,7 @@ async def upload_listing_image(
     profile = await _get_seller(db, user)
     listing = await _own_listing(db, listing_id, profile)
 
-    if listing.status not in (ListingStatus.DRAFT, ListingStatus.REJECTED):
-        raise HTTPException(status_code=400, detail="Фото можно добавлять только до отправки на модерацию")
+    _assert_editable(listing)
 
     count = len(listing.images)
     if count >= MAX_IMAGES_PER_LISTING:
@@ -373,9 +404,13 @@ async def upload_listing_image(
     url = await _save_listing_image(image)
     record = ListingImage(id=uuid.uuid4(), listing_id=listing.id, url=url, sort_order=count)
     db.add(record)
+
+    # Картинка — такая же часть карточки, как текст: новая фотография у
+    # опубликованного товара тоже идёт через проверку
+    remoderating = await _apply_edit_side_effects(db, listing)
     await db.commit()
 
-    return {"id": str(record.id), "url": url}
+    return {"id": str(record.id), "url": url, "remoderating": remoderating}
 
 
 @router.post("/seller/listings/{listing_id}/submit")
@@ -436,27 +471,45 @@ async def update_listing(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Правка заявки до отправки на модерацию.
+    Правка заявки.
 
-    Главный сценарий — заявку отклонили с комментарием, и продавец исправляет
-    ровно то, на что указал модератор. Без этого отказ означал бы «заводи
-    заявку заново», а причина отказа терялась бы.
+    Два сценария. Первый: заявку отклонили с комментарием, и продавец
+    исправляет ровно то, на что указал модератор. Второй: товар уже в
+    каталоге, но в нём опечатка или сменилась цена — раньше для этого
+    приходилось заводить заявку заново, теряя отзывы и историю.
+
+    Правка опубликованного товара снимает его с витрины до повторной
+    проверки: показывать непроверенный текст под уже одобренной карточкой
+    нельзя.
     """
     profile = await _get_seller(db, user)
     listing = await _own_listing(db, listing_id, profile)
     _assert_editable(listing)
 
-    if payload.name is not None:
+    changed = False
+    if payload.name is not None and payload.name.strip() != listing.name:
         listing.name = payload.name.strip()
-    if payload.description is not None:
+        changed = True
+    if payload.description is not None and payload.description.strip() != listing.description:
         listing.description = payload.description.strip()
-    if payload.price_usd is not None:
+        changed = True
+    if payload.price_usd is not None and payload.price_usd != listing.price_usd:
         listing.price_usd = payload.price_usd
-    if payload.category_id is not None:
+        changed = True
+    if payload.category_id is not None and payload.category_id != listing.category_id:
         listing.category_id = payload.category_id
+        changed = True
+
+    # Без проверки «а изменилось ли что-нибудь» открытая и сразу закрытая
+    # форма снимала бы товар с продажи на ровном месте.
+    remoderating = await _apply_edit_side_effects(db, listing) if changed else False
 
     await db.commit()
-    return {"id": str(listing.id), "status": listing.status.value}
+    return {
+        "id": str(listing.id),
+        "status": listing.status.value,
+        "remoderating": remoderating,
+    }
 
 
 @router.delete("/seller/listings/{listing_id}")
@@ -465,10 +518,50 @@ async def delete_listing(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Удаление черновика или отклонённой заявки. Опубликованные не трогаем."""
+    """
+    Удаление заявки.
+
+    Нельзя удалить то, по чему была сделка: на товар ссылаются заказ, платёж и
+    отзыв, и удаление оставило бы в истории покупателя пустую строку. Такой
+    товар снимается с продажи, а не удаляется.
+
+    Опубликованную заявку тоже не удаляем напрямую: сначала «снять с
+    продажи» — так продавец видит, что товар исчез из каталога, отдельным
+    действием, а не побочным эффектом удаления.
+    """
     profile = await _get_seller(db, user)
     listing = await _own_listing(db, listing_id, profile)
-    _assert_editable(listing)
+
+    if listing.status in (ListingStatus.PENDING, ListingStatus.APPROVED):
+        raise HTTPException(
+            status_code=400,
+            detail="Сначала снимите товар с продажи, потом удаляйте",
+        )
+
+    if await _product_is_taken(db, listing.product_id):
+        raise HTTPException(
+            status_code=400,
+            detail="По товару была сделка — удалить нельзя, историю нужно сохранить",
+        )
+
+    # Товар из каталога уносим вместе с заявкой: сделок по нему нет, значит
+    # ни заказы, ни отзывы на него не ссылаются.
+    if listing.product_id:
+        product = await db.get(Product, listing.product_id)
+        if product is not None:
+            ordered = (
+                await db.execute(
+                    select(func.count()).select_from(OrderItem)
+                    .where(OrderItem.product_id == product.id)
+                )
+            ).scalar() or 0
+            # Неоплаченный заказ сделкой не считается, но строку в истории
+            # оставляет — такой товар гасим
+            if ordered:
+                product.is_active = False
+                product.stock = 0
+            else:
+                await db.delete(product)
 
     await db.delete(listing)
     await db.commit()
@@ -489,6 +582,10 @@ async def delete_listing_image(
     image = next((img for img in listing.images if img.id == image_id), None)
     if image is None:
         raise HTTPException(status_code=404, detail="Фото не найдено")
+
+    # Первое фото — это картинка товара в каталоге, поэтому удаление фото у
+    # опубликованной заявки тоже идёт через повторную проверку
+    await _apply_edit_side_effects(db, listing)
 
     # Файл с диска не удаляем: он мог уже уйти в каталог как картинка товара
     # (при одобрении берётся первое фото), и удаление оставило бы битую

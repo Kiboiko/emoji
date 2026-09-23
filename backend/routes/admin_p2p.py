@@ -29,6 +29,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin/p2p", tags=["Admin P2P"])
 
+# Картинка для заявки без фото. Файл рисуется при старте бэкенда — см.
+# utils/placeholder.py; раньше ссылка вела в никуда.
+PLACEHOLDER_IMAGE = "/uploads/products/placeholder.png"
+
 
 class ModerationDecision(BaseModel):
     approve: bool
@@ -39,6 +43,10 @@ class DisputeResolution(BaseModel):
     # True — деньги продавцу, False — возврат покупателю
     release: bool
     comment: Optional[str] = Field(None, max_length=2000)
+
+
+class VerificationDecision(BaseModel):
+    verified: bool
 
 
 class SellerAction(BaseModel):
@@ -138,6 +146,13 @@ async def moderate_listing(
         listing.status = ListingStatus.REJECTED
         seller.rejected_streak += 1
 
+        # Если товар уже был в каталоге (правка после одобрения), он остаётся
+        # снятым: отказ означает, что новый текст показывать нельзя.
+        if listing.product_id:
+            rejected_product = await db.get(Product, listing.product_id)
+            if rejected_product is not None:
+                rejected_product.is_active = False
+
         threshold = await settings_service.get_int(db, "p2p_reject_block_threshold")
         restricted = False
         if seller.rejected_streak >= threshold:
@@ -157,31 +172,40 @@ async def moderate_listing(
         )
         return {"status": listing.status.value, "seller_restricted": restricted}
 
-    # --- Одобрение: заводим товар в каталоге ---
+    # --- Одобрение: заводим или обновляем товар в каталоге ---
     category_id = listing.category_id or await _default_category_id(db)
-    image_url = listing.images[0].url if listing.images else "/uploads/products/placeholder.png"
+    image_url = listing.images[0].url if listing.images else PLACEHOLDER_IMAGE
 
-    product = Product(
-        id=uuid.uuid4(),
-        name_ru=listing.name,
-        name_en=listing.name,
-        description_ru=listing.description,
-        description_en=listing.description,
-        price_usdt=listing.price_usd,
-        image_url=image_url,
-        category_id=category_id,
-        type="p2p",
-        min_quantity=1,
-        max_quantity=1,
-        # Сток ровно 1: это конкретная вещь продавца. max_quantity ограничивает
-        # только количество в одной корзине, а без стока одну и ту же вещь
-        # могли бы оплатить сразу несколько покупателей.
-        stock=1,
-        content_data={"listing_id": str(listing.id)},
-        owner_user_id=seller.user_id,
-        is_p2p=True,
-    )
-    db.add(product)
+    # Заявку могли править после одобрения — тогда она вернулась на модерацию
+    # вместе с уже существующим товаром. Заводить второй нельзя: на первый
+    # ссылаются корзины и заказы, и в каталоге оказалось бы два одинаковых.
+    product = await db.get(Product, listing.product_id) if listing.product_id else None
+
+    if product is None:
+        product = Product(
+            id=uuid.uuid4(),
+            category_id=category_id,
+            type="p2p",
+            min_quantity=1,
+            max_quantity=1,
+            # Сток ровно 1: это конкретная вещь продавца. max_quantity
+            # ограничивает только количество в одной корзине, а без стока одну
+            # и ту же вещь могли бы оплатить сразу несколько покупателей.
+            stock=1,
+            content_data={"listing_id": str(listing.id)},
+            owner_user_id=seller.user_id,
+            is_p2p=True,
+        )
+        db.add(product)
+
+    product.name_ru = listing.name
+    product.name_en = listing.name
+    product.description_ru = listing.description
+    product.description_en = listing.description
+    product.price_usdt = listing.price_usd
+    product.image_url = image_url
+    product.category_id = category_id
+    product.is_active = True
     await db.flush()
 
     listing.product_id = product.id
@@ -248,6 +272,7 @@ async def list_sellers(
                 "username": s.user.username if s.user else None,
                 "telegram_id": s.user.telegram_id if s.user else None,
                 "status": s.status.value,
+                "is_verified": s.is_verified,
                 "rating": s.rating,
                 "rating_count": s.rating_count,
                 "deals_completed": s.deals_completed,
@@ -302,6 +327,29 @@ async def change_seller_status(
 
     await db.commit()
     return {"status": seller.status.value}
+
+
+@router.post("/sellers/{seller_id}/verify")
+async def set_seller_verified(
+    seller_id: uuid.UUID,
+    decision: VerificationDecision,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Ставит или снимает галочку проверенного продавца.
+
+    Отдельно от статуса: активный продавец — это «не заблокирован», галочка —
+    «площадка подтвердила, кто он». Покупатель по ней и отличает случайного
+    продавца от того, за кого площадка ручается.
+    """
+    seller = await db.get(SellerProfile, seller_id)
+    if seller is None:
+        raise HTTPException(status_code=404, detail="Продавец не найден")
+
+    seller.is_verified = decision.verified
+    await db.commit()
+    return {"is_verified": seller.is_verified}
 
 
 # ---------------------------------------------------------------------------

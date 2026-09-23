@@ -113,6 +113,10 @@ export const p2pApi = {
     setSellerStatus: (id: string, status: string, reason?: string, restrict_days?: number) =>
         api.post(`/api/admin/p2p/sellers/${id}/status`, { status, reason, restrict_days })
             .then((r) => r.data),
+    // Галочка проверенного продавца — решение отдельное от статуса:
+    // «не заблокирован» и «площадка за него ручается» это разные вещи
+    setSellerVerified: (id: string, verified: boolean) =>
+        api.post(`/api/admin/p2p/sellers/${id}/verify`, { verified }).then((r) => r.data),
 
     deals: (params: { status?: string; skip?: number; limit?: number }) =>
         api.get<any>('/api/admin/p2p/deals', { params }).then((r) => r.data),
@@ -139,6 +143,8 @@ export const subscriptionsApi = {
             .then((r) => r.data),
     suspendChannel: (id: string, reason?: string) =>
         api.post(`/api/admin/subscriptions/channels/${id}/suspend`, { reason }).then((r) => r.data),
+    setChannelVerified: (id: string, verified: boolean) =>
+        api.post(`/api/admin/subscriptions/channels/${id}/verify`, { verified }).then((r) => r.data),
 
     list: (params: { status?: string; skip?: number; limit?: number }) =>
         api.get<any>('/api/admin/subscriptions', { params }).then((r) => r.data),
