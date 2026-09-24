@@ -1,9 +1,18 @@
 /* --- Карточка каталога -------------------------------------------------
    Подложки и рамки у карточки нет: рисунок лежит прямо на фоне страницы,
-   разделяет карточки воздух. Вместе с убранным описанием и кнопкой корзины
-   это сняло 64 px высоты — 216 против 280. */
+   разделяет карточки воздух. Пометки — плашками на картинке, цена — в
+   кнопке покупки: так ни то ни другое не стоит отдельной строки. */
 
 .product-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+/* Открыть товар: картинка и название. Отдельно от кнопки покупки, потому
+   что кнопка внутри кнопки — невалидная разметка, и клавиатура до
+   внутренней не добирается. */
+.product-open {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -17,6 +26,7 @@
 
 .product-image {
     position: relative;
+    display: block;
     width: 100%;
     /* 1 : 0,7 — пропорция из образца. Именно она, а не квадрат, и делает
        карточку низкой при широкой картинке. */
@@ -34,34 +44,48 @@
 }
 
 @media (hover: hover) {
-    .product-card:hover .product-image img {
+    .product-open:hover .product-image img {
         transform: scale(1.04);
     }
 }
 
-/* Пометка «хит» поверх картинки, а не строкой: строка стоила бы высоты */
-.product-badge {
+/* --- Плашки на картинке ------------------------------------------------
+   Тёмная полупрозрачная подложка, а не акцентная заливка: под плашкой
+   может оказаться что угодно, и на светлой фотографии акцент терялся. */
+
+.product-tag {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    display: flex;
+    left: 8px;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 9px;
-    /* Полупрозрачная чёрная подложка, а не акцентная заливка: под значком
-       может оказаться что угодно, и на светлой картинке акцент терялся */
-    background: rgba(15, 15, 15, 0.62);
+    gap: 3px;
+    padding: 3px 8px;
+    border-radius: 8px;
+    background: rgba(10, 10, 10, 0.72);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+/* Со словом, а не иконкой: огонёк в 26 px без подписи читался пятном, а на
+   пёстрой фотографии почти пропадал */
+.product-tag-top {
+    top: 8px;
     color: var(--accent-warning);
 }
 
-.product-price {
-    margin-top: 10px;
-    font-size: 18px;
-    font-weight: 700;
-    line-height: 1.15;
-    color: var(--accent-primary);
+.product-tag-rating {
+    bottom: 8px;
+    color: #f5f5f5;
+}
+
+.product-star {
+    color: var(--accent-warning);
+}
+
+.product-reviews {
+    font-weight: 400;
+    color: #a3a3a3;
 }
 
 /* line-clamp обрезает текст по ВЫСОТЕ и ничего не делает с шириной: одно
@@ -70,7 +94,11 @@
    название пишет продавец, и «бурмалдабурмалдабурмалда» или ссылка без
    пробелов ломали бы витрину у всех посетителей. */
 .product-name {
-    margin-top: 5px;
+    margin-top: 10px;
+    /* Высота под две строки задана жёстко: иначе карточки с однострочным и
+       двустрочным названием ставят кнопки покупки на разную высоту */
+    height: 36px;
+    overflow: hidden;
     font-size: 14px;
     font-weight: 500;
     line-height: 1.3;
@@ -78,40 +106,37 @@
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
-    overflow: hidden;
     overflow-wrap: anywhere;
 }
 
-/* Высота задана жёстко: строка остаётся на месте и когда отзывов нет,
-   иначе соседние карточки в ряду встают на разную высоту */
-.product-rating {
+/* --- Кнопка покупки ---------------------------------------------------- */
+
+.product-buy {
     display: flex;
     align-items: center;
-    gap: 5px;
-    margin-top: 5px;
-    height: 15px;
-}
-
-.product-stars {
-    display: inline-flex;
-    gap: 1px;
-    color: var(--accent-warning);
-}
-
-.product-stars .star-empty {
-    opacity: 0.35;
-}
-
-.product-reviews {
-    font-size: 12px;
-    color: var(--text-secondary);
+    justify-content: center;
+    gap: 7px;
+    margin-top: 10px;
+    /* 40px — минимальная комфортная тап-цель; при меньшей по кнопке
+       промахиваются, а промах здесь = переход на карточку товара */
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 12px;
+    /* Плоская заливка, а не градиент: кнопка мелкая, и переход на ней
+       читается грязью */
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
 }
 
 /* --- Скелетон карточки ------------------------------------------------
    Повторяет структуру карточки, поэтому высота совпадает автоматически. */
 
 .product-card-skeleton {
-    cursor: default;
     pointer-events: none;
 }
 
@@ -119,20 +144,15 @@
     border-radius: var(--radius-sm);
 }
 
-.skeleton-line-price {
-    height: 21px;
-    width: 64px;
-    margin-top: 10px;
-}
-
 .skeleton-line-title {
     height: 36px;
     width: 100%;
-    margin-top: 5px;
+    margin-top: 10px;
 }
 
-.skeleton-line-rating {
-    height: 15px;
-    width: 84px;
-    margin-top: 5px;
+.skeleton-line-buy {
+    height: 40px;
+    width: 100%;
+    margin-top: 10px;
+    border-radius: 12px;
 }

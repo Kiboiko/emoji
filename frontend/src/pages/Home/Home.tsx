@@ -5,8 +5,10 @@ import { PackageOpen } from 'lucide-react';
 import { Header } from '@/components/Header/Header';
 import { ProductCard } from '@/components/ProductCard/ProductCard';
 import { ProductCardSkeleton } from '@/components/ProductCard/ProductCardSkeleton';
-import { productsApi, categoriesApi } from '@/api/client';
+import { productsApi, categoriesApi, cartApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
+import { useCartStore } from '@/store/cartStore';
+import { useTelegram } from '@/hooks/useTelegram';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import type { Product, Category } from '@/types';
 import './Home.css';
@@ -14,6 +16,8 @@ import './Home.css';
 export const Home: React.FC = () => {
     const navigate = useNavigate();
     const { language } = useAuthStore();
+    const { setCart } = useCartStore();
+    const { haptic } = useTelegram();
 
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -124,6 +128,33 @@ export const Home: React.FC = () => {
         loadData();
     }, [language, selectedCategory]);
 
+    const handleAddToCart = async (productId: string) => {
+        const product = filteredProducts.find(p => p.id === productId);
+        if (!product) return;
+
+        // Услуге нужна ссылка на аккаунт или пост, а её спрашивают на
+        // странице товара: класть такое в корзину одним нажатием нельзя
+        if (product.type === 'service') {
+            haptic.impact('light');
+            navigate(`/product/${productId}`);
+            return;
+        }
+
+        try {
+            haptic.impact('light');
+            await cartApi.addToCart(productId, product.min_quantity || 1);
+            setCart(await cartApi.getCart(language));
+            haptic.notification('success');
+        } catch (error: any) {
+            console.error('Failed to add to cart:', error);
+            if (error.response?.data?.detail) {
+                alert(`Error: ${error.response.data.detail}`);
+            } else {
+                haptic.notification('error');
+            }
+        }
+    };
+
     // Detect if user is on mobile device (not desktop Telegram)
     const isMobile = React.useMemo(() => {
         const tg = (window as any).Telegram?.WebApp;
@@ -198,6 +229,7 @@ export const Home: React.FC = () => {
                                 <ProductCard
                                     product={product}
                                     onClick={() => navigate(`/product/${product.id}`)}
+                                    onAddToCart={() => handleAddToCart(product.id)}
                                 />
                             </motion.div>
                         ))
