@@ -11,16 +11,13 @@ interface ProductCardProps {
 }
 
 /**
- * Карточка товара в сетке каталога.
+ * Карточка товара. Одна и та же в каталоге и на витрине магазина — иначе
+ * экраны расходятся, что уже однажды случилось.
  *
- * Пометки — «хит» и оценка — лежат плашками на картинке, а не строками под
- * ней. Отдельная строка оценки держала высоту и без отзывов, чтобы карточки
- * в ряду совпадали; отзывов на площадке пока нет ни у одного товара, и под
- * каждым названием висела пустая дыра. На картинке плашки просто нет, когда
- * показывать нечего.
- *
- * Цена лежит в кнопке покупки. Так она не стоит отдельной строки, и покупка
- * из сетки вернулась, не прибавив карточке высоты.
+ * «Хит» лежит плашкой на картинке, оценка — плашкой под названием. Строка
+ * оценки высоту не держит: у товара без отзывов её просто нет, а кнопка
+ * покупки всё равно стоит вровень с соседней, потому что прижата к низу
+ * карточки, а карточки в ряду сетка растягивает до одной высоты.
  *
  * Две кнопки, а не одна на всю карточку: вложенная кнопка внутри кнопки —
  * невалидная разметка, и клавиатура до внутренней не добирается.
@@ -52,24 +49,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     <img src={product.image_url} alt="" loading="lazy" />
 
                     {product.is_top && (
-                        <span className="product-tag product-tag-top">
+                        <span className="product-tag">
                             <Flame size={11} fill="currentColor" />
                             Хит
-                        </span>
-                    )}
-
-                    {/* Одна звезда и число, а не пять звёзд: пять штук в 12 px
-                        сливаются в полоску, а «4.9» читается сразу */}
-                    {rating != null && (
-                        <span className="product-tag product-tag-rating">
-                            <Star size={11} fill="currentColor" className="product-star" />
-                            {rating}
-                            <span className="product-reviews">· {product.reviews_count}</span>
                         </span>
                     )}
                 </span>
 
                 <span className="product-name">{product.name}</span>
+
+                {/* Одна звезда и число, а не пять звёзд: пять штук в 12 px
+                    сливаются в полоску, а «4.9» читается сразу */}
+                {rating != null && (
+                    <span className="product-rating">
+                        <Star size={12} fill="currentColor" className="product-star" />
+                        {rating}
+                        <span className="product-reviews">· {product.reviews_count}</span>
+                    </span>
+                )}
             </motion.button>
 
             <motion.button

@@ -51,16 +51,6 @@ export interface Product {
     author_link?: string | null;
 }
 
-/** Карточка товара на витрине магазина: автор там один и назван сверху */
-export interface StoreProduct {
-    id: string;
-    name: string;
-    price_usdt: string;
-    image_url: string;
-    type: string;
-    is_top: boolean;
-}
-
 export type StoreKind = 'seller' | 'channel' | 'platform';
 
 export interface Store {
@@ -73,10 +63,13 @@ export interface Store {
     rating: number | null;
     rating_count: number;
     deals_completed: number;
+    /** Дата регистрации магазина — для строки «на площадке с…» */
+    created_at?: string;
     /** Только у канала */
     link?: string | null;
     subscribers?: number;
-    products: StoreProduct[];
+    /** Те же товары, что и в каталоге: витрина рисует тот же компонент */
+    products: Product[];
 }
 
 /** Счётчики разделов кабинета — для строк на главной странице профиля */

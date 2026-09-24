@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { ArrowLeft, BadgeCheck, Link2, Star, Store as StoreIcon, Users } from 'lucide-react';
-import { storesApi } from '@/api/client';
+import { cartApi, storesApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
+import { useCartStore } from '@/store/cartStore';
 import { useToastStore, errorText } from '@/store/toastStore';
+import { useTelegram } from '@/hooks/useTelegram';
+import { ProductCard } from '@/components/ProductCard/ProductCard';
 import type { Store as StoreData } from '@/types';
 import './Store.css';
 
@@ -19,6 +21,8 @@ export const Store: React.FC = () => {
     const { kind, id } = useParams<{ kind: string; id: string }>();
     const navigate = useNavigate();
     const { language } = useAuthStore();
+    const { setCart } = useCartStore();
+    const { haptic } = useTelegram();
     const showToast = useToastStore((s) => s.show);
 
     const [store, setStore] = useState<StoreData | null>(null);
@@ -40,6 +44,26 @@ export const Store: React.FC = () => {
     }, [id, kind, language, showToast]);
 
     useEffect(() => { load(); }, [load]);
+
+    const addToCart = async (product: StoreData['products'][number]) => {
+        // Услуге нужна ссылка на аккаунт или пост, а её спрашивают на
+        // странице товара — как и в каталоге
+        if (product.type === 'service') {
+            haptic.impact('light');
+            navigate(`/product/${product.id}`);
+            return;
+        }
+
+        try {
+            haptic.impact('light');
+            await cartApi.addToCart(product.id, product.min_quantity || 1);
+            setCart(await cartApi.getCart(language));
+            haptic.notification('success');
+        } catch (e) {
+            haptic.notification('error');
+            showToast(errorText(e, t('Не удалось добавить в корзину', 'Failed to add to cart')), 'error');
+        }
+    };
 
     if (failed) {
         return (
@@ -155,21 +179,16 @@ export const Store: React.FC = () => {
                     </p>
                 ) : (
                     <div className="store-grid">
+                        {/* Тот же компонент, что и в каталоге. Своя вёрстка
+                            здесь уже однажды разошлась с каталожной: там появились
+                            оценка и кнопка покупки, а тут осталась старая. */}
                         {store.products.map((product) => (
-                            <motion.button
+                            <ProductCard
                                 key={product.id}
-                                className="store-card glass-card"
+                                product={product}
                                 onClick={() => navigate(`/product/${product.id}`)}
-                                whileTap={{ scale: 0.98 }}
-                            >
-                                <div className="store-card-image">
-                                    <img src={product.image_url} alt={product.name} loading="lazy" />
-                                </div>
-                                <div className="store-card-body">
-                                    <span className="store-card-name">{product.name}</span>
-                                    <span className="store-card-price">${product.price_usdt}</span>
-                                </div>
-                            </motion.button>
+                                onAddToCart={() => addToCart(product)}
+                            />
                         ))}
                     </div>
                 )}

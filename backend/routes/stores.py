@@ -29,21 +29,52 @@ from models.subscription import (
 router = APIRouter(prefix="/api/stores", tags=["Stores"])
 
 
-def _product_card(product: Product, lang: str) -> dict:
+async def _product_cards(db: AsyncSession, products: list, lang: str) -> list[dict]:
     """
-    Карточка товара для витрины магазина.
+    Товары витрины в том же виде, что и в каталоге.
 
-    Автора сюда не кладём: на странице магазина он один и назван сверху,
-    повторять его у каждого товара незачем.
+    Сначала здесь был свой урезанный набор полей — и витрина разошлась с
+    каталогом: в каталоге у карточки появились оценка и пометка хита, а здесь
+    осталась старая вёрстка. Общий вид — единственный способ не расходиться дальше:
+    фронт рисует оба экрана одним компонентом.
     """
-    return {
-        "id": str(product.id),
-        "name": product.name_ru if lang == "ru" else product.name_en,
-        "price_usdt": str(product.price_usdt),
-        "image_url": product.image_url,
-        "type": product.type,
-        "is_top": product.is_top,
-    }
+    # Импорт внутри функции: модули роутов грузятся по очереди, и верхнеуровневый
+    # ссылался бы на порядок регистрации в main.py
+    from routes.products import (
+        _author_fields, _channels_by_product, _platform_store,
+        _ratings_by_product, _sellers_by_user,
+    )
+    from schemas.product import ProductLocalized
+
+    if not products:
+        return []
+
+    sellers = await _sellers_by_user(db, products)
+    channels = await _channels_by_product(db, products)
+    platform = await _platform_store(db)
+    ratings = await _ratings_by_product(db, products)
+
+    return [
+        ProductLocalized(
+            id=p.id,
+            name=p.name_ru if lang == "ru" else p.name_en,
+            description=p.description_ru if lang == "ru" else p.description_en,
+            price_usdt=p.price_usdt,
+            price_ton=p.price_ton,
+            image_url=p.image_url,
+            category_id=p.category_id,
+            is_top=p.is_top,
+            type=p.type,
+            min_quantity=p.min_quantity,
+            max_quantity=p.max_quantity,
+            created_at=p.created_at,
+            is_active=p.is_active,
+            is_p2p=p.is_p2p,
+            **_author_fields(p, sellers, channels, platform),
+            **ratings.get(p.id, {}),
+        ).model_dump(mode="json")
+        for p in products
+    ]
 
 
 async def _seller_products(db: AsyncSession, seller: SellerProfile, lang: str) -> list[dict]:
@@ -70,7 +101,7 @@ async def _seller_products(db: AsyncSession, seller: SellerProfile, lang: str) -
         Product.is_top.desc(), Product.sort_order.desc(), Product.created_at.desc()
     )
     rows = (await db.execute(stmt)).scalars().all()
-    return [_product_card(p, lang) for p in rows]
+    return await _product_cards(db, list(rows), lang)
 
 
 @router.get("/seller/{seller_id}")
@@ -98,6 +129,7 @@ async def seller_store(
         "rating": seller.rating,
         "rating_count": seller.rating_count,
         "deals_completed": seller.deals_completed,
+        "created_at": seller.created_at.isoformat(),
         "products": await _seller_products(db, seller, lang),
     }
 
@@ -139,7 +171,7 @@ async def channel_store(
                 .order_by(Product.price_usdt.asc())
             )
         ).scalars().all()
-        products = [_product_card(p, lang) for p in rows]
+        products = await _product_cards(db, list(rows), lang)
 
     # Живых подписчиков видно покупателю: это единственный признак, по
     # которому он может оценить канал до покупки — рейтинга у канала нет
@@ -165,5 +197,6 @@ async def channel_store(
         "deals_completed": 0,
         "link": channel.username,
         "subscribers": subscribers,
+        "created_at": channel.created_at.isoformat(),
         "products": products,
     }

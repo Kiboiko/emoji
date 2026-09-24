@@ -302,3 +302,36 @@ async def test_product_without_reviews_has_no_rating(db, product_factory):
 
     assert item.rating is None
     assert item.reviews_count == 0
+
+
+async def test_store_products_carry_the_same_fields_as_catalog(
+    db, platform_store, product_factory, user_factory,
+):
+    """
+    Витрина магазина отдаёт товары в том же виде, что и каталог.
+
+    Своя урезанная выдача здесь уже однажды привела к тому, что экраны
+    разошлись: в каталоге у карточки появились оценка и пометка хита, а на
+    витрине осталась старая вёрстка без них.
+    """
+    from models.review import Review
+
+    buyer = await user_factory(username="store_reviewer")
+    product = await product_factory(name="С отзывами")
+    product.is_top = True
+
+    for value in (5, 4):
+        db.add(Review(
+            id=uuid.uuid4(), user_id=buyer.id, product_id=product.id,
+            text="отзыв", rating=value,
+        ))
+    await db.flush()
+
+    store = await stores.seller_store(platform_store.id, db=db)
+    card = [p for p in store["products"] if p["id"] == str(product.id)][0]
+
+    assert card["rating"] == 4.5
+    assert card["reviews_count"] == 2
+    assert card["is_top"] is True
+    # Автор нужен карточке на обоих экранах одинаково
+    assert card["author_kind"] == "platform"
