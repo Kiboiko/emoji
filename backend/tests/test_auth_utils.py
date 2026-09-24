@@ -67,19 +67,18 @@ def make_init_data_with_signature(*, token: str = BOT_TOKEN) -> str:
     """
     initData с полем signature — так его присылают свежие клиенты Telegram.
 
-    signature это отдельная подпись Ed25519 для проверки без токена бота, и
-    в расчёт HMAC она не входит: подписывается всё, кроме hash и signature.
+    signature это отдельная подпись Ed25519, которой данные можно проверить
+    без токена бота. В расчёт HMAC она ВХОДИТ наравне с остальными полями:
+    из строки убирается только hash. Тест моделирует именно это, потому что
+    обратное предположение однажды сломало вход на проде.
     """
     fields = {
         "auth_date": str(int(time.time())),
         "query_id": "AAHtest",
+        "signature": "3S1Cg7c0Vb1cQpKQ2_fake_ed25519_signature",
         "user": json.dumps(DEFAULT_USER, separators=(",", ":"), ensure_ascii=False),
     }
-    return urlencode({
-        **fields,
-        "signature": "3S1Cg7c0Vb1cQpKQ2_fake_ed25519_signature",
-        "hash": _sign(fields, token),
-    })
+    return urlencode({**fields, "hash": _sign(fields, token)})
 
 
 @pytest.fixture(autouse=True)
@@ -351,9 +350,11 @@ class TestCurrentUser:
 
 def test_signature_field_does_not_break_the_check():
     """
-    Вход ломался ровно на этом: signature попадал в data-check-string, HMAC
-    не сходился, и клиент получал 401 «Invalid hash». Выглядело как «то
-    работает, то нет» — потому что старые клиенты signature не присылают.
+    Клиент, присылающий signature, должен заходить.
+
+    Вход на проде сломался, когда signature исключили из data-check-string:
+    HMAC перестал сходиться у всех, кто это поле присылает. Правильно —
+    убирать из строки один только hash.
     """
     data = auth.validate_telegram_webapp_data(make_init_data_with_signature())
 
