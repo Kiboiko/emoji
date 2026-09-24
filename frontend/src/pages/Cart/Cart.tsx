@@ -112,7 +112,7 @@ export const Cart: React.FC = () => {
         return (
             <div className="cart-page">
                 <div className="container">
-                    <h1>{language === 'ru' ? 'Корзина' : 'Cart'}</h1>
+                    <h1 className="cart-title">{language === 'ru' ? 'Корзина' : 'Cart'}</h1>
                     <div className="cart-skeleton shimmer" />
                 </div>
             </div>
@@ -138,74 +138,96 @@ export const Cart: React.FC = () => {
         );
     }
 
+    const itemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+
     return (
         <div className="cart-page">
             <div className="container">
-                <div className="page-title-mobile">
-                    <h1>{language === 'ru' ? 'Корзина' : 'Cart'}</h1>
-                </div>
+                {/* Заголовок показывается везде. Раньше он был только для iOS и
+                    Android, а место под него резервировалось всегда — на десктопе
+                    страница начиналась с пустой полосы. */}
+                <h1 className="cart-title">{language === 'ru' ? 'Корзина' : 'Cart'}</h1>
 
                 <div className="cart-items">
                     <AnimatePresence>
                         {cart.items.map((item) => (
                             <motion.div
                                 key={item.id}
-                                className="cart-item glass-card"
+                                className="cart-item"
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: 20 }}
                                 layout
                             >
-                                <img src={item.image_url} alt={item.name} className="item-image" />
+                                <img src={item.image_url} alt="" className="item-image" />
 
-                                <div className="item-info">
-                                    <h3>{item.name}</h3>
-                                    {item.user_data?.link && (
-                                        <div className="item-link-wrapper">
-                                            <span className="item-link-chip">
-                                                {item.user_data.link}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="item-controls">
-                                    <div className="quantity-control">
-                                        <button
-                                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                            disabled={item.quantity === 1}
-                                        >
-                                            <Minus size={16} />
-                                        </button>
-                                        <span>{item.quantity}</span>
-                                        <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                                            <Plus size={16} />
-                                        </button>
-                                    </div>
-                                </div>
-
-
-
-                                <p className="item-price">${item.price_usdt}</p>
+                                <h3 className="item-name">{item.name}</h3>
 
                                 <button
                                     className="btn-remove"
                                     onClick={() => removeItem(item.id)}
+                                    aria-label={language === 'ru'
+                                        ? `Убрать «${item.name}» из корзины`
+                                        : `Remove ${item.name} from cart`}
                                 >
-                                    <Trash2 size={18} />
+                                    <Trash2 size={17} />
                                 </button>
+
+                                <div className="item-price">
+                                    <span className="item-total">${item.subtotal_usdt.toFixed(2)}</span>
+                                    {/* Цена за штуку — только когда штук больше одной:
+                                        иначе непонятно, откуда взялась сумма */}
+                                    {item.quantity > 1 && (
+                                        <span className="item-each">
+                                            {item.quantity} &#215; ${item.price_usdt}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="quantity-control">
+                                    <button
+                                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                        disabled={item.quantity === 1}
+                                        aria-label={language === 'ru' ? 'Меньше' : 'Decrease'}
+                                    >
+                                        <Minus size={15} />
+                                    </button>
+                                    <span className="quantity-value">{item.quantity}</span>
+                                    <button
+                                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                        aria-label={language === 'ru' ? 'Больше' : 'Increase'}
+                                    >
+                                        <Plus size={15} />
+                                    </button>
+                                </div>
+
+                                {/* Ссылка, которую спросили при заказе услуги — третьим
+                                    рядом во всю ширину, а не внутри колонки с названием */}
+                                {item.user_data?.link && (
+                                    <span className="item-link">{item.user_data.link}</span>
+                                )}
                             </motion.div>
                         ))}
                     </AnimatePresence>
                 </div>
 
-                <div className="cart-summary glass-card">
-                    <div className="summary-row total">
-                        <span>{language === 'ru' ? 'Итого' : 'Total'}</span>
-                        <span className="text-gradient">${cart.total_usdt.toFixed(2)}</span>
+                <div className="cart-summary">
+                    <div className="summary-row">
+                        <span>
+                            {itemCount}{' '}
+                            {language === 'ru' ? 'товаров' : 'items'}
+                        </span>
+                        <span>${cart.total_usdt.toFixed(2)}</span>
                     </div>
 
-                    <button className="btn-gradient btn-checkout" onClick={proceedToCheckout}>
+                    <div className="summary-divider" />
+
+                    <div className="summary-row summary-total">
+                        <span>{language === 'ru' ? 'Итого' : 'Total'}</span>
+                        <span className="summary-amount">${cart.total_usdt.toFixed(2)}</span>
+                    </div>
+
+                    <button className="btn-checkout" onClick={proceedToCheckout}>
                         {language === 'ru' ? 'Оформить заказ' : 'Checkout'}
                     </button>
                 </div>
