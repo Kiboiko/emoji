@@ -107,6 +107,7 @@ async def get_products(
     sellers = await _sellers_by_user(db, products)
     channels = await _channels_by_product(db, products)
     platform = await _platform_store(db)
+    ratings = await _ratings_by_product(db, products)
 
     localized = []
     for p in products:
@@ -127,6 +128,7 @@ async def get_products(
             is_p2p=p.is_p2p,
             # content_data is NOT included in ProductLocalized purposefully to hide instructions
             **_author_fields(p, sellers, channels, platform),
+            **ratings.get(p.id, {}),
         )
         localized.append(item)
         
@@ -188,6 +190,45 @@ async def _platform_store(db: AsyncSession):
             select(SellerProfile).where(SellerProfile.is_platform.is_(True))
         )
     ).scalars().first()
+
+
+async def _ratings_by_product(db: AsyncSession, products: list) -> dict:
+    """
+    Средняя оценка и число отзывов — одним запросом на весь каталог.
+
+    До этого оценка считалась только на странице товара, и в сетке её не было
+    вовсе. Считаем только по отзывам с оценкой и не скрытым модератором:
+    отзыв без оценки не должен тянуть среднее вниз, а скрытый — влиять вообще.
+    """
+    from models.review import Review
+
+    product_ids = [p.id for p in products]
+    if not product_ids:
+        return {}
+
+    rows = (
+        await db.execute(
+            select(
+                Review.product_id,
+                func.avg(Review.rating),
+                func.count(Review.id),
+            )
+            .where(
+                Review.product_id.in_(product_ids),
+                Review.rating.is_not(None),
+                Review.is_hidden.is_(False),
+            )
+            .group_by(Review.product_id)
+        )
+    ).all()
+
+    return {
+        product_id: {
+            "rating": round(float(average), 1),
+            "reviews_count": count,
+        }
+        for product_id, average, count in rows
+    }
 
 
 def _author_fields(product, sellers: dict, channels: dict, platform=None) -> dict:
@@ -317,6 +358,7 @@ async def get_product(
     sellers = await _sellers_by_user(db, [product])
     channels = await _channels_by_product(db, [product])
     platform = await _platform_store(db)
+    ratings = await _ratings_by_product(db, [product])
 
     return ProductLocalized(
         id=product.id,
@@ -334,6 +376,7 @@ async def get_product(
         is_active=product.is_active,
         is_p2p=product.is_p2p,
         **_author_fields(product, sellers, channels, platform),
+        **ratings.get(product.id, {}),
     )
 
 @router.post("")

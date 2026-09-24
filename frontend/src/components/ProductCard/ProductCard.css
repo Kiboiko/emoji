@@ -1,30 +1,28 @@
+/* --- Карточка каталога -------------------------------------------------
+   Подложки и рамки у карточки нет: рисунок лежит прямо на фоне страницы,
+   разделяет карточки воздух. Вместе с убранным описанием и кнопкой корзины
+   это сняло 64 px высоты — 216 против 280. */
+
 .product-card {
-    cursor: pointer;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
-    height: 100%;
-    position: relative;
-    background: var(--bg-card);
-    transition: all 0.3s ease;
-}
-
-.product-badge {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 10;
-    font-size: 11px;
-    padding: 4px 10px;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
 }
 
 .product-image {
+    position: relative;
     width: 100%;
-    height: 200px;
+    /* 1 : 0,7 — пропорция из образца. Именно она, а не квадрат, и делает
+       карточку низкой при широкой картинке. */
+    aspect-ratio: 1 / 0.7;
     overflow: hidden;
-    /* Совпадает с радиусом .glass-card: при 12px против 16px углы
-       картинки выпирали за скруглением карточки */
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-radius: var(--radius-lg);
     background: var(--bg-tertiary);
 }
 
@@ -37,127 +35,78 @@
 
 @media (hover: hover) {
     .product-card:hover .product-image img {
-        transform: scale(1.05);
+        transform: scale(1.04);
     }
 }
 
-.product-info {
-    padding: 16px;
+/* Пометка «хит» поверх картинки, а не строкой: строка стоила бы высоты */
+.product-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    flex: 1;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 9px;
+    /* Полупрозрачная чёрная подложка, а не акцентная заливка: под значком
+       может оказаться что угодно, и на светлой картинке акцент терялся */
+    background: rgba(15, 15, 15, 0.62);
+    color: var(--accent-warning);
+}
+
+.product-price {
+    margin-top: 10px;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--accent-primary);
 }
 
 /* line-clamp обрезает текст по ВЫСОТЕ и ничего не делает с шириной: одно
    длинное слово без пробелов остаётся неразрывным и распирает карточку,
    а вместе с ней и всю сетку. Перенос внутри слова здесь обязателен —
-   название и описание пишет продавец, и «бурмалдабурмалдабурмалда» или
-   ссылка без пробелов ломали бы витрину у всех посетителей. */
+   название пишет продавец, и «бурмалдабурмалдабурмалда» или ссылка без
+   пробелов ломали бы витрину у всех посетителей. */
 .product-name {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
-    line-height: 1.3;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-}
-
-.product-description {
+    margin-top: 5px;
     font-size: 14px;
-    color: var(--text-secondary);
-    line-height: 1.5;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--text-primary);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     overflow-wrap: anywhere;
-    flex: 1;
 }
 
-.product-footer {
+/* Высота задана жёстко: строка остаётся на месте и когда отзывов нет,
+   иначе соседние карточки в ряду встают на разную высоту */
+.product-rating {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-top: auto;
-    padding-top: 12px;
-    border-top: 1px solid var(--border-color);
+    gap: 5px;
+    margin-top: 5px;
+    height: 15px;
 }
 
-.product-price {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+.product-stars {
+    display: inline-flex;
+    gap: 1px;
+    color: var(--accent-warning);
 }
 
-.price-main {
-    font-size: 20px;
-    font-weight: 700;
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+.product-stars .star-empty {
+    opacity: 0.35;
 }
 
-.btn-add-cart {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    border: none;
-    background: var(--gradient-primary);
-    color: var(--accent-contrast);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
-    transition: all 0.3s ease;
+.product-reviews {
+    font-size: 12px;
+    color: var(--text-secondary);
 }
 
-.btn-add-cart:hover {
-    box-shadow: 0 6px 16px rgba(var(--accent-rgb), 0.4);
-}
-
-@media (max-width: 640px) {
-    .product-image {
-        height: 140px;
-    }
-
-    .product-info {
-        padding: 12px;
-        gap: 6px;
-    }
-
-    .product-name {
-        font-size: 14px;
-        line-height: 1.2;
-    }
-
-    .product-description {
-        font-size: 12px;
-        -webkit-line-clamp: 1;
-    }
-
-    .price-main {
-        font-size: 16px;
-    }
-
-    .btn-add-cart {
-        /* 36px — меньше минимальной комфортной тап-цели; по кнопке
-           промахиваются, а промах здесь = переход на карточку товара */
-        width: 40px;
-        height: 40px;
-        border-radius: var(--radius-md);
-    }
-
-    .btn-add-cart svg {
-        width: 18px;
-        height: 18px;
-    }
-}
 /* --- Скелетон карточки ------------------------------------------------
    Повторяет структуру карточки, поэтому высота совпадает автоматически. */
 
@@ -166,54 +115,24 @@
     pointer-events: none;
 }
 
-.product-card-skeleton .product-image {
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-}
-
 .skeleton-line {
     border-radius: var(--radius-sm);
 }
 
-.skeleton-line-title {
-    height: 18px;
-    width: 80%;
-}
-
-.skeleton-line-text {
-    height: 14px;
-    width: 100%;
-    flex: 1;
-    max-height: 40px;
-}
-
 .skeleton-line-price {
-    height: 20px;
-    width: 70px;
+    height: 21px;
+    width: 64px;
+    margin-top: 10px;
 }
 
-.skeleton-line-button {
-    height: 44px;
-    width: 44px;
-    border-radius: var(--radius-md);
+.skeleton-line-title {
+    height: 36px;
+    width: 100%;
+    margin-top: 5px;
 }
 
-@media (max-width: 640px) {
-    .skeleton-line-title {
-        height: 14px;
-    }
-
-    .skeleton-line-text {
-        height: 12px;
-        max-height: 14px;
-    }
-
-    .skeleton-line-price {
-        height: 16px;
-        width: 54px;
-    }
-
-    .skeleton-line-button {
-        height: 40px;
-        width: 40px;
-    }
+.skeleton-line-rating {
+    height: 15px;
+    width: 84px;
+    margin-top: 5px;
 }

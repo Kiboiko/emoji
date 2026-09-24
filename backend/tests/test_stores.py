@@ -256,3 +256,49 @@ async def test_catalog_survives_without_platform_store(db, product_factory):
 
     assert item.author_kind is None
     assert item.author_id is None
+
+
+# ---------------------------------------------------------------------------
+# Оценка товара в каталоге
+# ---------------------------------------------------------------------------
+
+async def test_catalog_carries_product_rating(db, product_factory, user_factory):
+    """
+    Оценка считалась только на странице товара — в сетке её не было вовсе.
+    Средняя округляется до десятых, скрытые отзывы и отзывы без оценки не
+    учитываются.
+    """
+    from models.review import Review
+
+    buyer = await user_factory(username="reviewer")
+    product = await product_factory(name="С отзывами")
+
+    for value, hidden in [(5, False), (4, False), (1, True)]:
+        db.add(Review(
+            id=uuid.uuid4(), user_id=buyer.id, product_id=product.id,
+            text="отзыв", rating=value, is_hidden=hidden,
+        ))
+    # Отзыв без оценки не должен тянуть среднее вниз
+    db.add(Review(
+        id=uuid.uuid4(), user_id=buyer.id, product_id=product.id,
+        text="без оценки", rating=None,
+    ))
+    await db.flush()
+
+    listed = await products_routes.get_products(db=db)
+    found = [p for p in listed if p.id == product.id]
+    assert found, "товар не попал в каталог"
+
+    assert found[0].rating == 4.5
+    assert found[0].reviews_count == 2
+
+
+async def test_product_without_reviews_has_no_rating(db, product_factory):
+    """Ноль звёзд хуже отсутствия звёзд: карточка не должна их рисовать."""
+    product = await product_factory(name="Без отзывов")
+
+    listed = await products_routes.get_products(db=db)
+    item = [p for p in listed if p.id == product.id][0]
+
+    assert item.rating is None
+    assert item.reviews_count == 0

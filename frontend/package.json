@@ -9,6 +9,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@fontsource/golos-text": "^5.3.0",
     "@ton/core": "^0.63.1",
     "@tonconnect/ui-react": "^3.0.2",
     "@twa-dev/sdk": "^8.0.2",

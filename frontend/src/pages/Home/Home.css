@@ -53,14 +53,18 @@
 .products-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
-    gap: 16px;
+    /* По вертикали больше — см. телефонный размер ниже */
+    gap: 24px 16px;
     padding: 0 16px;
 }
 
 @media (max-width: 640px) {
     .products-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
+        /* По вертикали больше, чем по горизонтали: у карточки нет подложки,
+           и ряды разделяет только воздух — при одинаковом зазоре они
+           слипались бы в одну ленту */
+        gap: 18px 12px;
         padding: 0 12px;
     }
 }

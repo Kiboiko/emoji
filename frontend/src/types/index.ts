@@ -34,6 +34,10 @@ export interface Product {
     /** Товар пользователя, а не площадки: оплата уходит в escrow */
     is_p2p?: boolean;
 
+    /** Оценка товара. null — отзывов нет: карточка не рисует ни звёзд, ни нуля */
+    rating?: number | null;
+    reviews_count?: number;
+
     /** Чей это магазин: продавца, канала или самой площадки */
     author_kind?: 'seller' | 'channel' | 'platform' | null;
     /** id магазина — по нему строится ссылка на его витрину */
