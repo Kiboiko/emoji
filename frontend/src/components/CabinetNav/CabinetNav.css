@@ -1,0 +1,87 @@
+/* --- Разделы кабинета --------------------------------------------------
+   Одна карточка, внутри строки-переходы. Разделители рисуем между строками,
+   а не у каждой: иначе под последней остаётся висящая линия. */
+
+.cabnav {
+    padding: 0;
+    margin: 0 0 var(--space-3);
+    overflow: hidden;
+}
+
+.cabnav-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cabnav-row + .cabnav-row {
+    border-top: 1px solid var(--border-color);
+}
+
+@media (hover: hover) {
+    .cabnav-row:hover {
+        background: var(--bg-secondary);
+    }
+}
+
+.cabnav-row:active {
+    background: var(--bg-secondary);
+}
+
+.cabnav-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    background: rgba(var(--accent-rgb), 0.12);
+    color: var(--accent-primary);
+}
+
+.cabnav-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.cabnav-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.cabnav-hint {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cabnav-count {
+    flex-shrink: 0;
+    min-width: 24px;
+    padding: 2px var(--space-2);
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.cabnav-arrow {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+}

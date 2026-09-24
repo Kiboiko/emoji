@@ -102,10 +102,11 @@ async def get_products(
     result = await db.execute(stmt)
     products = result.scalars().all()
 
-    # Авторы нужны, чтобы показать на карточке, чей это товар. Двумя
-    # запросами на весь каталог, а не по товару в цикле.
+    # Авторы нужны, чтобы показать на странице товара, чей он, и дать
+    # ссылку на магазин. Тремя запросами на весь каталог, а не по товару.
     sellers = await _sellers_by_user(db, products)
     channels = await _channels_by_product(db, products)
+    platform = await _platform_store(db)
 
     localized = []
     for p in products:
@@ -125,7 +126,7 @@ async def get_products(
             is_active=p.is_active,
             is_p2p=p.is_p2p,
             # content_data is NOT included in ProductLocalized purposefully to hide instructions
-            **_author_fields(p, sellers, channels),
+            **_author_fields(p, sellers, channels, platform),
         )
         localized.append(item)
         
@@ -173,19 +174,37 @@ async def _channels_by_product(db: AsyncSession, products: list) -> dict:
     return {product_id: channel for product_id, channel in rows}
 
 
-def _author_fields(product, sellers: dict, channels: dict) -> dict:
+async def _platform_store(db: AsyncSession):
+    """
+    Магазин самой площадки.
+
+    Заводится миграцией, здесь только читается: создавать строку на
+    GET-запросе каталога нельзя. Если его нет — товары площадки просто
+    придут без магазина, как раньше.
+    """
+    from models.p2p import SellerProfile
+    return (
+        await db.execute(
+            select(SellerProfile).where(SellerProfile.is_platform.is_(True))
+        )
+    ).scalars().first()
+
+
+def _author_fields(product, sellers: dict, channels: dict, platform=None) -> dict:
     """
     Кто стоит за товаром — в виде, одинаковом для витрины.
 
     Три источника и один набор полей: продавец, автор канала и сама площадка.
-    До этого подписка приходила вообще без автора, и покупатель не видел, в
-    чей канал он платит.
+    У последней теперь тоже есть магазин: товар без владельца продаёт не
+    «никто», а площадка, и покупатель должен мочь перейти на её витрину.
     """
     channel = channels.get(product.id)
     if channel is not None:
         return {
             "author_kind": "channel",
+            "author_id": channel.id,
             "author_name": channel.title,
+            "author_avatar": channel.avatar_url,
             "author_verified": channel.is_verified,
             "author_link": channel.username,
         }
@@ -194,13 +213,24 @@ def _author_fields(product, sellers: dict, channels: dict) -> dict:
     if seller is not None:
         return {
             "author_kind": "seller",
+            "author_id": seller.id,
             "author_name": seller.display_name,
+            "author_avatar": seller.avatar_url,
             "author_verified": seller.is_verified,
             "author_rating": seller.rating,
             "author_deals": seller.deals_completed,
         }
 
-    # Товар площадки: автора нет, и выдумывать его не надо
+    if platform is not None:
+        return {
+            "author_kind": "platform",
+            "author_id": platform.id,
+            "author_name": platform.display_name,
+            "author_avatar": platform.avatar_url,
+            "author_verified": platform.is_verified,
+        }
+
+    # Магазин площадки ещё не заведён — выдумывать автора не надо
     return {}
 
 # Admin Endpoint for raw products table
@@ -286,6 +316,7 @@ async def get_product(
     # витрина по is_active нарисует «снято с продажи».
     sellers = await _sellers_by_user(db, [product])
     channels = await _channels_by_product(db, [product])
+    platform = await _platform_store(db)
 
     return ProductLocalized(
         id=product.id,
@@ -302,7 +333,7 @@ async def get_product(
         created_at=product.created_at,
         is_active=product.is_active,
         is_p2p=product.is_p2p,
-        **_author_fields(product, sellers, channels),
+        **_author_fields(product, sellers, channels, platform),
     )
 
 @router.post("")

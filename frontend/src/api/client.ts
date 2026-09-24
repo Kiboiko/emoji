@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { AuthorChannel, ChannelStatus } from '@/types';
+import type { AuthorChannel, ChannelStatus, ProfileSummary, Store } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -206,6 +206,21 @@ export const usersApi = {
         const response = await apiClient.get('/users/referral-stats');
         return response.data;
     },
+
+    // Счётчики разделов кабинета одним запросом: сами списки
+    // живут на своих экранах и на главной не нужны
+    getSummary: async (): Promise<ProfileSummary> =>
+        (await apiClient.get('/users/me/summary')).data,
+};
+
+// Витрины магазинов. Площадка — такой же продавец, поэтому отдельного
+// метода под неё нет: у неё такой же id, как у остальных.
+export const storesApi = {
+    getSellerStore: async (id: string, lang = 'ru'): Promise<Store> =>
+        (await apiClient.get(`/stores/seller/${id}`, { params: { lang } })).data,
+
+    getChannelStore: async (id: string, lang = 'ru'): Promise<Store> =>
+        (await apiClient.get(`/stores/channel/${id}`, { params: { lang } })).data,
 };
 
 // Terms API
@@ -226,8 +241,19 @@ export const p2pApi = {
         display_name: string; payout_wallet: string; accept_terms: boolean;
     }) => (await apiClient.post('/p2p/seller/register', data)).data,
 
-    updateSeller: async (data: { display_name?: string; payout_wallet?: string }) =>
-        (await apiClient.patch('/p2p/seller/me', data)).data,
+    updateSeller: async (data: {
+        display_name?: string; payout_wallet?: string; description?: string;
+    }) => (await apiClient.patch('/p2p/seller/me', data)).data,
+
+    // Логотип магазина. Content-Type снимаем явно — у инстанса он
+    // application/json, и без этого multipart не собирается
+    uploadSellerAvatar: async (file: File) => {
+        const form = new FormData();
+        form.append('image', file);
+        return (await apiClient.post('/p2p/seller/me/avatar', form, {
+            headers: { 'Content-Type': undefined },
+        })).data;
+    },
 
     getMyListings: async () => (await apiClient.get('/p2p/seller/listings')).data,
 

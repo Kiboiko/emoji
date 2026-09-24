@@ -118,6 +118,18 @@ export const p2pApi = {
     setSellerVerified: (id: string, verified: boolean) =>
         api.post(`/api/admin/p2p/sellers/${id}/verify`, { verified }).then((r) => r.data),
 
+    // Магазин самой площадки: такой же продавец, но заполняет его
+    // администратор, а не владелец
+    platformStore: () =>
+        api.get<any>('/api/admin/p2p/platform-store').then((r) => r.data),
+    updatePlatformStore: (data: { display_name?: string; description?: string }) =>
+        api.patch('/api/admin/p2p/platform-store', data).then((r) => r.data),
+    uploadPlatformStoreAvatar: (file: File) => {
+        const form = new FormData();
+        form.append('image', file);
+        return api.post('/api/admin/p2p/platform-store/avatar', form).then((r) => r.data);
+    },
+
     deals: (params: { status?: string; skip?: number; limit?: number }) =>
         api.get<any>('/api/admin/p2p/deals', { params }).then((r) => r.data),
     dealMessages: (id: string) =>

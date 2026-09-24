@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Check, X, Loader2, Image as ImageIcon, BadgeCheck, Ban, Undo2,
 } from 'lucide-react';
@@ -26,7 +26,7 @@ const STATUSES = [
  * было. Галочка проверенного продавца без неё тоже не ставилась бы.
  */
 export const Moderation: React.FC = () => {
-    const [tab, setTab] = useState<'listings' | 'sellers'>('listings');
+    const [tab, setTab] = useState<'listings' | 'sellers' | 'store'>('listings');
 
     return (
         <div className="p-4 md:p-8">
@@ -49,9 +49,19 @@ export const Moderation: React.FC = () => {
                 >
                     Продавцы
                 </button>
+                <button
+                    onClick={() => setTab('store')}
+                    className={`px-4 py-2 rounded-lg text-sm ${
+                        tab === 'store' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    }`}
+                >
+                    Магазин площадки
+                </button>
             </div>
 
-            {tab === 'listings' ? <ListingsTab /> : <SellersTab />}
+            {tab === 'listings' && <ListingsTab />}
+            {tab === 'sellers' && <SellersTab />}
+            {tab === 'store' && <PlatformStoreTab />}
         </div>
     );
 };
@@ -392,5 +402,147 @@ const SellersTab: React.FC = () => {
             <DataTable columns={columns} rows={rows} rowKey={(s) => s.id} loading={loading} />
             <Pagination total={total} skip={skip} limit={LIMIT} onChange={setSkip} />
         </div>
+    );
+};
+
+
+/* ------------------------------------------------------------------ */
+/* Магазин площадки                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Товары без владельца продаёт не «никто», а площадка, и у неё такая
+ * же витрина, как у остальных продавцов. Заполняется отсюда.
+ */
+const PlatformStoreTab: React.FC = () => {
+    const toast = useToast();
+    const [store, setStore] = useState<any>(null);
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [busy, setBusy] = useState(false);
+    const fileInput = useRef<HTMLInputElement | null>(null);
+
+    const load = useCallback(async () => {
+        try {
+            const data = await p2pApi.platformStore();
+            setStore(data);
+            setName(data.display_name ?? '');
+            setDescription(data.description ?? '');
+        } catch (e) {
+            toast.fromError(e);
+        }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const save = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setBusy(true);
+        try {
+            await p2pApi.updatePlatformStore({
+                display_name: name.trim(),
+                description: description.trim(),
+            });
+            toast.success('Сохранено');
+            await load();
+        } catch (e) {
+            toast.fromError(e);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const pickLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        // Сбрасываем сразу: иначе повторный выбор того же файла
+        // не даст события
+        e.target.value = '';
+        if (!file) return;
+
+        setBusy(true);
+        try {
+            await p2pApi.uploadPlatformStoreAvatar(file);
+            toast.success('Логотип обновлён');
+            await load();
+        } catch (e) {
+            toast.fromError(e);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (!store) {
+        return <Loader2 size={22} className="animate-spin text-gray-400" />;
+    }
+
+    return (
+        <form onSubmit={save} className="max-w-xl space-y-5">
+            <div className="flex items-center gap-4">
+                <button
+                    type="button"
+                    onClick={() => fileInput.current?.click()}
+                    disabled={busy}
+                    className="w-20 h-20 rounded-full overflow-hidden bg-gray-800 text-gray-400 flex items-center justify-center text-2xl font-bold disabled:opacity-50"
+                    title="Загрузить логотип"
+                >
+                    {store.avatar_url
+                        ? <img src={store.avatar_url} alt="" className="w-full h-full object-cover" />
+                        : (name || '?').trim().charAt(0).toUpperCase()}
+                </button>
+                <div className="text-sm text-gray-400">
+                    Логотип магазина площадки.<br />
+                    Нажмите, чтобы {store.avatar_url ? 'заменить' : 'загрузить'}.
+                </div>
+            </div>
+
+            <input
+                ref={fileInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                hidden
+                onChange={pickLogo}
+            />
+
+            <label className="block">
+                <span className="block text-sm text-gray-400 mb-1">Название</span>
+                <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    minLength={2}
+                    maxLength={100}
+                    required
+                    className="w-full px-3 py-2 rounded-lg bg-gray-800 text-white border border-gray-700"
+                />
+            </label>
+
+            <label className="block">
+                <span className="block text-sm text-gray-400 mb-1">Описание</span>
+                <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    maxLength={1000}
+                    rows={4}
+                    className="w-full px-3 py-2 rounded-lg bg-gray-800 text-white border border-gray-700"
+                />
+            </label>
+
+            <div className="flex items-center gap-3">
+                <button
+                    type="submit"
+                    disabled={busy}
+                    className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 disabled:opacity-50"
+                >
+                    Сохранить
+                </button>
+                <a
+                    href={`/store/seller/${store.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-blue-400 hover:text-blue-300"
+                >
+                    Открыть витрину
+                </a>
+            </div>
+        </form>
     );
 };

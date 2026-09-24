@@ -97,9 +97,14 @@ class ProductLocalized(BaseModel):
     # покупатель не видел, чей это канал.
     #
     # author_kind: "seller" — товар пользователя, "channel" — доступ в канал,
-    # None — товар самой площадки.
+    # "platform" — магазин самой площадки. Пустой теперь только там,
+    # где магазин площадки ещё не заведён.
     author_kind: Optional[str] = None
+    # id магазина: по нему строится ссылка на витрину продавца. У
+    # продавца и площадки это SellerProfile.id, у подписки — Channel.id.
+    author_id: Optional[UUID] = None
     author_name: Optional[str] = None
+    author_avatar: Optional[str] = None
     author_verified: bool = False
     author_rating: Optional[float] = None
     author_deals: int = 0

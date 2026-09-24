@@ -441,3 +441,97 @@
     word-break: break-all;
     color: var(--text-secondary);
 }
+
+/* --- Витрина магазина в кабинете ---------------------------------------
+   Логотип и описание: то, что покупатель увидит на странице магазина.
+   Грузится вручную — аватар Telegram сделал бы магазин похожим на личный
+   аккаунт, а это именно магазин. */
+
+.seller-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.seller-logo {
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    overflow: hidden;
+    background: rgba(var(--accent-rgb), 0.15);
+    color: var(--accent-primary);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.seller-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.seller-logo:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* Карандаш поверх логотипа: без него кружок не читается как кнопка */
+.seller-logo-edit {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+}
+
+.seller-brand-text {
+    min-width: 0;
+}
+
+.seller-brand-name {
+    font-size: var(--font-md, 16px);
+    font-weight: var(--weight-semibold, 600);
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.seller-brand-hint {
+    font-size: var(--font-xs, 12px);
+    color: var(--text-tertiary);
+}
+
+.seller-identity-text {
+    min-width: 0;
+}
+
+.seller-about {
+    margin-top: var(--space-1);
+    font-size: var(--font-xs, 12px);
+    line-height: 1.5;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+}
+
+.seller-storefront {
+    display: inline-block;
+    margin-top: 2px;
+    color: var(--accent-primary);
+    font-size: var(--font-xs, 12px);
+    text-decoration: none;
+}

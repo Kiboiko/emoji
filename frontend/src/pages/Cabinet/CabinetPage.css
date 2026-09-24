@@ -1,0 +1,58 @@
+/* --- Экран раздела кабинета -------------------------------------------- */
+
+.cabinet-page {
+    min-height: 100vh;
+    padding-top: var(--space-4);
+}
+
+.cabinet-title {
+    margin: 0 0 var(--space-4);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.cabinet-bottom-spacer {
+    height: 100px;
+}
+
+/* Внутри своего экрана у кабинета нет карточки-обёртки: её роль играет сама
+   страница, а вложенная подложка съедала бы 16px по краям впустую. */
+.seller-section--page,
+.channel-section--page {
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* Списки на своём экране дышат свободнее: именно теснота и была жалобой */
+.cabinet-page .listing-item,
+.cabinet-page .channel-card {
+    padding: var(--space-4);
+}
+
+.cabinet-page .listing-name,
+.cabinet-page .channel-title {
+    font-size: 16px;
+}
+
+.cabinet-page .listing-price {
+    font-size: 18px;
+}
+
+/* Миниатюры фото крупнее: на своём экране место есть */
+.cabinet-page .listing-thumb {
+    width: 72px;
+    height: 72px;
+}
+
+/* Секции, у которых своя карточка, на отдельном экране её сохраняют, но
+   горизонтальный отступ берут только от .container */
+.cabinet-page .deals-section,
+.cabinet-page .subscriptions-section,
+.cabinet-page .orders-section {
+    margin: 0 0 var(--space-3);
+    padding: var(--space-4);
+}

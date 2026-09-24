@@ -1,141 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, Clock, Download, X, Wallet, ChevronDown, ChevronUp, Star, Check } from 'lucide-react';
-import { usersApi, ordersApi } from '@/api/client';
+import {
+    Copy, Clock, Download, X, Wallet, Store, Radio, Package, Handshake, Ticket,
+} from 'lucide-react';
+import { usersApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
-import { MySubscriptions } from '@/components/MySubscriptions/MySubscriptions';
-import { MyDeals } from '@/components/MyDeals/MyDeals';
-import { SellerCabinet } from '@/components/SellerCabinet/SellerCabinet';
-import { ChannelCabinet } from '@/components/ChannelCabinet/ChannelCabinet';
 import { PaymentWallet } from '@/components/PaymentWallet/PaymentWallet';
-import type { ReferralStats, Order } from '@/types';
+import { CabinetNav, type CabinetLink } from '@/components/CabinetNav/CabinetNav';
+import type { ReferralStats, ProfileSummary } from '@/types';
 import './Profile.css';
-
-const ReviewForm: React.FC<{
-    orderId: string;
-    productId: string;
-    productName: string;
-    language: string;
-    onSuccess: () => void;
-}> = ({ orderId, productId, productName, language, onSuccess }) => {
-    const [isVisible, setIsVisible] = useState(false);
-    const [rating, setRating] = useState(5);
-    const [text, setText] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const { haptic } = useTelegram();
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (text.length > 150) return;
-
-        setIsSubmitting(true);
-        try {
-            // Simple sanitization: remove HTML-like tags
-            const sanitizedText = text.replace(/<[^>]*>?/gm, '');
-
-            const reviewsApi = (await import('@/api/client')).reviewsApi;
-            await reviewsApi.createReview({
-                order_id: orderId,
-                product_id: productId,
-                rating,
-                text: sanitizedText
-            });
-
-            haptic.notification('success');
-            onSuccess();
-        } catch (error: any) {
-            console.error('Failed to submit review:', error);
-            if (error.response?.status === 400 && error.response?.data?.detail?.includes('already exists')) {
-                onSuccess(); // Consider it done if already reviewed
-            } else {
-                haptic.notification('error');
-                alert(language === 'ru' ? 'Ошибка при отправке отзыва' : 'Failed to submit review');
-            }
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    if (!isVisible) {
-        return (
-            <button
-                onClick={() => {
-                    setIsVisible(true);
-                    haptic.impact('light');
-                }}
-                className="btn-show-review"
-            >
-                {language === 'ru' ? 'Оставить отзыв' : 'Leave a review'}
-            </button>
-        );
-    }
-
-    return (
-        <AnimatePresence>
-            <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-            >
-                <form onSubmit={handleSubmit} className="review-form">
-                    <h4>
-                        {language === 'ru' ? `Оставить отзыв о ${productName}` : `Leave a review for ${productName}`}
-                    </h4>
-
-                    <div className="review-stars">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                            <button
-                                key={star}
-                                type="button"
-                                onClick={() => setRating(star)}
-                                className={`star-btn ${rating >= star ? 'active' : 'inactive'}`}
-                            >
-                                <Star size={24} fill={rating >= star ? 'currentColor' : 'none'} />
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="review-text-container">
-                        <textarea
-                            value={text}
-                            onChange={(e) => setText(e.target.value.slice(0, 150))}
-                            placeholder={language === 'ru' ? 'Поделитесь впечатлениями (макс. 150 символов)' : 'Share your thoughts (max 150 chars)'}
-                            className="review-textarea"
-                            required
-                        />
-                        <span className={`char-count ${text.length >= 140 ? 'warning' : ''}`}>
-                            {text.length}/150
-                        </span>
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={isSubmitting || !text.trim()}
-                        className="btn-submit-review"
-                    >
-                        {isSubmitting ? (language === 'ru' ? 'Отправка...' : 'Submitting...') : (language === 'ru' ? 'Отправить отзыв' : 'Submit Review')}
-                    </button>
-                </form>
-            </motion.div>
-        </AnimatePresence>
-    );
-};
 
 export const Profile: React.FC = () => {
     const { user, language } = useAuthStore();
     const showToast = useToastStore((s) => s.show);
     const { haptic } = useTelegram();
     const [stats, setStats] = useState<ReferralStats | null>(null);
-    const [orders, setOrders] = useState<Order[]>([]);
-    const [visibleOrdersCount, setVisibleOrdersCount] = useState(5);
+    const [summary, setSummary] = useState<ProfileSummary | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [walletAddress, setWalletAddress] = useState('');
     const [withdrawAmount, setWithdrawAmount] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [reviewedItems, setReviewedItems] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         loadStats();
@@ -143,12 +29,14 @@ export const Profile: React.FC = () => {
 
     const loadStats = async () => {
         try {
-            const [statsData, ordersData] = await Promise.all([
+            // Сами списки здесь больше не нужны — только числа рядом
+            // со строками разделов
+            const [statsData, summaryData] = await Promise.all([
                 usersApi.getReferralStats(),
-                ordersApi.getOrders(),
+                usersApi.getSummary(),
             ]);
             setStats(statsData);
-            setOrders(ordersData);
+            setSummary(summaryData);
         } catch (error) {
             console.error('Failed to load data:', error);
         }
@@ -266,6 +154,48 @@ export const Profile: React.FC = () => {
         }
     };
 
+    const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
+
+    // Строка магазина есть всегда, даже у не-продавца: иначе завести
+    // магазин неоткуда — регистрация живёт внутри того же экрана
+    const cabinetLinks: CabinetLink[] = [
+        {
+            to: '/my/listings',
+            icon: <Store size={18} />,
+            label: t('Мой магазин', 'My store'),
+            hint: summary?.is_seller
+                ? t('Товары и заявки на размещение', 'Products and listings')
+                : t('Начать продавать', 'Start selling'),
+            count: summary?.is_seller ? summary.listings : null,
+        },
+        {
+            to: '/my/channels',
+            icon: <Radio size={18} />,
+            label: t('Мои каналы', 'My channels'),
+            hint: t('Продажа подписок', 'Selling subscriptions'),
+            count: summary?.channels ?? null,
+        },
+        {
+            to: '/my/orders',
+            icon: <Package size={18} />,
+            label: t('Мои заказы', 'My orders'),
+            count: summary?.orders ?? null,
+        },
+        {
+            to: '/my/deals',
+            icon: <Handshake size={18} />,
+            label: t('Мои сделки', 'My deals'),
+            hint: t('Покупки и продажи через эскроу', 'Escrow purchases and sales'),
+            count: summary?.deals ?? null,
+        },
+        {
+            to: '/my/subscriptions',
+            icon: <Ticket size={18} />,
+            label: t('Мои подписки', 'My subscriptions'),
+            count: summary?.subscriptions ?? null,
+        },
+    ];
+
     return (
         <div className="profile-page">
             <div className="container">
@@ -363,119 +293,13 @@ export const Profile: React.FC = () => {
                     </div>
                 </section>
 
-                {/* Кошелёк, которым платят. Стоит до всего «что я продаю»:
-                    это условие покупки, а не часть кабинета продавца. */}
+                {/* Кошелёк, которым платят. Стоит до разделов:
+                    это условие покупки, а не один из них. */}
                 <PaymentWallet />
 
-                {/* Orders Section */}
-                <MyDeals />
-
-                <SellerCabinet />
-
-                {/* Рядом с кабинетом продавца: оба — «что я продаю на площадке» */}
-                <ChannelCabinet />
-
-                <MySubscriptions />
-
-                <div className="orders-section glass-card">
-                    <h2>{language === 'ru' ? 'Мои заказы' : 'My Orders'}</h2>
-
-                    {!orders || orders.length === 0 ? (
-                        <p className="empty-message">
-                            {language === 'ru' ? 'У вас пока нет заказов' : 'You have no orders yet'}
-                        </p>
-                    ) : (
-                        <>
-                            <div className="orders-list">
-                                {orders.slice(0, visibleOrdersCount).map((order) => (
-                                    <motion.div
-                                        key={order.id}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className="order-card"
-                                    >
-                                        <div className="order-header">
-                                            <div className="order-date">
-                                                <Clock size={14} />
-                                                {new Date(order.created_at).toLocaleDateString()}
-                                            </div>
-                                            <div className={`order-status status-${order.status}`}>
-                                                {order.status}
-                                            </div>
-                                        </div>
-
-                                        <div className="order-total">
-                                            ${Number(order.total_usdt).toFixed(2)}
-                                        </div>
-
-                                        <div className="order-items">
-                                            {order.items?.map((item) => {
-                                                const itemKey = `${order.id}-${item.product_id}`;
-                                                const pName = language === 'ru' ? item.product_snapshot?.name_ru : item.product_snapshot?.name_en;
-
-                                                const isReviewed = item.is_reviewed || reviewedItems.has(itemKey);
-
-                                                return (
-                                                    <div key={item.id} className="flex flex-col gap-1 mb-4 last:mb-0">
-                                                        <div className="order-item-name">
-                                                            • {pName}
-                                                            {item.quantity > 1 && ` x${item.quantity}`}
-                                                        </div>
-
-                                                        {/* Review Section - Only for COMPLETED orders */}
-                                                        {order.status === 'completed' && (
-                                                            isReviewed ? (
-                                                                <div className="review-badge">
-                                                                    <Check size={12} />
-                                                                    {language === 'ru' ? 'Отзыв оставлен' : 'Review left'}
-                                                                </div>
-                                                            ) : (
-                                                                <ReviewForm
-                                                                    orderId={order.id}
-                                                                    productId={item.product_id}
-                                                                    productName={pName || 'Product'}
-                                                                    language={language}
-                                                                    onSuccess={() => setReviewedItems(prev => new Set(prev).add(itemKey))}
-                                                                />
-                                                            )
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </motion.div>
-                                ))}
-                            </div>
-
-                            {orders.length > 5 && (
-                                <button
-                                    className="btn-show-more"
-                                    onClick={() => {
-                                        if (visibleOrdersCount >= orders.length) {
-                                            setVisibleOrdersCount(5);
-                                            // Optional: Scroll back to orders title
-                                            document.querySelector('.orders-section')?.scrollIntoView({ behavior: 'smooth' });
-                                        } else {
-                                            setVisibleOrdersCount(prev => prev + 5);
-                                        }
-                                    }}
-                                >
-                                    {visibleOrdersCount >= orders.length ? (
-                                        <>
-                                            {language === 'ru' ? 'Скрыть заказы' : 'Hide Orders'}
-                                            <ChevronUp size={16} />
-                                        </>
-                                    ) : (
-                                        <>
-                                            {language === 'ru' ? 'Показать еще' : 'Show More'}
-                                            <ChevronDown size={16} />
-                                        </>
-                                    )}
-                                </button>
-                            )}
-                        </>
-                    )}
-                </div>
+                {/* Разделы уехали на отдельные экраны: в одном свитке при
+                    десятке товаров и подписок всё превращалось в мелкую кашу. */}
+                <CabinetNav links={cabinetLinks} />
             </div>
 
             <div className="bottom-nav-spacer" />

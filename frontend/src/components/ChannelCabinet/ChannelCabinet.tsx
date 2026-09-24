@@ -30,12 +30,13 @@ const STATUS_LABEL: Record<ChannelStatus, [string, string]> = {
  * Бэкенд для всего этого существовал с этапа 4, но вызывать его было
  * неоткуда: подключить канал мог только разработчик запросом из консоли.
  */
-export const ChannelCabinet: React.FC = () => {
+export const ChannelCabinet: React.FC<{ standalone?: boolean }> = ({ standalone = false }) => {
     const { language } = useAuthStore();
     const { haptic } = useTelegram();
     const showToast = useToastStore((s) => s.show);
 
-    const [open, setOpen] = useState(false);
+    // На своём экране сворачивать нечего — см. SellerCabinet
+    const [open, setOpen] = useState(standalone);
     const [channels, setChannels] = useState<AuthorChannel[] | null>(null);
     const [connecting, setConnecting] = useState(false);
 
@@ -61,16 +62,18 @@ export const ChannelCabinet: React.FC = () => {
     const hasChannels = (channels?.length ?? 0) > 0;
 
     return (
-        <div className="channel-section glass-card">
-            <button className="channel-head" onClick={() => setOpen(!open)}>
-                <span className="channel-head-left">
-                    <Radio size={18} />
-                    {hasChannels
-                        ? t('Мои каналы', 'My channels')
-                        : t('Продавать подписки', 'Sell subscriptions')}
-                </span>
-                {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
+        <div className={standalone ? 'channel-section channel-section--page' : 'channel-section glass-card'}>
+            {!standalone && (
+                <button className="channel-head" onClick={() => setOpen(!open)}>
+                    <span className="channel-head-left">
+                        <Radio size={18} />
+                        {hasChannels
+                            ? t('Мои каналы', 'My channels')
+                            : t('Продавать подписки', 'Sell subscriptions')}
+                    </span>
+                    {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
+            )}
 
             {open && channels !== null && (
                 <>

@@ -58,13 +58,27 @@ class SellerProfile(Base):
     __tablename__ = "seller_profiles"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    # Пустой у магазина площадки: за ним не стоит человек. Уникальности это
+    # не мешает — несколько NULL уникальному индексу в PostgreSQL не помеха.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
-        unique=True, nullable=False,
+        unique=True, nullable=True,
     )
 
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     payout_wallet: Mapped[str] = mapped_column(String(80), nullable=False)
+
+    # Витрина магазина: логотип и описание. Логотип продавец грузит сам —
+    # аватар Telegram сделал бы магазин похожим на личный аккаунт.
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Магазин самой площадки. Товары к нему не подвешиваются через
+    # owner_user_id: то поле означает «товар пользователя» и тянет за собой
+    # escrow, блокировку продавца и выплаты. Площадка продаёт напрямую.
+    is_platform: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
 
     # Галочка проверенного продавца. Ставит только администратор: смысл её в
     # том, что площадка подтвердила личность, а не в том, что продавец сам

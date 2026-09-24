@@ -61,6 +61,7 @@ class SellerRegister(BaseModel):
 class SellerUpdate(BaseModel):
     display_name: Optional[str] = Field(None, min_length=2, max_length=100)
     payout_wallet: Optional[str] = Field(None, min_length=10, max_length=80)
+    description: Optional[str] = Field(None, max_length=1000)
 
 
 class ListingCreate(BaseModel):
@@ -171,7 +172,7 @@ async def _seller_balance_nano(db: AsyncSession, user: User) -> int:
     return account.balance_minor if account else 0
 
 
-async def _save_listing_image(upload: UploadFile) -> str:
+async def _save_listing_image(upload: UploadFile, subdir: str = "listings") -> str:
     """
     Сохраняет фото объявления с проверками.
 
@@ -204,13 +205,13 @@ async def _save_listing_image(upload: UploadFile) -> str:
 
     extension = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}[fmt]
     file_name = f"{uuid.uuid4()}{extension}"
-    directory = Path(settings.UPLOAD_DIR) / "listings"
+    directory = Path(settings.UPLOAD_DIR) / subdir
     directory.mkdir(parents=True, exist_ok=True)
 
     async with aiofiles.open(directory / file_name, "wb") as out:
         await out.write(content)
 
-    return f"/uploads/listings/{file_name}"
+    return f"/uploads/{subdir}/{file_name}"
 
 
 # ---------------------------------------------------------------------------
@@ -230,8 +231,11 @@ async def seller_profile(
 
     return {
         "registered": True,
+        "id": str(profile.id),
         "display_name": profile.display_name,
         "payout_wallet": profile.payout_wallet,
+        "avatar_url": profile.avatar_url,
+        "description": profile.description,
         "status": profile.status.value,
         "is_verified": profile.is_verified,
         "restricted_until": (
@@ -265,9 +269,36 @@ async def update_seller(
         profile.display_name = payload.display_name.strip()
     if payload.payout_wallet is not None:
         profile.payout_wallet = payload.payout_wallet.strip()
+    if payload.description is not None:
+        profile.description = payload.description.strip() or None
 
     await db.commit()
-    return {"display_name": profile.display_name, "payout_wallet": profile.payout_wallet}
+    return {
+        "display_name": profile.display_name,
+        "payout_wallet": profile.payout_wallet,
+        "description": profile.description,
+    }
+
+
+@router.post("/seller/me/avatar")
+async def upload_seller_avatar(
+    image: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Логотип магазина.
+
+    Грузится вручную, а не тянется из Telegram, как у каналов: с личным
+    аватаром магазин выглядит аккаунтом, а не магазином.
+
+    Проверки те же, что у фото объявлений: тип по содержимому, а не по
+    расширению — и то и другое подделывается тривиально.
+    """
+    profile = await _get_seller(db, user)
+    profile.avatar_url = await _save_listing_image(image, subdir="stores")
+    await db.commit()
+    return {"avatar_url": profile.avatar_url}
 
 
 @router.post("/seller/register")

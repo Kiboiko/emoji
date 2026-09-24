@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +47,11 @@ class DisputeResolution(BaseModel):
 
 class VerificationDecision(BaseModel):
     verified: bool
+
+
+class PlatformStoreUpdate(BaseModel):
+    display_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    description: Optional[str] = Field(None, max_length=1000)
 
 
 class SellerAction(BaseModel):
@@ -255,7 +260,13 @@ async def list_sellers(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(SellerProfile).options(selectinload(SellerProfile.user))
+    # Магазин площадки сюда не попадает: у него нет владельца, его
+    # нельзя заблокировать, и правится он отдельной ручкой
+    stmt = (
+        select(SellerProfile)
+        .options(selectinload(SellerProfile.user))
+        .where(SellerProfile.is_platform.is_(False))
+    )
     if status:
         stmt = stmt.where(SellerProfile.status == status)
 
@@ -327,6 +338,74 @@ async def change_seller_status(
 
     await db.commit()
     return {"status": seller.status.value}
+
+
+@router.get("/platform-store")
+async def get_platform_store(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Магазин самой площадки.
+
+    Такой же продавец, как остальные, только заполняет его администратор,
+    а не владелец. Строка заводится миграцией — если её нет, это сломанная
+    база, а не штатный случай.
+    """
+    store = await _platform_store(db)
+    return {
+        "id": str(store.id),
+        "display_name": store.display_name,
+        "description": store.description,
+        "avatar_url": store.avatar_url,
+        "is_verified": store.is_verified,
+    }
+
+
+@router.patch("/platform-store")
+async def update_platform_store(
+    payload: PlatformStoreUpdate,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    store = await _platform_store(db)
+
+    if payload.display_name is not None:
+        store.display_name = payload.display_name.strip()
+    if payload.description is not None:
+        store.description = payload.description.strip() or None
+
+    await db.commit()
+    return {"display_name": store.display_name, "description": store.description}
+
+
+@router.post("/platform-store/avatar")
+async def upload_platform_store_avatar(
+    image: UploadFile = File(...),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Логотип площадки — те же проверки, что у логотипа продавца."""
+    from routes.p2p import _save_listing_image
+
+    store = await _platform_store(db)
+    store.avatar_url = await _save_listing_image(image, subdir="stores")
+    await db.commit()
+    return {"avatar_url": store.avatar_url}
+
+
+async def _platform_store(db: AsyncSession) -> SellerProfile:
+    store = (
+        await db.execute(
+            select(SellerProfile).where(SellerProfile.is_platform.is_(True))
+        )
+    ).scalars().first()
+    if store is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Магазин площадки не заведён — не накачена миграция b1c2d3e4f5a6",
+        )
+    return store
 
 
 @router.post("/sellers/{seller_id}/verify")

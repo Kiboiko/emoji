@@ -8,7 +8,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import type { Product, Review } from '@/types';
-import { AuthorTag } from '@/components/ProductCard/AuthorTag';
+import { StoreLine } from '@/components/StoreLine/StoreLine';
 import './ProductDetails.css';
 
 export const ProductDetails: React.FC = () => {
@@ -262,9 +262,10 @@ export const ProductDetails: React.FC = () => {
                         )}
                         <h1>{product.name}</h1>
 
-                        {/* Чей это товар. У подписки здесь канал — до этого
-                            покупатель не видел, в какой канал он платит. */}
-                        <AuthorTag product={product} size="md" />
+                        {/* Чей это товар и переход в его магазин.
+                            Именно здесь, а не в сетке каталога: там магазин
+                            перетягивал внимание с самого товара. */}
+                        <StoreLine product={product} />
 
                         {product.is_active === false && (
                             <div className="product-unavailable">

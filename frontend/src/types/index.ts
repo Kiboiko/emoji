@@ -34,14 +34,56 @@ export interface Product {
     /** Товар пользователя, а не площадки: оплата уходит в escrow */
     is_p2p?: boolean;
 
-    /** Кто стоит за товаром: продавец, канал или (если пусто) сама площадка */
-    author_kind?: 'seller' | 'channel' | null;
+    /** Чей это магазин: продавца, канала или самой площадки */
+    author_kind?: 'seller' | 'channel' | 'platform' | null;
+    /** id магазина — по нему строится ссылка на его витрину */
+    author_id?: string | null;
     author_name?: string | null;
+    author_avatar?: string | null;
     author_verified?: boolean;
     author_rating?: number | null;
     author_deals?: number;
     /** @username канала — у продавца такого адреса нет */
     author_link?: string | null;
+}
+
+/** Карточка товара на витрине магазина: автор там один и назван сверху */
+export interface StoreProduct {
+    id: string;
+    name: string;
+    price_usdt: string;
+    image_url: string;
+    type: string;
+    is_top: boolean;
+}
+
+export type StoreKind = 'seller' | 'channel' | 'platform';
+
+export interface Store {
+    kind: StoreKind;
+    id: string;
+    name: string;
+    avatar_url: string | null;
+    description: string | null;
+    is_verified: boolean;
+    rating: number | null;
+    rating_count: number;
+    deals_completed: number;
+    /** Только у канала */
+    link?: string | null;
+    subscribers?: number;
+    products: StoreProduct[];
+}
+
+/** Счётчики разделов кабинета — для строк на главной странице профиля */
+export interface ProfileSummary {
+    is_seller: boolean;
+    seller_id: string | null;
+    listings: number;
+    channels: number;
+    orders: number;
+    subscriptions: number;
+    deals: number;
 }
 
 export interface CartItem {
@@ -211,8 +253,14 @@ export interface Deal {
 
 export interface SellerProfile {
     registered: boolean;
+    /** id профиля — по нему строится адрес витрины магазина */
+    id?: string;
     display_name?: string;
     payout_wallet?: string;
+    /** Логотип магазина. Грузится вручную: аватар Telegram сделал бы магазин похожим на личный аккаунт */
+    avatar_url?: string | null;
+    description?: string | null;
+    is_verified?: boolean;
     status?: 'active' | 'restricted' | 'banned';
     restricted_until?: string | null;
     restriction_reason?: string | null;

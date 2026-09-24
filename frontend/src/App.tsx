@@ -13,16 +13,19 @@ import { Cart } from './pages/Cart/Cart';
 import { Checkout } from './pages/Checkout/Checkout';
 import { ProductDetails } from './pages/ProductDetails/ProductDetails';
 import { Profile } from './pages/Profile/Profile';
+import { Store } from './pages/Store/Store';
+import {
+    MyListingsPage, MyChannelsPage, MyOrdersPage, MyDealsPage, MySubscriptionsPage,
+} from './pages/Cabinet/CabinetRoutes';
 
 // Dev-вход без Telegram. Включается только на локальной сборке
 // (VITE_DEV_AUTH=true) и дополнительно требует DEBUG=true на бэкенде.
 const DEV_AUTH_ENABLED = import.meta.env.VITE_DEV_AUTH === 'true';
 
-// Placeholder components for other pages
-// История заказов живёт в профиле, а отдельная страница так и осталась
-// заглушкой «Coming Soon». Редирект вместо неё: по ссылке из старой переписки
-// или закладки человек попадает туда, где заказы действительно есть.
-const Orders = () => <Navigate to="/profile" replace />;
+// Отдельной страницы заказов не было — только заглушка «Coming Soon».
+// Редирект вместо неё: по ссылке из старой переписки или закладки человек
+// попадает туда, где заказы действительно есть.
+const Orders = () => <Navigate to="/my/orders" replace />;
 
 export const App: React.FC = () => {
     const { initData, startParam, isReady } = useTelegram();
@@ -194,6 +197,43 @@ const AppContent: React.FC = () => {
                         <Profile />
                     </PageTransition>
                 } />
+
+                {/* Витрина магазина. kind в адресе, а не два разных маршрута:
+                    страница одна, разница только в источнике данных */}
+                <Route path="/store/:kind/:id" element={
+                    <PageTransition>
+                        <Store />
+                    </PageTransition>
+                } />
+
+                {/* Разделы кабинета на своих экранах: в одном свитке при
+                    десятке товаров и подписок всё превращалось в мелкую кашу */}
+                <Route path="/my/listings" element={
+                    <PageTransition>
+                        <MyListingsPage />
+                    </PageTransition>
+                } />
+                <Route path="/my/channels" element={
+                    <PageTransition>
+                        <MyChannelsPage />
+                    </PageTransition>
+                } />
+                <Route path="/my/orders" element={
+                    <PageTransition>
+                        <MyOrdersPage />
+                    </PageTransition>
+                } />
+                <Route path="/my/deals" element={
+                    <PageTransition>
+                        <MyDealsPage />
+                    </PageTransition>
+                } />
+                <Route path="/my/subscriptions" element={
+                    <PageTransition>
+                        <MySubscriptionsPage />
+                    </PageTransition>
+                } />
+
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </AnimatePresence>

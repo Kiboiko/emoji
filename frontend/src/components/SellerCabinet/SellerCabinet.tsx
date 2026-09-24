@@ -28,12 +28,14 @@ const EMPTY_FORM: DraftForm = { name: '', description: '', price_usd: '', catego
  * Свёрнут по умолчанию: большинству пользователей продавать нечего, и
  * разворачивать форму на пол-экрана всем подряд незачем.
  */
-export const SellerCabinet: React.FC = () => {
+export const SellerCabinet: React.FC<{ standalone?: boolean }> = ({ standalone = false }) => {
     const { language } = useAuthStore();
     const { haptic } = useTelegram();
     const showToast = useToastStore((s) => s.show);
 
-    const [open, setOpen] = useState(false);
+    // На своём экране сворачивать нечего: заголовок даёт сама
+    // страница, и содержимое должно быть видно сразу
+    const [open, setOpen] = useState(standalone);
     const [profile, setProfile] = useState<SellerProfile | null>(null);
     const [listings, setListings] = useState<Listing[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -74,16 +76,18 @@ export const SellerCabinet: React.FC = () => {
     if (!profile) return null;
 
     return (
-        <div className="seller-section glass-card">
-            <button className="seller-head" onClick={() => setOpen(!open)}>
-                <span className="seller-head-left">
-                    <Store size={18} />
-                    {profile.registered
-                        ? t('Кабинет продавца', 'Seller cabinet')
-                        : t('Продавать на площадке', 'Sell on the marketplace')}
-                </span>
-                {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
+        <div className={standalone ? 'seller-section seller-section--page' : 'seller-section glass-card'}>
+            {!standalone && (
+                <button className="seller-head" onClick={() => setOpen(!open)}>
+                    <span className="seller-head-left">
+                        <Store size={18} />
+                        {profile.registered
+                            ? t('Кабинет продавца', 'Seller cabinet')
+                            : t('Продавать на площадке', 'Sell on the marketplace')}
+                    </span>
+                    {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
+            )}
 
             {open && !profile.registered && (
                 <SellerRegistration
@@ -244,7 +248,9 @@ const SellerSummary: React.FC<{
     const [editing, setEditing] = useState(false);
     const [name, setName] = useState(profile.display_name ?? '');
     const [wallet, setWallet] = useState(profile.payout_wallet ?? '');
+    const [about, setAbout] = useState(profile.description ?? '');
     const [saving, setSaving] = useState(false);
+    const avatarInput = useRef<HTMLInputElement | null>(null);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
@@ -255,6 +261,7 @@ const SellerSummary: React.FC<{
             await p2pApi.updateSeller({
                 display_name: name.trim(),
                 payout_wallet: wallet.trim(),
+                description: about.trim(),
             });
             haptic.notification('success');
             await onSaved();
@@ -266,8 +273,69 @@ const SellerSummary: React.FC<{
         }
     };
 
+    const pickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        // Сбрасываем сразу: иначе повторный выбор того же файла
+        // не даст события
+        e.target.value = '';
+        if (!file) return;
+
+        setSaving(true);
+        try {
+            await p2pApi.uploadSellerAvatar(file);
+            haptic.notification('success');
+            await onSaved();
+        } catch (err) {
+            onError(err, t('Не удалось загрузить логотип', 'Logo upload failed'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <div className="seller-summary">
+            {/* Логотип грузится вручную, а не тянется из Telegram, как у
+                каналов: с личным аватаром магазин выглядит аккаунтом */}
+            <div className="seller-brand">
+                <button
+                    className="seller-logo"
+                    onClick={() => avatarInput.current?.click()}
+                    disabled={saving}
+                    title={t('Загрузить логотип', 'Upload a logo')}
+                >
+                    {profile.avatar_url
+                        ? <img src={profile.avatar_url} alt="" />
+                        : <span aria-hidden="true">
+                            {(profile.display_name ?? '?').trim().charAt(0).toUpperCase()}
+                          </span>}
+                    <span className="seller-logo-edit"><Upload size={12} /></span>
+                </button>
+
+                <div className="seller-brand-text">
+                    <div className="seller-brand-name">{profile.display_name}</div>
+                    {/* Продавец должен видеть свой магазин глазами покупателя:
+                        иначе непонятно, что вообще даёт логотип и описание */}
+                    {profile.id && (
+                        <a className="seller-storefront" href={`/store/seller/${profile.id}`}>
+                            {t('Открыть витрину', 'Open storefront')}
+                        </a>
+                    )}
+                    <div className="seller-brand-hint">
+                        {profile.avatar_url
+                            ? t('Нажмите, чтобы заменить логотип', 'Tap to replace the logo')
+                            : t('Добавьте логотип магазина', 'Add a store logo')}
+                    </div>
+                </div>
+            </div>
+
+            <input
+                ref={avatarInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                hidden
+                onChange={pickAvatar}
+            />
+
             <div className="seller-stats">
                 <div className="seller-stat">
                     <span className="seller-stat-value">
@@ -312,9 +380,12 @@ const SellerSummary: React.FC<{
 
             {!editing ? (
                 <div className="seller-identity">
-                    <div>
+                    <div className="seller-identity-text">
                         <div className="seller-name">{profile.display_name}</div>
                         <div className="seller-wallet">{profile.payout_wallet}</div>
+                        {profile.description && (
+                            <div className="seller-about">{profile.description}</div>
+                        )}
                     </div>
                     <button className="seller-icon-btn" onClick={() => setEditing(true)}>
                         <Pencil size={14} />
@@ -329,6 +400,13 @@ const SellerSummary: React.FC<{
                         minLength={2}
                         maxLength={100}
                         required
+                    />
+                    <textarea
+                        className="seller-input seller-textarea"
+                        value={about}
+                        onChange={(e) => setAbout(e.target.value)}
+                        placeholder={t('О магазине (необязательно)', 'About the store (optional)')}
+                        maxLength={1000}
                     />
                     <input
                         className="seller-input"

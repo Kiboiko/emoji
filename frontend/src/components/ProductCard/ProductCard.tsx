@@ -2,7 +2,6 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ShoppingCart, Flame } from 'lucide-react';
 import type { Product } from '@/types';
-import { AuthorTag } from './AuthorTag';
 import './ProductCard.css';
 
 interface ProductCardProps {
@@ -45,10 +44,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </div>
 
             <div className="product-info">
-                {/* Чей это товар. У подписки здесь канал, у P2P — продавец,
-                    у товара площадки строки нет вовсе. */}
-                <AuthorTag product={product} />
-
+                {/* Магазин на карточке не подписываем: в сетке каталога он
+                    перетягивал внимание с самого товара. Место магазина — на
+                    странице товара, где по нему можно и перейти. */}
                 <h3 className="product-name">{product.name}</h3>
                 <p className="product-description">{product.description}</p>
 
