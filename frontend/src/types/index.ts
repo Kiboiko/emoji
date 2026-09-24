@@ -93,6 +93,8 @@ export interface CartItem {
     quantity: number;
     subtotal_usdt: number;
     subtotal_ton?: number;
+    /** Потолок количества: меньшее из «в одни руки» и остатка. null — без ограничений */
+    max_quantity?: number | null;
     type?: 'digital' | 'service' | 'instruction';
     user_data?: {
         link?: string;

@@ -40,6 +40,23 @@ export const Cart: React.FC = () => {
         const oldCart = cart;
         if (!cart) return;
 
+        // Страж ДО оптимистичного обновления. Без него корзина успевала
+        // нарисовать новое число и пересчитать сумму, сервер отказывал, и
+        // всё откатывалось — цифра мигала.
+        const target = cart.items.find((item) => item.id === itemId);
+        const ceiling = target?.max_quantity ?? null;
+
+        if (ceiling !== null && newQuantity > ceiling) {
+            haptic.notification('error');
+            showToast(
+                language === 'ru'
+                    ? `Больше ${ceiling} шт. этого товара взять нельзя`
+                    : `You cannot take more than ${ceiling} of this item`,
+                'error',
+            );
+            return;
+        }
+
         const updatedItems = cart.items.map(item =>
             item.id === itemId ? { ...item, quantity: newQuantity, subtotal_usdt: item.price_usdt * newQuantity } : item
         );
@@ -175,6 +192,16 @@ export const Cart: React.FC = () => {
 
                                 <div className="item-price">
                                     <span className="item-total">${item.subtotal_usdt.toFixed(2)}</span>
+                                    {/* Потолок называем только когда в него упёрлись:
+                                        иначе погасший «плюс» ничего не объясняет */}
+                                    {item.max_quantity != null
+                                        && item.quantity >= item.max_quantity && (
+                                        <span className="item-limit">
+                                            {language === 'ru'
+                                                ? `макс. ${item.max_quantity}`
+                                                : `max ${item.max_quantity}`}
+                                        </span>
+                                    )}
                                     {/* Цена за штуку — только когда штук больше одной:
                                         иначе непонятно, откуда взялась сумма */}
                                     {item.quantity > 1 && (
@@ -195,6 +222,8 @@ export const Cart: React.FC = () => {
                                     <span className="quantity-value">{item.quantity}</span>
                                     <button
                                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                        disabled={item.max_quantity != null
+                                            && item.quantity >= item.max_quantity}
                                         aria-label={language === 'ru' ? 'Больше' : 'Increase'}
                                     >
                                         <Plus size={15} />

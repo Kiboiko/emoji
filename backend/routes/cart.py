@@ -13,6 +13,18 @@ from utils.auth import get_current_user
 router = APIRouter(prefix="/api/cart", tags=["Cart"])
 
 
+def _quantity_ceiling(product: Product) -> int | None:
+    """
+    Сколько штук этого товара можно держать в корзине. None — без ограничений.
+
+    Ограничений два и они разные: max_quantity — сколько разрешено взять в одни
+    руки, stock — сколько вообще есть. Витрине важен меньший из двух: именно о
+    него упрётся покупатель.
+    """
+    limits = [value for value in (product.max_quantity, product.stock) if value is not None]
+    return min(limits) if limits else None
+
+
 @router.get("", response_model=CartResponse)
 async def get_cart(
     lang: str = "ru",
@@ -48,6 +60,10 @@ async def get_cart(
                 "quantity": cart_item.quantity,
                 "user_data": cart_item.user_data,
                 "type": product.type,
+                # Потолок количества нужен витрине, чтобы погасить «плюс»
+                # заранее. Без него корзина рисовала новое число и сумму до
+                # ответа сервера, а сервер отказывал — цифра успевала мигнуть.
+                "max_quantity": _quantity_ceiling(product),
                 "subtotal_usdt": item_total_usdt,
                 "subtotal_ton": item_total_ton
             })
@@ -156,6 +172,10 @@ async def update_cart_item(
             raise HTTPException(status_code=400, detail=f"Minimum quantity is {product.min_quantity}")
         if product.max_quantity and item_data.quantity > product.max_quantity:
             raise HTTPException(status_code=400, detail=f"Maximum quantity is {product.max_quantity}")
+        # Сток проверялся только при добавлении в корзину: можно было
+        # положить последнюю штуку, а потом плюсом набрать больше, чем есть
+        if product.stock is not None and item_data.quantity > product.stock:
+            raise HTTPException(status_code=400, detail=f"Only {product.stock} left in stock")
     
     cart_item.quantity = item_data.quantity
     await db.commit()

@@ -225,3 +225,103 @@ class TestCancelOrder:
 
         await db.refresh(unique_item)
         assert unique_item.stock == 1
+
+
+class TestQuantityCeiling:
+    """
+    Потолок количества и его соблюдение при ПРАВКЕ, а не только при добавлении.
+
+    Заказчик нажимал «плюс» у штучного товара: количество и сумма на мгновение
+    менялись, и только потом приходил отказ. Витрина рисовала новое значение,
+    не зная предела, — а предел ей никто не сообщал.
+    """
+
+    async def test_cart_reports_the_ceiling(self, db, user_factory, unique_item):
+        buyer = await user_factory(username="ceiling_buyer")
+        db.add(CartItem(
+            id=uuid.uuid4(), user_id=buyer.id,
+            product_id=unique_item.id, quantity=1,
+        ))
+        await db.flush()
+
+        cart = await cart_routes.get_cart(user=buyer, db=db)
+
+        assert cart.items[0]["max_quantity"] == 1
+
+    async def test_ceiling_is_the_smaller_of_the_two_limits(
+        self, db, user_factory, category,
+    ):
+        """Разрешено взять 5, а на складе 2 — потолок равен двум."""
+        product = Product(
+            id=uuid.uuid4(),
+            name_ru="Ключи", name_en="Keys",
+            description_ru="Описание", description_en="Description",
+            price_usdt=Decimal("3.00"), image_url="/uploads/x.jpg",
+            category_id=category.id, stock=2, type="digital",
+            max_quantity=5, content_data={},
+        )
+        db.add(product)
+        buyer = await user_factory(username="ceiling_buyer2")
+        db.add(CartItem(
+            id=uuid.uuid4(), user_id=buyer.id, product_id=product.id, quantity=1,
+        ))
+        await db.flush()
+
+        cart = await cart_routes.get_cart(user=buyer, db=db)
+
+        assert cart.items[0]["max_quantity"] == 2
+
+    async def test_no_limits_means_no_ceiling(self, db, user_factory, category):
+        """Услуга без ограничений не должна гасить «плюс»."""
+        product = Product(
+            id=uuid.uuid4(),
+            name_ru="Услуга", name_en="Service",
+            description_ru="Описание", description_en="Description",
+            price_usdt=Decimal("1.00"), image_url="/uploads/x.jpg",
+            category_id=category.id, stock=None, type="service",
+            max_quantity=None, content_data={},
+        )
+        db.add(product)
+        buyer = await user_factory(username="ceiling_buyer3")
+        db.add(CartItem(
+            id=uuid.uuid4(), user_id=buyer.id, product_id=product.id, quantity=1,
+        ))
+        await db.flush()
+
+        cart = await cart_routes.get_cart(user=buyer, db=db)
+
+        assert cart.items[0]["max_quantity"] is None
+
+    async def test_update_cannot_exceed_stock(self, db, user_factory, category):
+        """
+        Смежная дыра: сток проверялся только при добавлении в корзину.
+
+        Можно было положить последнюю штуку, а потом «плюсом» набрать больше,
+        чем существует, — и упереться в это уже на оплате.
+        """
+        product = Product(
+            id=uuid.uuid4(),
+            name_ru="Остаток", name_en="Last ones",
+            description_ru="Описание", description_en="Description",
+            price_usdt=Decimal("4.00"), image_url="/uploads/x.jpg",
+            category_id=category.id, stock=2, type="digital",
+            max_quantity=None, content_data={},
+        )
+        db.add(product)
+        buyer = await user_factory(username="stock_buyer")
+        item = CartItem(
+            id=uuid.uuid4(), user_id=buyer.id, product_id=product.id, quantity=2,
+        )
+        db.add(item)
+        await db.flush()
+
+        from schemas.cart import CartItemUpdate
+
+        with pytest.raises(HTTPException) as exc:
+            await cart_routes.update_cart_item(
+                str(item.id), CartItemUpdate(quantity=3), user=buyer, db=db,
+            )
+        assert exc.value.status_code == 400
+
+        await db.refresh(item)
+        assert item.quantity == 2, "количество изменилось вопреки отказу"
