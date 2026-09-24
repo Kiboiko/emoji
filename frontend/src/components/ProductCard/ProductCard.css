@@ -84,8 +84,9 @@
 .product-rating {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     align-self: flex-start;
+    max-width: 100%;
     margin-top: 8px;
     padding: 3px 8px;
     border-radius: 8px;
@@ -96,11 +97,17 @@
     line-height: 1.3;
 }
 
-.product-star {
-    color: var(--accent-warning);
+.product-rating-value {
+    flex-shrink: 0;
 }
 
+/* Счётчик отзывов ужимается первым: при трёхзначном числе на узкой
+   карточке звёзды важнее, чем «· 341» целиком */
 .product-reviews {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-weight: 400;
     color: var(--text-secondary);
 }

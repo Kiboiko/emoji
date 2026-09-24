@@ -1,0 +1,34 @@
+/* --- Пять звёзд с дробной заливкой -------------------------------------
+   Контурный ряд снизу, залитый сверху в блоке, обрезанном по ширине. */
+
+.stars {
+    position: relative;
+    display: inline-block;
+    /* Без этого строка наследует межстрочный интервал текста, и звёзды
+       съезжают относительно числа рядом */
+    line-height: 0;
+    flex-shrink: 0;
+}
+
+.stars-row {
+    display: flex;
+    gap: 1px;
+}
+
+.stars-empty {
+    color: var(--text-tertiary);
+}
+
+.stars-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+    color: var(--accent-warning);
+}
+
+/* Звёзды в залитом ряду не должны сжиматься: иначе вместо обрезки по
+   ширине они просто ужмутся, и заливка перестанет показывать долю */
+.stars-fill svg {
+    flex-shrink: 0;
+}

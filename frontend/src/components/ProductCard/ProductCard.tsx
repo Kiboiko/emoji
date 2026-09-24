@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Flame, ShoppingCart, Star } from 'lucide-react';
+import { Flame, ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
+import { Stars } from '@/components/Stars/Stars';
 import './ProductCard.css';
 
 interface ProductCardProps {
@@ -58,12 +59,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
                 <span className="product-name">{product.name}</span>
 
-                {/* Одна звезда и число, а не пять звёзд: пять штук в 12 px
-                    сливаются в полоску, а «4.9» читается сразу */}
+                {/* Пять звёзд с дробной заливкой и число рядом. Одной звезды
+                    было мало: по ней не видно, 4.2 там или 4.9, а число без
+                    звёзд не читается с одного взгляда. */}
                 {rating != null && (
                     <span className="product-rating">
-                        <Star size={12} fill="currentColor" className="product-star" />
-                        {rating}
+                        <Stars value={rating} size={12} />
+                        <span className="product-rating-value">{rating}</span>
                         <span className="product-reviews">· {product.reviews_count}</span>
                     </span>
                 )}
