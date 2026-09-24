@@ -7,6 +7,7 @@ import { ProductCard } from '@/components/ProductCard/ProductCard';
 import { ProductCardSkeleton } from '@/components/ProductCard/ProductCardSkeleton';
 import { productsApi, categoriesApi, cartApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
+import { useToastStore, errorText } from '@/store/toastStore';
 import { useCartStore } from '@/store/cartStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { useWebSocket } from '@/hooks/useWebSocket';
@@ -18,6 +19,7 @@ export const Home: React.FC = () => {
     const { language } = useAuthStore();
     const { setCart } = useCartStore();
     const { haptic } = useTelegram();
+    const showToast = useToastStore((s) => s.show);
 
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -145,13 +147,14 @@ export const Home: React.FC = () => {
             await cartApi.addToCart(productId, product.min_quantity || 1);
             setCart(await cartApi.getCart(language));
             haptic.notification('success');
-        } catch (error: any) {
-            console.error('Failed to add to cart:', error);
-            if (error.response?.data?.detail) {
-                alert(`Error: ${error.response.data.detail}`);
-            } else {
-                haptic.notification('error');
-            }
+        } catch (error) {
+            // Был window.alert с техническим текстом вроде «Error: Not
+            // authenticated»: системное окно поверх Mini App выглядит
+            // чужеродно и ничего человеку не объясняет
+            haptic.notification('error');
+            showToast(errorText(error, language === 'ru'
+                ? 'Не удалось добавить в корзину'
+                : 'Failed to add to cart'), 'error');
         }
     };
 

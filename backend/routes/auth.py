@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Header, Body, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -10,6 +11,8 @@ from utils.auth import validate_telegram_webapp_data, create_access_token, gener
 from pydantic import BaseModel
 
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -220,6 +223,17 @@ async def authenticate_telegram(
         }
     
     except ValueError as e:
+        # Причина отказа в лог, иначе неудачный вход — просто 401 в доступе
+        # и никаких следов о том, что именно не сошлось. Имена полей — без
+        # значений: в initData лежат данные пользователя и подпись.
+        from urllib.parse import parse_qs
+
+        try:
+            fields = ",".join(sorted(parse_qs(init_data).keys()))
+        except Exception:
+            fields = "не разобрался"
+
+        logger.warning("[AUTH] Вход отклонён: %s. Поля initData: %s", e, fields)
         raise HTTPException(status_code=401, detail=str(e))
     except HTTPException:
         raise

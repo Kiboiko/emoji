@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from '@/store/authStore';
 import type { AuthorChannel, ChannelStatus, ProfileSummary, Store } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -22,17 +23,32 @@ apiClient.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
+// Адреса самого входа. Их 401 означает «войти не вышло», а не «токен
+// протух» — разница важная, см. ниже.
+const LOGIN_PATHS = ['/auth/telegram', '/auth/dev'];
+
 // Response interceptor for error handling
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
-            // Clear token but DO NOT force reload/redirect
-            // Background requests (e.g. cart update during ban) should fail silently or show UI error
-            localStorage.removeItem('access_token');
+        const url: string = error.config?.url ?? '';
+        const isLogin = LOGIN_PATHS.some((path) => url.includes(path));
+
+        if (error.response?.status === 401 && !isLogin) {
+            // Перезагрузку не дёргаем: фоновый запрос заблокированного
+            // пользователя уходил бы в бесконечный цикл перезагрузок.
+            //
+            // Чистим И хранилище, И состояние. Раньше стирался только
+            // localStorage, а в хранилище zustand токен оставался: приложение
+            // считало себя авторизованным, а заголовок уже никуда не подставлялся.
+            useAuthStore.getState().logout();
             localStorage.removeItem('user');
-            // window.location.href = '/'; // DISABLED: Causes infinite reload loops during ban
         }
+
+        // А вот при провале самого входа токен НЕ трогаем. Приложение
+        // перевходит при каждом открытии, и один неудачный вход уносил с собой
+        // рабочий токен с прошлого раза — после чего ломалось всё сразу:
+        // и корзина, и профиль.
         return Promise.reject(error);
     }
 );

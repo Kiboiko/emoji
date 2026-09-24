@@ -18,6 +18,9 @@ export const Profile: React.FC = () => {
     const { haptic } = useTelegram();
     const [stats, setStats] = useState<ReferralStats | null>(null);
     const [summary, setSummary] = useState<ProfileSummary | null>(null);
+    // Ошибка отдельным флагом: без него пустой stats означал и «ещё
+    // грузится», и «не загрузилось» — и скелетон крутился вечно
+    const [statsFailed, setStatsFailed] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [walletAddress, setWalletAddress] = useState('');
     const [withdrawAmount, setWithdrawAmount] = useState<string>('');
@@ -28,6 +31,7 @@ export const Profile: React.FC = () => {
     }, []);
 
     const loadStats = async () => {
+        setStatsFailed(false);
         try {
             // Сами списки здесь больше не нужны — только числа рядом
             // со строками разделов
@@ -39,6 +43,7 @@ export const Profile: React.FC = () => {
             setSummary(summaryData);
         } catch (error) {
             console.error('Failed to load data:', error);
+            setStatsFailed(true);
         }
     };
 
@@ -220,7 +225,18 @@ export const Profile: React.FC = () => {
                     {/* Пока статистика не пришла, показывать $0.00 нельзя:
                         человек с балансом видит ноль и решает, что деньги
                         пропали. Скелетон честнее — «ещё не знаем». */}
-                    {stats === null ? (
+                    {statsFailed ? (
+                        <div className="refwallet-failed">
+                            <span>
+                                {language === 'ru'
+                                    ? 'Не удалось загрузить баланс'
+                                    : 'Could not load the balance'}
+                            </span>
+                            <button className="refwallet-retry" onClick={loadStats}>
+                                {language === 'ru' ? 'Повторить' : 'Retry'}
+                            </button>
+                        </div>
+                    ) : stats === null ? (
                         <div className="skeleton refwallet-skeleton" />
                     ) : (
                         <div className="refwallet-amount">

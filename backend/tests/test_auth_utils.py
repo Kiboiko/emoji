@@ -63,6 +63,25 @@ def make_init_data(
     return urlencode({**fields, "hash": _sign(fields, token)})
 
 
+def make_init_data_with_signature(*, token: str = BOT_TOKEN) -> str:
+    """
+    initData с полем signature — так его присылают свежие клиенты Telegram.
+
+    signature это отдельная подпись Ed25519 для проверки без токена бота, и
+    в расчёт HMAC она не входит: подписывается всё, кроме hash и signature.
+    """
+    fields = {
+        "auth_date": str(int(time.time())),
+        "query_id": "AAHtest",
+        "user": json.dumps(DEFAULT_USER, separators=(",", ":"), ensure_ascii=False),
+    }
+    return urlencode({
+        **fields,
+        "signature": "3S1Cg7c0Vb1cQpKQ2_fake_ed25519_signature",
+        "hash": _sign(fields, token),
+    })
+
+
 @pytest.fixture(autouse=True)
 def bot_token(monkeypatch):
     """Подставляем известный токен: подпись считается именно от него."""
@@ -328,3 +347,23 @@ class TestCurrentUser:
         admin = await user_factory(username="real_admin", is_admin=True)
 
         assert (await auth.require_admin(user=admin)).id == admin.id
+
+
+def test_signature_field_does_not_break_the_check():
+    """
+    Вход ломался ровно на этом: signature попадал в data-check-string, HMAC
+    не сходился, и клиент получал 401 «Invalid hash». Выглядело как «то
+    работает, то нет» — потому что старые клиенты signature не присылают.
+    """
+    data = auth.validate_telegram_webapp_data(make_init_data_with_signature())
+
+    assert data["telegram_id"] == DEFAULT_USER["id"]
+    assert data["username"] == DEFAULT_USER["username"]
+
+
+def test_signature_does_not_let_a_forged_hash_through():
+    """Исключение signature из проверки не должно ослаблять саму проверку."""
+    forged = make_init_data_with_signature(token="999:WRONG-TOKEN")
+
+    with pytest.raises(ValueError):
+        auth.validate_telegram_webapp_data(forged)

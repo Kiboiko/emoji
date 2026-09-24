@@ -646,3 +646,32 @@ html[data-platform="android"] .refwallet-card {
         transform: rotate(360deg);
     }
 }
+
+/* Баланс не загрузился. Раньше на этом месте вечно крутился скелетон:
+   пустой ответ и ошибка выглядели одинаково. */
+.refwallet-failed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--accent-error);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.refwallet-retry {
+    flex-shrink: 0;
+    padding: var(--space-1-5) var(--space-3);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: var(--radius-sm, 8px);
+    background: transparent;
+    color: var(--accent-error);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}

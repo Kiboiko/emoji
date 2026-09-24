@@ -35,9 +35,17 @@ def validate_telegram_webapp_data(init_data: str) -> dict:
             raise ValueError("Hash not found in initData")
         
         # Create data-check-string
+        #
+        # Из строки исключаются ДВА поля, а не одно. Помимо hash, Telegram
+        # добавил в initData signature — отдельную подпись Ed25519 для проверки
+        # без токена бота. Его тоже нельзя брать в расчёт HMAC.
+        #
+        # Именно на этом ломался вход: клиенты, присылающие signature,
+        # получали «Invalid hash» и 401, остальные заходили нормально — отсюда и
+        # вид «то работает, то нет».
         data_check_arr = []
         for key, value in parsed_data.items():
-            if key != 'hash':
+            if key not in ('hash', 'signature'):
                 data_check_arr.append(f"{key}={value[0]}")
         
         data_check_arr.sort()
