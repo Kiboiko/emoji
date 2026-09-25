@@ -72,23 +72,14 @@ export const Home: React.FC = () => {
         );
     }, [products, searchQuery]);
 
-    // Магазины и хиты — это витрина для разглядывания. Как только человек
-    // ищет или выбрал категорию, он знает, что ему нужно, и всё лишнее между
-    // ним и результатом только мешает.
+    // Строка магазинов — витрина для разглядывания. Как только человек ищет
+    // или выбрал категорию, он знает, что ему нужно, и всё лишнее между ним
+    // и результатом только мешает.
     const isBrowsing = !searchQuery.trim() && !selectedCategory;
 
-    const hits = React.useMemo(
-        () => (isBrowsing ? filteredProducts.filter((p) => p.is_top).slice(0, 8) : []),
-        [filteredProducts, isBrowsing],
-    );
-
-    // Хиты не повторяем ниже: один и тот же товар дважды на экране читается
-    // как сбой, а не как подборка
-    const rest = React.useMemo(() => {
-        if (!hits.length) return filteredProducts;
-        const shown = new Set(hits.map((p) => p.id));
-        return filteredProducts.filter((p) => !shown.has(p.id));
-    }, [filteredProducts, hits]);
+    // Ленты хитов здесь была: широкая карточка не помещалась в ширину экрана
+    // и вторая обрезалась пополам. Хиты и так идут первыми в общей сетке —
+    // их сортирует loadData, — и плашка «Хит» на картинке никуда не делась.
 
     const loadData = async (silent = false) => {
         try {
@@ -299,25 +290,10 @@ export const Home: React.FC = () => {
                     </>
                 )}
 
-                {hits.length > 0 && (
-                    <>
-                        <h2 className="home-section">{t('Хиты', 'Top picks')}</h2>
-                        <div className="hits-scroll">
-                            {hits.map((product) => (
-                                <div className="hits-item" key={product.id}>
-                                    <ProductCard
-                                        product={product}
-                                        onClick={() => openProduct(product.id)}
-                                        onAddToCart={() => handleAddToCart(product.id)}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    </>
-                )}
-
-                {hits.length > 0 && rest.length > 0 && (
-                    <h2 className="home-section">{t('Все товары', 'All products')}</h2>
+                {/* Заголовок нужен только когда выше стоят магазины: иначе
+                    сетка повисает под чужим разделом */}
+                {isBrowsing && !isLoading && stores.length > 1 && (
+                    <h2 className="home-section">{t('Товары', 'Products')}</h2>
                 )}
 
                 {/* Products */}
@@ -348,11 +324,11 @@ export const Home: React.FC = () => {
                     </div>
                 ) : view === 'list' ? (
                     <div className="products-list">
-                        {rest.map(renderProduct)}
+                        {filteredProducts.map(renderProduct)}
                     </div>
                 ) : (
                     <div className="products-grid">
-                        {rest.map((product, index) => (
+                        {filteredProducts.map((product, index) => (
                             <motion.div
                                 key={product.id}
                                 initial={{ opacity: 0, y: 20 }}

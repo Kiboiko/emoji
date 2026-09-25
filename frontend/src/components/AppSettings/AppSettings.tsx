@@ -41,10 +41,12 @@ export const AppSettings: React.FC = () => {
             <h2 className="appsettings-title">{t('Настройки', 'Settings')}</h2>
 
             <div className="appsettings-row">
-                <span className="appsettings-icon" aria-hidden="true">
-                    <Globe size={18} />
-                </span>
-                <span className="appsettings-label">{t('Язык', 'Language')}</span>
+                <div className="appsettings-head">
+                    <span className="appsettings-icon" aria-hidden="true">
+                        <Globe size={18} />
+                    </span>
+                    <span className="appsettings-label">{t('Язык', 'Language')}</span>
+                </div>
 
                 <div className="appsettings-switch">
                     <button
@@ -67,10 +69,12 @@ export const AppSettings: React.FC = () => {
             </div>
 
             <div className="appsettings-row">
-                <span className="appsettings-icon" aria-hidden="true">
-                    <Palette size={18} />
-                </span>
-                <span className="appsettings-label">{t('Оформление', 'Appearance')}</span>
+                <div className="appsettings-head">
+                    <span className="appsettings-icon" aria-hidden="true">
+                        <Palette size={18} />
+                    </span>
+                    <span className="appsettings-label">{t('Оформление', 'Appearance')}</span>
+                </div>
 
                 <div className="appsettings-switch">
                     <button

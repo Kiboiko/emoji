@@ -1,7 +1,9 @@
 /* --- Настройки приложения ----------------------------------------------
-   Две строки: ярлык слева, переключатель справа. Переключатель переносится
-   под ярлык, когда не помещается, — «Как в Telegram» по-русски длиннее
-   половины экрана, и без переноса подпись ужималась бы до многоточия. */
+   Ярлык сверху, переключатель под ним во всю ширину.
+
+   Сначала они стояли в одну строку. «Как в Telegram» по-русски занимает
+   половину экрана, ярлык ужимался до нуля, но текст из него никуда не
+   девался и выезжал под переключатель — подписи налезали друг на друга. */
 
 .appsettings {
     margin-top: var(--space-5);
@@ -16,11 +18,16 @@
 
 .appsettings-row {
     display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-3);
+    flex-direction: column;
+    gap: var(--space-2-5);
     padding: var(--space-3) 0;
     border-bottom: 1px solid var(--border-color);
+}
+
+.appsettings-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
 }
 
 .appsettings-row:last-child {
@@ -34,8 +41,6 @@
 }
 
 .appsettings-label {
-    flex: 1;
-    min-width: 0;
     font-size: var(--font-md);
     font-weight: var(--weight-medium);
     color: var(--text-primary);
@@ -51,18 +56,26 @@
     background: var(--bg-tertiary);
 }
 
+/* Положения делят ширину поровну, а не по длине подписи: иначе «Как в
+   Telegram» съедает две трети, и по двум оставшимся огрызкам не попасть. */
 .appsettings-switch button {
-    /* 36px — нижняя граница комфортной тап-цели по высоте; ширину набирают
-       подписи, а строка целиком набирает запас отступами сверху и снизу */
+    flex: 1;
+    min-width: 0;
+    /* 36px — нижняя граница комфортной тап-цели по высоте; строка целиком
+       набирает запас отступами сверху и снизу */
     min-height: 36px;
-    padding: 0 var(--space-3);
+    padding: 0 var(--space-1-5);
     border: none;
     border-radius: 6px;
     background: transparent;
     color: var(--text-secondary);
     font-family: inherit;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: var(--weight-medium);
+    /* Страховка на совсем узкий экран: лучше «Как в Telegra…», чем подпись
+       поверх соседней */
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
     cursor: pointer;
     transition: background-color var(--transition-fast), color var(--transition-fast);
