@@ -1,18 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { PackageOpen } from 'lucide-react';
+import { LayoutGrid, List, PackageOpen } from 'lucide-react';
 import { Header } from '@/components/Header/Header';
 import { ProductCard } from '@/components/ProductCard/ProductCard';
 import { ProductCardSkeleton } from '@/components/ProductCard/ProductCardSkeleton';
-import { productsApi, categoriesApi, cartApi } from '@/api/client';
+import { ProductRow, ProductRowSkeleton } from '@/components/ProductRow/ProductRow';
+import { StoreStrip } from '@/components/StoreStrip/StoreStrip';
+import { productsApi, categoriesApi, cartApi, storesApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useCartStore } from '@/store/cartStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import type { Product, Category } from '@/types';
+import type { Product, Category, StoreCard } from '@/types';
 import './Home.css';
+
+type CatalogView = 'grid' | 'list';
+
+const VIEW_KEY = 'catalog-view';
+
+/**
+ * Вид каталога помним между заходами: человек выбирает его один раз под свою
+ * привычку, и сбрасывать выбор на каждом открытии Mini App — значит заставлять
+ * выбирать заново. localStorage в приватном окне может бросить, поэтому обе
+ * стороны обёрнуты.
+ */
+const readView = (): CatalogView => {
+    try {
+        return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid';
+    } catch {
+        return 'grid';
+    }
+};
 
 export const Home: React.FC = () => {
     const navigate = useNavigate();
@@ -23,9 +43,23 @@ export const Home: React.FC = () => {
 
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
+    const [stores, setStores] = useState<StoreCard[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
+    const [view, setView] = useState<CatalogView>(readView);
+
+    const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
+
+    const changeView = (next: CatalogView) => {
+        setView(next);
+        haptic.impact('light');
+        try {
+            localStorage.setItem(VIEW_KEY, next);
+        } catch {
+            // Приватный режим: вид просто не переживёт перезапуск
+        }
+    };
 
     // Client-side filtering for search - no flickering!
     const filteredProducts = React.useMemo(() => {
@@ -38,6 +72,24 @@ export const Home: React.FC = () => {
         );
     }, [products, searchQuery]);
 
+    // Магазины и хиты — это витрина для разглядывания. Как только человек
+    // ищет или выбрал категорию, он знает, что ему нужно, и всё лишнее между
+    // ним и результатом только мешает.
+    const isBrowsing = !searchQuery.trim() && !selectedCategory;
+
+    const hits = React.useMemo(
+        () => (isBrowsing ? filteredProducts.filter((p) => p.is_top).slice(0, 8) : []),
+        [filteredProducts, isBrowsing],
+    );
+
+    // Хиты не повторяем ниже: один и тот же товар дважды на экране читается
+    // как сбой, а не как подборка
+    const rest = React.useMemo(() => {
+        if (!hits.length) return filteredProducts;
+        const shown = new Set(hits.map((p) => p.id));
+        return filteredProducts.filter((p) => !shown.has(p.id));
+    }, [filteredProducts, hits]);
+
     const loadData = async (silent = false) => {
         try {
             if (!silent) setIsLoading(true);
@@ -49,6 +101,14 @@ export const Home: React.FC = () => {
             } catch (error) {
                 console.error('Failed to load categories:', error);
                 if (!categories.length) setCategories([]);
+            }
+
+            // Магазины независимо: без них каталог работает, и падение этого
+            // запроса не должно оставлять человека без товаров
+            try {
+                setStores(await storesApi.getStores());
+            } catch (error) {
+                console.error('Failed to load stores:', error);
             }
 
             // Fetch products independently (without search query - search is client-side now)
@@ -106,7 +166,7 @@ export const Home: React.FC = () => {
                 // but usually stock restore comes via manual edit or cancellation.
                 // If cancellation restores stock, we might want it to appear?
                 // For now, let's stick to update/remove logic to fix the "hiding" issue.
-                // If we want it to appear, we should probably check filter criteria and add it, 
+                // If we want it to appear, we should probably check filter criteria and add it,
                 // but reloading is safer for "appearing".
                 // Let's at least handle the "remove" part correctly.
                 return prev;
@@ -158,19 +218,56 @@ export const Home: React.FC = () => {
         }
     };
 
-    // Detect if user is on mobile device (not desktop Telegram)
-    const isMobile = React.useMemo(() => {
-        const tg = (window as any).Telegram?.WebApp;
-        if (!tg) return false;
-        return tg.platform === 'ios' || tg.platform === 'android';
-    }, []);
+    const openProduct = (id: string) => navigate(`/product/${id}`);
+
+    // Товар рисуется одним из двух видов, но данные и обработчики у них общие
+    const renderProduct = (product: Product) => (
+        view === 'list'
+            ? (
+                <ProductRow
+                    key={product.id}
+                    product={product}
+                    onClick={() => openProduct(product.id)}
+                    onAddToCart={() => handleAddToCart(product.id)}
+                />
+            )
+            : (
+                <ProductCard
+                    product={product}
+                    onClick={() => openProduct(product.id)}
+                    onAddToCart={() => handleAddToCart(product.id)}
+                />
+            )
+    );
 
     return (
         <div className="home-page">
             <Header
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
-                pageTitle={isMobile ? (language === 'ru' ? 'Каталог' : 'Catalog') : undefined}
+                pageTitle={t('Каталог', 'Catalog')}
+                actions={(
+                    <div className="view-switch">
+                        <button
+                            type="button"
+                            className={view === 'grid' ? 'active' : ''}
+                            onClick={() => changeView('grid')}
+                            aria-label={t('Показать сеткой', 'Show as grid')}
+                            aria-pressed={view === 'grid'}
+                        >
+                            <LayoutGrid size={17} />
+                        </button>
+                        <button
+                            type="button"
+                            className={view === 'list' ? 'active' : ''}
+                            onClick={() => changeView('list')}
+                            aria-label={t('Показать списком', 'Show as list')}
+                            aria-pressed={view === 'list'}
+                        >
+                            <List size={17} />
+                        </button>
+                    </div>
+                )}
             />
 
             <div className="container">
@@ -180,7 +277,7 @@ export const Home: React.FC = () => {
                         className={`category-chip ${!selectedCategory ? 'active' : ''}`}
                         onClick={() => setSelectedCategory(null)}
                     >
-                        {language === 'ru' ? 'Все' : 'All'}
+                        {t('Все', 'All')}
                     </button>
                     {categories.map((category) => (
                         <button
@@ -193,33 +290,69 @@ export const Home: React.FC = () => {
                     ))}
                 </div>
 
-                {/* Products Grid */}
-                <div className="products-grid">
-                    {isLoading ? (
-                        Array.from({ length: 6 }).map((_, i) => (
-                            <ProductCardSkeleton key={i} />
-                        ))
-                    ) : filteredProducts.length === 0 ? (
-                        <div className="empty-state">
-                            <PackageOpen size={40} className="empty-state-icon" />
-                            <div className="empty-state-title">
-                                {language === 'ru' ? 'Товары не найдены' : 'No products found'}
-                            </div>
-                            {/* Разные подсказки: «ничего нет» и «ничего не подошло под
-                                фильтр» — это разные ситуации, и совет во втором случае
-                                должен быть про фильтр, а не про магазин */}
-                            <p className="empty-state-text">
-                                {searchQuery || selectedCategory
-                                    ? (language === 'ru'
-                                        ? 'Попробуйте изменить запрос или выбрать другую категорию.'
-                                        : 'Try a different search or category.')
-                                    : (language === 'ru'
-                                        ? 'Каталог пока пуст. Загляните позже.'
-                                        : 'The catalog is empty for now. Check back later.')}
-                            </p>
+                {/* Магазины. Одного магазина мало: строка из единственного
+                    кружка ничего не рассказывает и только занимает место. */}
+                {isBrowsing && !isLoading && stores.length > 1 && (
+                    <>
+                        <h2 className="home-section">{t('Магазины', 'Stores')}</h2>
+                        <StoreStrip stores={stores} />
+                    </>
+                )}
+
+                {hits.length > 0 && (
+                    <>
+                        <h2 className="home-section">{t('Хиты', 'Top picks')}</h2>
+                        <div className="hits-scroll">
+                            {hits.map((product) => (
+                                <div className="hits-item" key={product.id}>
+                                    <ProductCard
+                                        product={product}
+                                        onClick={() => openProduct(product.id)}
+                                        onAddToCart={() => handleAddToCart(product.id)}
+                                    />
+                                </div>
+                            ))}
                         </div>
-                    ) : (
-                        filteredProducts.map((product, index) => (
+                    </>
+                )}
+
+                {hits.length > 0 && rest.length > 0 && (
+                    <h2 className="home-section">{t('Все товары', 'All products')}</h2>
+                )}
+
+                {/* Products */}
+                {isLoading ? (
+                    <div className={view === 'list' ? 'products-list' : 'products-grid'}>
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            view === 'list'
+                                ? <ProductRowSkeleton key={i} />
+                                : <ProductCardSkeleton key={i} />
+                        ))}
+                    </div>
+                ) : filteredProducts.length === 0 ? (
+                    <div className="empty-state">
+                        <PackageOpen size={40} className="empty-state-icon" />
+                        <div className="empty-state-title">
+                            {t('Товары не найдены', 'No products found')}
+                        </div>
+                        {/* Разные подсказки: «ничего нет» и «ничего не подошло под
+                            фильтр» — это разные ситуации, и совет во втором случае
+                            должен быть про фильтр, а не про магазин */}
+                        <p className="empty-state-text">
+                            {searchQuery || selectedCategory
+                                ? t('Попробуйте изменить запрос или выбрать другую категорию.',
+                                    'Try a different search or category.')
+                                : t('Каталог пока пуст. Загляните позже.',
+                                    'The catalog is empty for now. Check back later.')}
+                        </p>
+                    </div>
+                ) : view === 'list' ? (
+                    <div className="products-list">
+                        {rest.map(renderProduct)}
+                    </div>
+                ) : (
+                    <div className="products-grid">
+                        {rest.map((product, index) => (
                             <motion.div
                                 key={product.id}
                                 initial={{ opacity: 0, y: 20 }}
@@ -229,15 +362,11 @@ export const Home: React.FC = () => {
                                 // тысячный — почти через минуту
                                 transition={{ delay: Math.min(index * 0.05, 0.4) }}
                             >
-                                <ProductCard
-                                    product={product}
-                                    onClick={() => navigate(`/product/${product.id}`)}
-                                    onAddToCart={() => handleAddToCart(product.id)}
-                                />
+                                {renderProduct(product)}
                             </motion.div>
-                        ))
-                    )}
-                </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             <div className="bottom-nav-spacer" />

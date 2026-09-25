@@ -1,127 +1,113 @@
+/* --- Шапка каталога ----------------------------------------------------
+   Плоская заливка вместо стекла: размытие считалось на каждый кадр
+   прокрутки, а шапка залипает сверху и перерисовывается всю дорогу.
+
+   Ширину держит .container страницы, поэтому свои боковые поля здесь
+   совпадают с ним — 16px. */
+
 .header {
     position: sticky;
     top: 0;
     z-index: var(--z-sticky);
-    padding: 16px;
-    margin-bottom: 20px;
+    padding: var(--space-4) var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-primary);
 }
 
-.header-row {
+.header-top {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.header-title {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 22px;
+    font-weight: var(--weight-bold);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+
+.header-actions {
+    flex-shrink: 0;
+    display: flex;
+    gap: var(--space-2);
 }
 
 .search-container {
     position: relative;
     display: flex;
     align-items: center;
-    flex: 1;
 }
 
 .search-icon {
     position: absolute;
     left: 14px;
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
     pointer-events: none;
 }
 
 .search-input {
     width: 100%;
-    height: 48px;
-    padding: 0 16px 0 44px;
-    border-radius: 12px;
+    height: 44px;
+    padding: 0 14px 0 42px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     background: var(--bg-secondary);
     color: var(--text-primary);
+    font-family: inherit;
     font-size: 15px;
-    transition: all 0.2s ease;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
     outline: none;
 }
 
 .search-input::placeholder {
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
 }
 
 .search-input:focus {
     border-color: var(--accent-primary);
-    background: var(--bg-card);
-    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
+    background: var(--bg-primary);
 }
 
-.header-actions {
+/* --- Переключатель вида каталога ---------------------------------------
+   Две кнопки в общей канавке: активная — приподнятая плашка, как в
+   сегментных переключателях, к которым привыкли на телефоне. */
+
+.view-switch {
     display: flex;
-    gap: 8px;
-    flex-shrink: 0;
+    padding: 3px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
 }
 
-.icon-btn {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-card);
-    color: var(--text-primary);
+.view-switch button {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 38px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.2s ease;
-    position: relative;
-    flex-shrink: 0;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
-.icon-btn:hover {
-    background: var(--bg-tertiary);
-    transform: scale(1.05);
-}
-
-.icon-btn:active {
-    transform: scale(0.95);
-}
-
-.lang-code {
-    position: absolute;
-    bottom: 3px;
-    right: 3px;
-    font-size: 8px;
-    font-weight: 700;
+.view-switch button.active {
+    background: var(--bg-primary);
     color: var(--accent-primary);
 }
 
-/* Page title in header - mobile only */
-.header-page-title {
-    display: none;
-}
-
-/* Mobile styles - apply ONLY on iOS/Android platforms */
+/* На iOS и Android шапка Mini App перекрывает верх страницы, поэтому под
+   ней нужен запас. На десктопе его быть не должно — там пустая полоса. */
 html[data-platform="ios"] .header,
 html[data-platform="android"] .header {
-    margin-top: 0;
-    margin-bottom: 12px;
-    margin-left: 0;
-    margin-right: 0;
-    border-radius: 0;
-    padding: calc(env(safe-area-inset-top, 0px) + 48px) 16px 16px 16px;
-    position: sticky;
-    top: 0;
-}
-
-html[data-platform="ios"] .header-page-title,
-html[data-platform="android"] .header-page-title {
-    display: block;
-    text-align: center;
-    margin-bottom: 16px;
-}
-
-html[data-platform="ios"] .header-page-title h1,
-html[data-platform="android"] .header-page-title h1 {
-    font-size: 24px;
-    font-weight: 700;
-    margin: 0;
-}
-
-html[data-platform="ios"] .header-row,
-html[data-platform="android"] .header-row {
-    margin-top: 20px;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 48px);
 }

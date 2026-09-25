@@ -7,8 +7,7 @@
     display: flex;
     gap: 8px;
     overflow-x: auto;
-    padding: 0 16px 20px;
-    margin-bottom: 20px;
+    padding: 0 16px 16px;
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -17,31 +16,79 @@
     display: none;
 }
 
+/* Чипс — заливка без рамки. Рамка вокруг серой плашки давала двойной
+   контур, а у выбранной категории ещё и спорила с заливкой. */
 .category-chip {
     flex-shrink: 0;
-    padding: 10px 20px;
-    border-radius: 20px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-card);
+    height: 34px;
+    padding: 0 16px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: var(--bg-tertiary);
     color: var(--text-secondary);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
     white-space: nowrap;
 }
 
-@media (hover: hover) {
-    .category-chip:hover {
-        background: var(--bg-tertiary);
-    }
+/* Плоская заливка без свечения: тем же приёмом покрашена кнопка покупки,
+   и градиент с ореолом рядом с ней выглядел как другая кнопка. */
+.category-chip.active {
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+    font-weight: var(--weight-semibold);
 }
 
-.category-chip.active {
-    background: var(--gradient-primary);
-    color: var(--accent-contrast);
-    border-color: transparent;
-    box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
+/* --- Заголовок раздела -------------------------------------------------
+   Разделы появились, когда на главную вышли магазины и хиты: до этого весь
+   экран был одной сеткой и подписывать было нечего. */
+.home-section {
+    margin: 0 0 var(--space-2-5);
+    padding: 0 var(--space-4);
+    font-size: var(--font-lg);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+}
+
+/* --- Хиты ---------------------------------------------------------------
+   Лента вбок, а не сетка: подборка не должна занимать экран целиком, иначе
+   до обычных товаров придётся долистывать.
+
+   Карточка шире, чем в сетке, но та же самая: у неё ширина в процентах, и
+   в ячейке 74% она просто растягивается. Своя вёрстка здесь уже однажды
+   разошлась с каталожной. */
+.hits-scroll {
+    display: flex;
+    gap: var(--space-3);
+    overflow-x: auto;
+    padding: 0 var(--space-4) var(--space-5);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.hits-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.hits-item {
+    /* Край следующей карточки виден — это единственный признак того, что
+       ленту можно листать */
+    flex: 0 0 min(74%, 300px);
+}
+
+/* --- Список -------------------------------------------------------------
+   Второй вид каталога. Поля те же, что у сетки на телефоне, иначе при
+   переключении вида содержимое прыгает вбок. */
+.products-list {
+    padding: 0 var(--space-4);
+}
+
+@media (max-width: 640px) {
+    .products-list {
+        padding: 0 var(--space-3);
+    }
 }
 
 /* minmax(0, 1fr), а не 1fr: у колонки `1fr` нижняя граница — auto, то есть
