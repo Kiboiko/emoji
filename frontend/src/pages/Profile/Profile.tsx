@@ -9,6 +9,7 @@ import { useToastStore } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { PaymentWallet } from '@/components/PaymentWallet/PaymentWallet';
 import { CabinetNav, type CabinetLink } from '@/components/CabinetNav/CabinetNav';
+import { AppSettings } from '@/components/AppSettings/AppSettings';
 import type { ReferralStats, ProfileSummary } from '@/types';
 import './Profile.css';
 
@@ -316,6 +317,11 @@ export const Profile: React.FC = () => {
                 {/* Разделы уехали на отдельные экраны: в одном свитке при
                     десятке товаров и подписок всё превращалось в мелкую кашу. */}
                 <CabinetNav links={cabinetLinks} />
+
+                {/* Язык и оформление. Были кнопками в шапке каталога, где
+                    висели на каждом экране ради настройки, которую меняют
+                    один раз. */}
+                <AppSettings />
             </div>
 
             <div className="bottom-nav-spacer" />
