@@ -79,40 +79,76 @@
     position: relative;
     margin-top: -40px;
     z-index: 10;
-    padding: 0 20px 180px;
-    /* Increased bottom padding for action bar visibility */
+    /* Запас под панель покупки даёт .bottom-content-spacer — здесь он был
+       задан второй раз, и внизу копилось триста пикселей пустоты */
+    padding: 0 20px;
 }
 
 .product-header {
-    margin-bottom: 16px;
+    margin-bottom: var(--space-5);
 }
 
+/* 24/700 вместо 28/800: на телефоне название в две строки сверхжирным
+   кеглем занимало четверть экрана и спорило с ценой */
 .product-header h1 {
-    font-size: 28px;
-    font-weight: 800;
-    line-height: 1.2;
-    margin-top: 8px;
+    margin: 0 0 var(--space-3);
+    font-size: 24px;
+    font-weight: var(--weight-bold);
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
 }
 
-.product-badge {
+/* Плашка хита на картинке — тот же вид, что на карточке каталога. Цвета
+   жёсткие, а не токены: плашка лежит на фотографии, а та от темы не зависит. */
+.product-tag-hero {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 1;
+    padding: 5px 11px;
+    border-radius: var(--radius-sm);
+    background: rgba(10, 10, 10, 0.75);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: var(--weight-bold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.3;
+}
+
+/* Цена и оценка в одной строке: по краям, потому что это два разных ответа
+   на два разных вопроса — «сколько» и «стоит ли» */
+.product-facts {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}
+
+/* Сплошной цвет вместо градиента с обрезкой по тексту: градиентная надпись
+   на тонких знаках доллара расслаивалась на полосы */
+.price-large {
+    font-size: 28px;
+    font-weight: var(--weight-bold);
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+
+.rating-link {
     display: inline-flex;
     align-items: center;
-    padding: 4px 10px;
-    border-radius: 8px;
-    margin-bottom: 8px;
-}
-
-.product-price-block {
-    margin-bottom: 24px;
-}
-
-.price-large {
-    font-size: 32px;
-    font-weight: 800;
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    gap: var(--space-1-5);
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+    cursor: pointer;
 }
 
 .product-description-block h3 {
@@ -131,58 +167,43 @@
     overflow-wrap: anywhere;
 }
 
+/* Панель прижата к низу экрана, а не висит над ним отдельной плашкой со
+   скруглением и тенью: плавающая панель закрывала текст под собой и на
+   тёмной теме читалась как вторая страница поверх первой. */
 .action-bar {
     position: fixed;
-    bottom: 24px;
-    left: 16px;
-    right: 16px;
-    padding: 14px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: var(--space-3) var(--space-4) calc(var(--space-4) + var(--safe-area-bottom));
     z-index: var(--z-overlay);
-    background: var(--bg-glass);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border-color);
-    border-radius: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-primary);
 }
 
 .bottom-content-spacer {
-    height: 140px;
-    /* Space for the fixed action bar */
+    height: 120px;
     width: 100%;
-}
-
-.price-compact {
-    display: flex;
-    flex-direction: column;
-}
-
-.price-compact span:first-child {
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-
-.price-compact .value {
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--text-primary);
 }
 
 .btn-add-to-cart {
     display: flex;
     align-items: center;
-    gap: 8px;
-    background: var(--gradient-primary);
-    color: var(--accent-contrast);
+    justify-content: center;
+    gap: var(--space-2-5);
+    width: 100%;
+    height: 52px;
+    padding: 0;
     border: none;
-    padding: 12px 24px;
-    border-radius: 12px;
-    font-weight: 600;
+    border-radius: 14px;
+    /* Плоская заливка, как у кнопки покупки на карточке: градиент с ореолом
+       рядом с ней выглядел как кнопка из другого приложения */
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+    font-family: inherit;
+    font-weight: var(--weight-bold);
     font-size: 16px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
 }
 
 .btn-back {
@@ -215,57 +236,14 @@
 }
 
 /* Reviews Badge */
-.reviews-badge {
-    display: inline-flex;
-    align-items: center;
-    background: var(--bg-tertiary);
-    /* Dark blue-ish in dark mode */
-    border-radius: 12px;
-    padding: 6px 12px;
-    margin-top: 12px;
-    cursor: pointer;
-    transition: transform 0.2s;
-}
-
-.reviews-badge:active {
-    transform: scale(0.95);
-}
-
-.badge-left {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 600;
-    color: var(--text-primary);
-    /* Blue text */
-}
-
-.badge-divider {
-    width: 1px;
-    height: 16px;
-    background: var(--border-color);
-    margin: 0 10px;
-}
-
-.badge-right {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.star-icon {
-    color: var(--accent-warning);
-}
-
 .rating-value {
-    font-weight: 700;
+    font-weight: var(--weight-bold);
     color: var(--text-primary);
 }
 
 .rating-count {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin-left: 2px;
+    font-weight: var(--weight-medium);
+    color: var(--accent-primary);
 }
 
 /* Reviews Block */
@@ -323,18 +301,8 @@
     font-weight: 500;
 }
 
-.review-rating {
-    display: flex;
-    gap: 2px;
-}
-
-.star-filled {
-    color: var(--accent-warning);
-}
-
-.star-empty {
-    color: var(--text-tertiary);
-}
+/* Звёзды в отзыве рисует общий компонент Stars — тот же, что на карточках
+   каталога. Здесь был свой цикл из пяти иконок с округлением оценки. */
 
 .review-text {
     font-size: 14px;

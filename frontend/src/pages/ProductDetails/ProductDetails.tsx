@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ShoppingCart, Flame, Star, MessageSquare, Plus, Minus } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Plus, Minus } from 'lucide-react';
 import { productsApi, cartApi, reviewsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
@@ -9,6 +9,8 @@ import { useTelegram } from '@/hooks/useTelegram';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import type { Product, Review } from '@/types';
 import { StoreLine } from '@/components/StoreLine/StoreLine';
+import { Stars } from '@/components/Stars/Stars';
+import { useToastStore, errorText } from '@/store/toastStore';
 import './ProductDetails.css';
 
 export const ProductDetails: React.FC = () => {
@@ -17,6 +19,7 @@ export const ProductDetails: React.FC = () => {
     const { language } = useAuthStore();
     const { setCart } = useCartStore();
     const { haptic } = useTelegram();
+    const showToast = useToastStore((state) => state.show);
 
     const [product, setProduct] = useState<Product | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -174,14 +177,16 @@ export const ProductDetails: React.FC = () => {
             setCart(cart);
             haptic.notification('success');
             navigate('/cart');
-        } catch (error: any) {
+        } catch (error) {
+            // Был window.alert с техническим текстом вроде «Error: Not
+            // authenticated»: системное окно поверх Mini App выглядит
+            // чужеродно и ничего человеку не объясняет. В каталоге это уже
+            // исправлено, здесь окно оставалось.
             console.error('Failed to add to cart:', error);
-            if (error.response?.data?.detail) {
-                alert(`Error: ${error.response.data.detail}`);
-            } else {
-                alert('Connection error');
-                haptic.notification('error');
-            }
+            haptic.notification('error');
+            showToast(errorText(error, language === 'ru'
+                ? 'Не удалось добавить в корзину'
+                : 'Failed to add to cart'), 'error');
         }
     };
 
@@ -224,9 +229,28 @@ export const ProductDetails: React.FC = () => {
         );
     }
 
-    const averageRating = reviews.length > 0
-        ? (reviews.reduce((acc, curr) => acc + (curr.rating || 0), 0) / reviews.length).toFixed(1)
-        : '0.0';
+    // Оценку считает сервер по всем отзывам сразу. Раньше она усреднялась
+    // по загруженной первой странице: у товара с сорока отзывами на экране
+    // стояло среднее первых пяти, и оно менялось по мере пролистывания.
+    const rating = product.rating ?? null;
+    const reviewsCount = product.reviews_count ?? 0;
+
+    const reviewWord = (n: number) => {
+        if (language !== 'ru') return n === 1 ? 'review' : 'reviews';
+        const tail = n % 10;
+        const hundred = n % 100;
+        if (tail === 1 && hundred !== 11) return 'отзыв';
+        if (tail >= 2 && tail <= 4 && (hundred < 12 || hundred > 14)) return 'отзыва';
+        return 'отзывов';
+    };
+
+    // Столько же, сколько уйдёт в корзину: handleAddToCart зажимает
+    // количество теми же границами
+    const chargedQuantity = Math.min(
+        Math.max(quantity, product.min_quantity || 1),
+        product.max_quantity || 999999,
+    );
+    const total = (product.price_usdt * chargedQuantity).toFixed(2);
 
     return (
         <motion.div
@@ -244,6 +268,10 @@ export const ProductDetails: React.FC = () => {
                 transition={{ delay: 0.1, duration: 0.4 }}
             >
                 <img src={product.image_url} alt={product.name} />
+                {/* Плашка на картинке — как на карточке в каталоге. Раньше
+                    это был градиентный кружок с огоньком и без подписи: что
+                    он означает, понять было неоткуда. */}
+                {product.is_top && <span className="product-tag-hero">Хит</span>}
                 <div className="hero-gradient" />
             </motion.div>
 
@@ -254,44 +282,41 @@ export const ProductDetails: React.FC = () => {
                 transition={{ delay: 0.2, duration: 0.4 }}
             >
                 <div className="product-header">
-                    <div>
-                        {product.is_top && (
-                            <div className="product-badge badge-primary">
-                                <Flame size={14} fill="currentColor" />
-                            </div>
-                        )}
-                        <h1>{product.name}</h1>
+                    <h1>{product.name}</h1>
 
-                        {/* Чей это товар и переход в его магазин.
-                            Именно здесь, а не в сетке каталога: там магазин
-                            перетягивал внимание с самого товара. */}
-                        <StoreLine product={product} />
+                    {/* Чей это товар и переход в его магазин.
+                        Именно здесь, а не в сетке каталога: там магазин
+                        перетягивал внимание с самого товара. */}
+                    <StoreLine product={product} />
 
-                        {product.is_active === false && (
-                            <div className="product-unavailable">
-                                {language === 'ru'
-                                    ? 'Товар снят с продажи'
-                                    : 'This item is no longer for sale'}
-                            </div>
-                        )}
-
-                        <div className="reviews-badge" onClick={handleBadgeClick}>
-                            <div className="badge-left">
-                                <MessageSquare size={16} />
-                                <span>{language === 'ru' ? 'Отзывы' : 'Reviews'}</span>
-                            </div>
-                            <div className="badge-divider" />
-                            <div className="badge-right">
-                                <Star size={16} fill="currentColor" className="star-icon" />
-                                <span className="rating-value">{averageRating}</span>
-                                <span className="rating-count">({reviews.length})</span>
-                            </div>
+                    {product.is_active === false && (
+                        <div className="product-unavailable">
+                            {language === 'ru'
+                                ? 'Товар снят с продажи'
+                                : 'This item is no longer for sale'}
                         </div>
-                    </div>
-                </div>
+                    )}
 
-                <div className="product-price-block">
-                    <span className="price-large">${product.price_usdt}</span>
+                    {/* Цена и оценка одной строкой. Раньше цена стояла
+                        отдельным блоком, а внизу её же показывала панель
+                        покупки — один и тот же доллар встречался трижды. */}
+                    <div className="product-facts">
+                        <span className="price-large">${product.price_usdt}</span>
+
+                        {rating != null && (
+                            <button
+                                type="button"
+                                className="rating-link"
+                                onClick={handleBadgeClick}
+                            >
+                                <Stars value={rating} size={14} />
+                                <span className="rating-value">{rating}</span>
+                                <span className="rating-count">
+                                    {reviewsCount} {reviewWord(reviewsCount)}
+                                </span>
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="product-description-block">
@@ -371,16 +396,7 @@ export const ProductDetails: React.FC = () => {
                                         </div>
                                         <span className="user-name">{review.fake_username || review.user?.first_name || 'User'}</span>
                                     </div>
-                                    <div className="review-rating">
-                                        {Array.from({ length: 5 }).map((_, i) => (
-                                            <Star
-                                                key={i}
-                                                size={12}
-                                                fill={i < (review.rating || 0) ? "currentColor" : "none"}
-                                                className={i < (review.rating || 0) ? "star-filled" : "star-empty"}
-                                            />
-                                        ))}
-                                    </div>
+                                    <Stars value={review.rating || 0} size={12} />
                                 </div>
                                 <p className="review-text">{review.text}</p>
                                 <span className="review-date">
@@ -417,16 +433,7 @@ export const ProductDetails: React.FC = () => {
                                             </div>
                                             <span className="user-name">{review.fake_username || review.user?.first_name || 'User'}</span>
                                         </div>
-                                        <div className="review-rating">
-                                            {Array.from({ length: 5 }).map((_, i) => (
-                                                <Star
-                                                    key={i}
-                                                    size={12}
-                                                    fill={i < (review.rating || 0) ? "currentColor" : "none"}
-                                                    className={i < (review.rating || 0) ? "star-filled" : "star-empty"}
-                                                />
-                                            ))}
-                                        </div>
+                                        <Stars value={review.rating || 0} size={12} />
                                     </div>
                                     <p className="review-text">{review.text}</p>
                                     <span className="review-date">
@@ -469,22 +476,21 @@ export const ProductDetails: React.FC = () => {
                 <div className="bottom-content-spacer" />
             </motion.div>
 
-            <div className="action-bar glass-card">
-                <div className="price-compact">
-                    <span>Total:</span>
-                    <span className="value">${product.price_usdt}</span>
-                </div>
+            {/* Одна кнопка во всю ширину, цена внутри неё. Подпись «Total:»
+                рядом врала: там стояла цена за штуку, а у услуги с
+                количеством к оплате уходило другое число. */}
+            <div className="action-bar">
                 <motion.button
                     className="btn-add-to-cart"
                     onClick={handleAddToCart}
-                    whileTap={{ scale: 0.95 }}
+                    whileTap={{ scale: 0.97 }}
                     /* Снятый с продажи товар открывается по старой ссылке, но
                        корзина его всё равно не примет — кнопку гасим здесь,
                        чтобы человек не упирался в ошибку после нажатия */
                     disabled={product.is_active === false}
                 >
-                    <span>{language === 'ru' ? 'В корзину' : 'Add to Cart'}</span>
                     <ShoppingCart size={20} />
+                    {language === 'ru' ? 'В корзину' : 'Add to cart'} · ${total}
                 </motion.button>
             </div>
         </motion.div>

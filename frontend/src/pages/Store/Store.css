@@ -81,8 +81,10 @@
     font-weight: 600;
 }
 
+/* Оценку красят сами звёзды, а число рядом — обычный текст. Раньше строка
+   целиком шла янтарным, и «3 сделок» рядом читалось как продолжение оценки. */
 .store-stat:first-child {
-    color: var(--accent-warning);
+    color: var(--text-primary);
 }
 
 .store-stat-dim {

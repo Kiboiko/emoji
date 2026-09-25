@@ -1,7 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BadgeCheck, ChevronRight, Star, Store } from 'lucide-react';
+import { BadgeCheck, ChevronRight, Store } from 'lucide-react';
 import type { Product } from '@/types';
+import { Stars } from '@/components/Stars/Stars';
 import './StoreLine.css';
 
 interface StoreLineProps {
@@ -61,7 +62,7 @@ export const StoreLine: React.FC<StoreLineProps> = ({ product }) => {
                     <span className="storeline-stats">
                         {author_rating != null && (
                             <span className="storeline-rating">
-                                <Star size={11} fill="currentColor" />
+                                <Stars value={author_rating} size={11} />
                                 {author_rating}
                             </span>
                         )}

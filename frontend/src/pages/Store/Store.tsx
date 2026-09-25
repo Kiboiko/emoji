@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BadgeCheck, Link2, Star, Store as StoreIcon, Users } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Link2, Store as StoreIcon, Users } from 'lucide-react';
 import { cartApi, storesApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { ProductCard } from '@/components/ProductCard/ProductCard';
+import { Stars } from '@/components/Stars/Stars';
 import type { Store as StoreData } from '@/types';
 import './Store.css';
 
@@ -132,7 +133,7 @@ export const Store: React.FC = () => {
                         <div className="store-stats">
                             {store.rating != null && (
                                 <span className="store-stat">
-                                    <Star size={13} fill="currentColor" />
+                                    <Stars value={store.rating} size={13} />
                                     {store.rating}
                                     <span className="store-stat-dim">({store.rating_count})</span>
                                 </span>
