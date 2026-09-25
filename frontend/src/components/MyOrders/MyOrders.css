@@ -239,9 +239,8 @@
     gap: 8px;
 }
 
-.btn-submit-review:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
+.btn-submit-review:active {
+    transform: scale(0.98);
 }
 
 .btn-submit-review:disabled {

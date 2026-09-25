@@ -40,7 +40,7 @@ export const BottomNav: React.FC = () => {
     ];
 
     return (
-        <nav className="bottom-nav glass-card">
+        <nav className="bottom-nav">
             {navItems.map((item) => (
                 <NavLink
                     key={item.to}

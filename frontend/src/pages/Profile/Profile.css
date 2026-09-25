@@ -147,14 +147,7 @@ html[data-platform="android"] .refwallet-card {
     font-size: var(--font-lg);
     font-weight: var(--weight-semibold);
     cursor: pointer;
-    box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.28);
-    transition: box-shadow var(--transition-base), transform var(--transition-fast);
-}
-
-@media (hover: hover) {
-    .refwallet-cta:hover:not(:disabled) {
-        box-shadow: 0 10px 28px rgba(var(--accent-rgb), 0.38);
-    }
+    transition: transform var(--transition-fast);
 }
 
 .refwallet-cta:active:not(:disabled) {

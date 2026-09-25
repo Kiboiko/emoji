@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Flame, ShoppingCart } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
 import { Stars } from '@/components/Stars/Stars';
 import './ProductCard.css';
@@ -49,12 +49,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 <span className="product-image">
                     <img src={product.image_url} alt="" loading="lazy" />
 
-                    {product.is_top && (
-                        <span className="product-tag">
-                            <Flame size={11} fill="currentColor" />
-                            Хит
-                        </span>
-                    )}
+                    {/* Без огонька: иконка мельче подписи, на фотографии
+                        превращалась в жёлтую кляксу и клиенту не нравилась */}
+                    {product.is_top && <span className="product-tag">Хит</span>}
                 </span>
 
                 <span className="product-name">{product.name}</span>
