@@ -335,3 +335,87 @@ async def test_store_products_carry_the_same_fields_as_catalog(
     assert card["is_top"] is True
     # Автор нужен карточке на обоих экранах одинаково
     assert card["author_kind"] == "platform"
+
+
+# ---------------------------------------------------------------------------
+# Список магазинов для главной
+# ---------------------------------------------------------------------------
+
+async def test_store_list_puts_platform_first(
+    db, platform_store, product_factory, user_factory,
+):
+    """Площадка — лицо маркета, поэтому стоит первой, а не по алфавиту."""
+    await product_factory(name="Товар площадки")
+
+    owner = await user_factory(username="list_owner")
+    db.add(SellerProfile(
+        id=uuid.uuid4(), user_id=owner.id,
+        display_name="Аптека", payout_wallet="UQListWallet0001",
+    ))
+    await db.flush()
+    await product_factory(owner=owner, name="Чужой товар")
+
+    listed = await stores.store_list(limit=12, db=db)
+
+    assert [item["kind"] for item in listed][:1] == ["platform"]
+    assert {item["name"] for item in listed} == {"Маркет", "Аптека"}
+
+
+async def test_store_list_skips_stores_without_products(
+    db, product_factory, user_factory,
+):
+    """
+    Магазин без товаров не показываем: витрина, на которой нечего купить,
+    разочаровывает ровно один раз.
+    """
+    seller_owner = await user_factory(username="has_goods")
+    empty_owner = await user_factory(username="no_goods")
+
+    db.add(SellerProfile(
+        id=uuid.uuid4(), user_id=seller_owner.id,
+        display_name="С товаром", payout_wallet="UQWithGoods00001",
+    ))
+    db.add(SellerProfile(
+        id=uuid.uuid4(), user_id=empty_owner.id,
+        display_name="Пустой", payout_wallet="UQNoGoods0000001",
+    ))
+    await db.flush()
+    await product_factory(owner=seller_owner, name="Единственный")
+
+    names = {item["name"] for item in await stores.store_list(limit=12, db=db)}
+
+    assert "С товаром" in names
+    assert "Пустой" not in names
+
+
+async def test_store_list_skips_banned_seller(db, product_factory, user_factory):
+    owner = await user_factory(username="banned_in_list")
+    db.add(SellerProfile(
+        id=uuid.uuid4(), user_id=owner.id,
+        display_name="Закрыто", payout_wallet="UQBannedList0001",
+        status=SellerStatus.BANNED,
+    ))
+    await db.flush()
+    await product_factory(owner=owner, name="Товар заблокированного")
+
+    names = {item["name"] for item in await stores.store_list(limit=12, db=db)}
+    assert "Закрыто" not in names
+
+
+async def test_store_list_counts_only_active_products(
+    db, product_factory, user_factory,
+):
+    owner = await user_factory(username="counts_owner")
+    db.add(SellerProfile(
+        id=uuid.uuid4(), user_id=owner.id,
+        display_name="Считаем", payout_wallet="UQCounting000001",
+    ))
+    await db.flush()
+    await product_factory(owner=owner, name="Живой")
+    await product_factory(owner=owner, name="Снятый", active=False)
+
+    listed = await stores.store_list(limit=12, db=db)
+    mine = [item for item in listed if item["name"] == "Считаем"]
+
+    assert mine, "магазин не попал в список"
+    assert mine[0]["products"] == 1

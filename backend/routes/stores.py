@@ -104,6 +104,134 @@ async def _seller_products(db: AsyncSession, seller: SellerProfile, lang: str) -
     return await _product_cards(db, list(rows), lang)
 
 
+@router.get("")
+async def store_list(
+    limit: int = Query(12, ge=1, le=40),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Магазины, у которых сейчас есть что купить.
+
+    Нужен главной. Товар теперь принадлежит магазину, но попасть в магазин
+    можно было только через карточку товара — то есть сначала выбрать вещь,
+    а уже потом узнать продавца. Здесь порядок обратный.
+
+    Пустые магазины не показываем: витрина без товаров разочаровывает ровно
+    один раз, и больше туда не заходят.
+    """
+    # --- продавцы: сколько у кого живых товаров, одним запросом
+    counted = (
+        await db.execute(
+            select(Product.owner_user_id, func.count(Product.id))
+            .where(Product.is_active.is_(True), Product.owner_user_id.is_not(None))
+            .group_by(Product.owner_user_id)
+        )
+    ).all()
+    by_user = {user_id: number for user_id, number in counted}
+
+    sellers: list[SellerProfile] = []
+    if by_user:
+        sellers = list(
+            (
+                await db.execute(
+                    select(SellerProfile).where(
+                        SellerProfile.user_id.in_(by_user.keys()),
+                        SellerProfile.status != SellerStatus.BANNED,
+                    )
+                )
+            ).scalars().all()
+        )
+
+    # --- площадка: её товары опознаются пустым владельцем, подписки не в счёт
+    platform_products = (
+        await db.execute(
+            select(func.count(Product.id)).where(
+                Product.is_active.is_(True),
+                Product.owner_user_id.is_(None),
+                Product.type != "subscription",
+            )
+        )
+    ).scalar() or 0
+    platform = (
+        await db.execute(
+            select(SellerProfile).where(SellerProfile.is_platform.is_(True))
+        )
+    ).scalars().first()
+
+    # --- каналы: товар подписки связан с каналом через тариф
+    channel_counts = (
+        await db.execute(
+            select(SubscriptionPlan.channel_id, func.count(Product.id))
+            .join(Product, Product.id == SubscriptionPlan.product_id)
+            .where(Product.is_active.is_(True))
+            .group_by(SubscriptionPlan.channel_id)
+        )
+    ).all()
+    by_channel = {channel_id: number for channel_id, number in channel_counts}
+
+    channels: list[Channel] = []
+    if by_channel:
+        channels = list(
+            (
+                await db.execute(
+                    select(Channel).where(
+                        Channel.id.in_(by_channel.keys()),
+                        Channel.status == ChannelStatus.ACTIVE,
+                    )
+                )
+            ).scalars().all()
+        )
+
+    items: list[dict] = []
+
+    if platform is not None and platform_products:
+        items.append({
+            "kind": "platform",
+            "id": str(platform.id),
+            "name": platform.display_name,
+            "avatar_url": platform.avatar_url,
+            "is_verified": bool(platform.is_verified),
+            "rating": platform.rating,
+            "products": platform_products,
+        })
+
+    for seller in sellers:
+        items.append({
+            "kind": "seller",
+            "id": str(seller.id),
+            "name": seller.display_name,
+            "avatar_url": seller.avatar_url,
+            "is_verified": bool(seller.is_verified),
+            "rating": seller.rating,
+            "products": by_user.get(seller.user_id, 0),
+        })
+
+    for channel in channels:
+        items.append({
+            "kind": "channel",
+            "id": str(channel.id),
+            "name": channel.title,
+            "avatar_url": channel.avatar_url,
+            "is_verified": bool(channel.is_verified),
+            # Рейтинга у канала нет: отзывы собираются по сделкам, а подписка
+            # идёт не через сделку
+            "rating": None,
+            "products": by_channel.get(channel.id, 0),
+        })
+
+    # Площадка первой — это лицо маркета. Дальше проверенные, дальше те, у
+    # кого товаров больше: у пустоватого магазина меньше причин быть в начале.
+    head = items[:1] if items and items[0]["kind"] == "platform" else []
+    tail = items[len(head):]
+    tail.sort(key=lambda item: (
+        not item["is_verified"],
+        -item["products"],
+        item["name"].lower(),
+    ))
+
+    return (head + tail)[:limit]
+
+
 @router.get("/seller/{seller_id}")
 async def seller_store(
     seller_id: uuid.UUID,

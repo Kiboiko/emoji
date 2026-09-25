@@ -53,6 +53,21 @@ export interface Product {
 
 export type StoreKind = 'seller' | 'channel' | 'platform';
 
+/**
+ * Магазин в строке на главной: только то, что помещается под кружком.
+ * Полная витрина — Store ниже.
+ */
+export interface StoreCard {
+    kind: StoreKind;
+    id: string;
+    name: string;
+    avatar_url: string | null;
+    is_verified: boolean;
+    rating: number | null;
+    /** Сколько товаров сейчас продаётся */
+    products: number;
+}
+
 export interface Store {
     kind: StoreKind;
     id: string;
