@@ -66,6 +66,9 @@ class SellerUpdate(BaseModel):
 
 class ListingCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=500)
+    # Необязательное: у кого товар только для русскоязычных, второе название
+    # заполнять незачем
+    name_en: Optional[str] = Field(None, min_length=3, max_length=500)
     description: str = Field(..., min_length=10, max_length=5000)
     price_usd: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2)
     category_id: Optional[uuid.UUID] = None
@@ -75,6 +78,7 @@ class ListingCreate(BaseModel):
 class ListingUpdate(BaseModel):
     """Правка заявки. Любое поле необязательно — меняем только присланные."""
     name: Optional[str] = Field(None, min_length=3, max_length=500)
+    name_en: Optional[str] = Field(None, max_length=500)
     description: Optional[str] = Field(None, min_length=10, max_length=5000)
     price_usd: Optional[Decimal] = Field(None, gt=0, max_digits=10, decimal_places=2)
     category_id: Optional[uuid.UUID] = None
@@ -350,6 +354,7 @@ async def my_listings(
         {
             "id": str(l.id),
             "name": l.name,
+            "name_en": l.name_en,
             "description": l.description,
             "price_usd": str(l.price_usd),
             "status": l.status.value,
@@ -405,6 +410,7 @@ async def create_listing(
         seller_id=profile.id,
         category_id=payload.category_id,
         name=payload.name.strip(),
+        name_en=(payload.name_en or "").strip() or None,
         description=payload.description.strip(),
         price_usd=payload.price_usd,
         status=ListingStatus.DRAFT,
@@ -521,6 +527,13 @@ async def update_listing(
     if payload.name is not None and payload.name.strip() != listing.name:
         listing.name = payload.name.strip()
         changed = True
+    if payload.name_en is not None:
+        # Пустая строка — осознанное «убрать английское название», поэтому
+        # None, а не пропуск: иначе стереть его было бы нечем
+        value = payload.name_en.strip() or None
+        if value != listing.name_en:
+            listing.name_en = value
+            changed = True
     if payload.description is not None and payload.description.strip() != listing.description:
         listing.description = payload.description.strip()
         changed = True

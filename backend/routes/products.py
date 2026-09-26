@@ -360,6 +360,23 @@ async def get_product(
     platform = await _platform_store(db)
     ratings = await _ratings_by_product(db, [product])
 
+    author = _author_fields(product, sellers, channels, platform)
+
+    # Оценку продавца считаем так же, как на его витрине: среднее по отзывам
+    # на все его товары. Поле seller.rating растёт только от отзывов по
+    # сделкам P2P, и у большинства магазинов оно пустое — покупатель видел
+    # бы продавца без оценки, хотя на витрине у того стоят пять звёзд.
+    #
+    # Импорт внутри функции: модули роутов грузятся по очереди, и
+    # верхнеуровневый ссылался бы на порядок регистрации в main.py
+    if author.get("author_kind") and author.get("author_id"):
+        from routes.stores import rating_for_author
+        author_rating, author_reviews = await rating_for_author(
+            db, author["author_kind"], author["author_id"],
+        )
+        author["author_rating"] = author_rating
+        author["author_reviews"] = author_reviews
+
     return ProductLocalized(
         id=product.id,
         name=product.name_ru if lang == "ru" else product.name_en,
@@ -375,7 +392,7 @@ async def get_product(
         created_at=product.created_at,
         is_active=product.is_active,
         is_p2p=product.is_p2p,
-        **_author_fields(product, sellers, channels, platform),
+        **author,
         **ratings.get(product.id, {}),
     )
 

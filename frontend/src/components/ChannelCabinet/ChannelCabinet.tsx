@@ -850,6 +850,7 @@ const PlanForm: React.FC<{
     const { haptic } = useTelegram();
     const commissions = usePublicSettings();
     const [titleRu, setTitleRu] = useState(plan?.title_ru ?? '');
+    const [titleEn, setTitleEn] = useState(plan?.title_en ?? '');
     const [days, setDays] = useState(String(plan?.duration_days ?? 30));
     const [price, setPrice] = useState(plan?.price_usd ?? '');
     const [busy, setBusy] = useState(false);
@@ -862,12 +863,9 @@ const PlanForm: React.FC<{
         try {
             const payload = {
                 title_ru: titleRu.trim(),
-                // Отдельного поля под английское название намеренно нет: форма
-                // и так на четыре поля, а авторы здесь пишут по-русски.
-                // Бэкенд требует непустое title_en, поэтому дублируем — это
-                // честнее пустой строки, которую увидел бы англоязычный
-                // покупатель в каталоге.
-                title_en: titleRu.trim(),
+                // Если английское не заполнили — дублируем русское: бэкенд
+                // требует непустое, а пустая строка в каталоге хуже русской
+                title_en: titleEn.trim() || titleRu.trim(),
                 duration_days: Number(days),
                 price_usd: price.trim(),
             };
@@ -899,6 +897,19 @@ const PlanForm: React.FC<{
                     placeholder={t('Месяц', 'Month')}
                     maxLength={255}
                     required
+                />
+            </label>
+
+            {/* Второе название нужно английскому интерфейсу: без него
+                покупатель с английским языком видел в каталоге русское */}
+            <label className="channel-label">
+                {t('По-английски — необязательно', 'In English — optional')}
+                <input
+                    className="channel-input"
+                    value={titleEn}
+                    onChange={(e) => setTitleEn(e.target.value)}
+                    placeholder="Month"
+                    maxLength={255}
                 />
             </label>
 

@@ -148,6 +148,9 @@ class ProductListing(Base):
     )
 
     name: Mapped[str] = mapped_column(String(500), nullable=False)
+    # Английское название. Необязательное: если автор его не указал, при
+    # публикации в обе колонки товара уходит русское — как было раньше.
+    name_en: Mapped[str | None] = mapped_column(String(500), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     price_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
 

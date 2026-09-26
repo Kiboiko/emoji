@@ -284,7 +284,8 @@ export const p2pApi = {
     getMyListings: async () => (await apiClient.get('/p2p/seller/listings')).data,
 
     updateListing: async (listingId: string, data: {
-        name?: string; description?: string; price_usd?: string; category_id?: string;
+        name?: string; name_en?: string; description?: string;
+        price_usd?: string; category_id?: string;
     }) => (await apiClient.patch(`/p2p/seller/listings/${listingId}`, data)).data,
 
     deleteListing: async (listingId: string) =>
@@ -300,7 +301,7 @@ export const p2pApi = {
         (await apiClient.post(`/p2p/seller/listings/${listingId}/republish`)).data,
 
     createListing: async (data: {
-        name: string; description: string; price_usd: string;
+        name: string; name_en?: string; description: string; price_usd: string;
         category_id?: string; accept_terms: boolean;
     }) => (await apiClient.post('/p2p/seller/listings', data)).data,
 

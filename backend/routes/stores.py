@@ -109,6 +109,33 @@ async def _rating_over(db: AsyncSession, product_ids: list) -> tuple[float | Non
     return round(float(average), 2), int(count)
 
 
+async def rating_for_author(db: AsyncSession, kind: str, author_id) -> tuple[float | None, int]:
+    """
+    Оценка магазина по виду автора и его идентификатору.
+
+    Нужна странице товара: продавец показывается там той же строкой, что и
+    на своей витрине, и расходиться эти два числа не должны. Отдельная
+    функция, а не повтор запроса, именно поэтому.
+    """
+    if kind == "channel":
+        ids = [
+            product_id for (product_id,) in (
+                await db.execute(
+                    select(SubscriptionPlan.product_id).where(
+                        SubscriptionPlan.channel_id == author_id,
+                        SubscriptionPlan.product_id.is_not(None),
+                    )
+                )
+            ).all()
+        ]
+        return await _rating_over(db, ids)
+
+    seller = await db.get(SellerProfile, author_id)
+    if seller is None:
+        return None, 0
+    return await _rating_over(db, await _seller_product_ids(db, seller))
+
+
 async def _seller_product_ids(db: AsyncSession, seller: SellerProfile) -> list:
     """
     Все товары магазина, включая снятые с продажи.
@@ -209,29 +236,10 @@ async def store_list(
         )
     ).scalars().first()
 
-    # --- каналы: товар подписки связан с каналом через тариф
-    channel_counts = (
-        await db.execute(
-            select(SubscriptionPlan.channel_id, func.count(Product.id))
-            .join(Product, Product.id == SubscriptionPlan.product_id)
-            .where(Product.is_active.is_(True))
-            .group_by(SubscriptionPlan.channel_id)
-        )
-    ).all()
-    by_channel = {channel_id: number for channel_id, number in channel_counts}
-
-    channels: list[Channel] = []
-    if by_channel:
-        channels = list(
-            (
-                await db.execute(
-                    select(Channel).where(
-                        Channel.id.in_(by_channel.keys()),
-                        Channel.status == ChannelStatus.ACTIVE,
-                    )
-                )
-            ).scalars().all()
-        )
+    # Каналов здесь нет намеренно. Витрина у канала есть, и попасть на неё
+    # можно с карточки подписки, но в строке «Магазины» канал читался как
+    # ещё один продавец: завёл подписку — и оказался среди магазинов.
+    # Подписки живут своей категорией в каталоге.
 
     items: list[dict] = []
 
@@ -255,19 +263,6 @@ async def store_list(
             "is_verified": bool(seller.is_verified),
             "rating": seller.rating,
             "products": by_user.get(seller.user_id, 0),
-        })
-
-    for channel in channels:
-        items.append({
-            "kind": "channel",
-            "id": str(channel.id),
-            "name": channel.title,
-            "avatar_url": channel.avatar_url,
-            "is_verified": bool(channel.is_verified),
-            # Рейтинга у канала нет: отзывы собираются по сделкам, а подписка
-            # идёт не через сделку
-            "rating": None,
-            "products": by_channel.get(channel.id, 0),
         })
 
     # Площадка первой — это лицо маркета. Дальше проверенные, дальше те, у

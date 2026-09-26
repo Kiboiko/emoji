@@ -204,7 +204,9 @@ async def moderate_listing(
         db.add(product)
 
     product.name_ru = listing.name
-    product.name_en = listing.name
+    # Английского названия может не быть: тогда в каталоге на обоих языках
+    # стоит русское — так было всегда, и это лучше пустой строки
+    product.name_en = listing.name_en or listing.name
     product.description_ru = listing.description
     product.description_en = listing.description
     product.price_usdt = listing.price_usd

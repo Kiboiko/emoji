@@ -526,3 +526,61 @@ async def test_store_without_reviews_has_no_rating(db, user_factory, product_fac
 
     assert store["rating"] is None
     assert store["rating_count"] == 0
+
+
+async def test_store_list_has_no_channels(db, user_factory, product_factory):
+    """
+    Витрина у канала есть, но в строке «Магазины» он читался как ещё один
+    продавец: завёл подписку — и оказался среди магазинов.
+    """
+    author = await user_factory(username="list_channel_owner")
+    channel = Channel(
+        id=uuid.uuid4(), owner_user_id=author.id,
+        telegram_chat_id=-1007777777777, title="Канал в списке",
+        status=ChannelStatus.ACTIVE, bot_is_admin=True,
+        payout_wallet="EQChannelList001",
+    )
+    db.add(channel)
+    await db.flush()
+
+    plan_product = await product_factory(type_="subscription", name="Канал — месяц")
+    db.add(SubscriptionPlan(
+        id=uuid.uuid4(), channel_id=channel.id, product_id=plan_product.id,
+        title_ru="Месяц", title_en="Month", duration_days=30,
+        price_usd=Decimal("5.00"),
+    ))
+    await db.flush()
+
+    listed = await stores.store_list(limit=12, db=db)
+
+    assert all(item["kind"] != "channel" for item in listed)
+    assert "Канал в списке" not in {item["name"] for item in listed}
+
+
+async def test_author_rating_matches_the_storefront(
+    db, user_factory, product_factory,
+):
+    """
+    На странице товара продавец показывается той же строкой, что и на своей
+    витрине. Раньше туда шёл счётчик из seller_profiles — он растёт только
+    от отзывов по сделкам, и числа расходились.
+    """
+    owner = await user_factory(username="same_rating_owner")
+    seller = SellerProfile(
+        id=uuid.uuid4(), user_id=owner.id,
+        display_name="Одинаково", payout_wallet="UQSameRating0001",
+    )
+    db.add(seller)
+    await db.flush()
+
+    buyer = await user_factory(username="same_rating_buyer")
+    product = await product_factory(owner=owner, name="Товар")
+    _add_review(db, buyer, product, 4)
+    _add_review(db, buyer, product, 5)
+    await db.flush()
+
+    page = await products_routes.get_product(str(product.id), db=db)
+    store = await stores.seller_store(seller.id, db=db)
+
+    assert page.author_rating == store["rating"] == 4.5
+    assert page.author_reviews == store["rating_count"] == 2

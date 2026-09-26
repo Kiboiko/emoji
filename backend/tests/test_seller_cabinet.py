@@ -347,3 +347,37 @@ async def test_update_payout_wallet(db, seller_user):
     assert profile.payout_wallet == "UQNewWalletAddress123"
     # Имя не присылали — оно не должно затереться
     assert profile.display_name == "Продавец"
+
+
+# ---------------------------------------------------------------------------
+# Английское название
+# ---------------------------------------------------------------------------
+
+async def test_listing_keeps_english_name(db, seller_user, listing_factory):
+    listing = await listing_factory(status=ListingStatus.DRAFT)
+
+    await p2p.update_listing(
+        listing.id,
+        p2p.ListingUpdate(name_en="Mechanical keyboard"),
+        user=seller_user, db=db,
+    )
+
+    assert listing.name_en == "Mechanical keyboard"
+
+
+async def test_empty_english_name_clears_it(db, seller_user, listing_factory):
+    """
+    Пустая строка — это осознанное «убрать английское название», а не
+    «поле не прислали»: иначе стереть его было бы нечем.
+    """
+    listing = await listing_factory(status=ListingStatus.DRAFT)
+    listing.name_en = "Keyboard"
+    await db.flush()
+
+    await p2p.update_listing(
+        listing.id,
+        p2p.ListingUpdate(name_en="   "),
+        user=seller_user, db=db,
+    )
+
+    assert listing.name_en is None

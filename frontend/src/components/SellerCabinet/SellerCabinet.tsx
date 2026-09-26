@@ -37,12 +37,16 @@ const DELETABLE = ['draft', 'rejected', 'withdrawn'];
 
 interface DraftForm {
     name: string;
+    /** Необязательное: у товара только для русскоязычных его заполнять незачем */
+    name_en: string;
     description: string;
     price_usd: string;
     category_id: string;
 }
 
-const EMPTY_FORM: DraftForm = { name: '', description: '', price_usd: '', category_id: '' };
+const EMPTY_FORM: DraftForm = {
+    name: '', name_en: '', description: '', price_usd: '', category_id: '',
+};
 
 /**
  * Кабинет продавца.
@@ -687,6 +691,7 @@ const ListingManager: React.FC<{
     const startEdit = (listing: Listing) => {
         setForm({
             name: listing.name,
+            name_en: listing.name_en ?? '',
             description: listing.description,
             price_usd: listing.price_usd,
             category_id: listing.category_id ?? '',
@@ -701,6 +706,7 @@ const ListingManager: React.FC<{
         try {
             const payload = {
                 name: form.name.trim(),
+                name_en: form.name_en.trim(),
                 description: form.description.trim(),
                 price_usd: form.price_usd,
                 category_id: form.category_id || undefined,
@@ -822,10 +828,21 @@ const ListingManager: React.FC<{
                         className="seller-input"
                         value={form.name}
                         onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        placeholder={t('Название', 'Title')}
+                        placeholder={t('Название по-русски', 'Title in Russian')}
                         minLength={3}
                         maxLength={500}
                         required
+                    />
+                    {/* Второе название нужно английскому интерфейсу: без него
+                        покупатель с английским языком видел в каталоге
+                        русское имя, и переключатель на такой товар не влиял */}
+                    <input
+                        className="seller-input"
+                        value={form.name_en}
+                        onChange={(e) => setForm({ ...form, name_en: e.target.value })}
+                        placeholder={t('Название по-английски — необязательно',
+                                       'Title in English — optional')}
+                        maxLength={500}
                     />
                     <textarea
                         className="seller-input seller-textarea"

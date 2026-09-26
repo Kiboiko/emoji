@@ -113,6 +113,9 @@ class ProductLocalized(BaseModel):
     author_avatar: Optional[str] = None
     author_verified: bool = False
     author_rating: Optional[float] = None
+    # Сколько отзывов стоит за этой оценкой. Заполняется только на
+    # странице товара: в сетке каталога подпись продавца не рисуется.
+    author_reviews: int = 0
     author_deals: int = 0
     # @username канала: по нему покупатель может посмотреть витрину автора до
     # покупки. У продавца такого адреса нет — там None.

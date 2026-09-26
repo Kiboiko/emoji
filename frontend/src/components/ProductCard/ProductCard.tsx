@@ -56,23 +56,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
                 <span className="product-name">{product.name}</span>
 
-                {/* Строка оценки стоит всегда, даже пустая. Раньше её просто
-                    не было у товара без отзывов — и кнопка покупки, прижатая
-                    к низу, оставляла над собой дыру ровно в её высоту, но
-                    только на одной карточке из ряда.
-
-                    Пять звёзд с дробной заливкой и число рядом: по одной
+                {/* Пять звёзд с дробной заливкой и число рядом: по одной
                     звезде не видно, 4.2 там или 4.9, а число без звёзд не
-                    читается с одного взгляда. */}
-                <span className="product-rating">
-                    {rating != null && (
-                        <>
-                            <Stars value={rating} size={12} />
-                            <span className="product-rating-value">{rating}</span>
-                            <span className="product-reviews">· {product.reviews_count}</span>
-                        </>
-                    )}
-                </span>
+                    читается с одного взгляда.
+
+                    Пустую строку под оценку больше не держим. Она выравнивала
+                    кнопки в ряду, но у товара без отзывов оставляла над
+                    кнопкой заметный пустой кусок — а он мозолит глаза сильнее,
+                    чем кнопки на разной высоте. */}
+                {rating != null && (
+                    <span className="product-rating">
+                        <Stars value={rating} size={12} />
+                        <span className="product-rating-value">{rating}</span>
+                        <span className="product-reviews">· {product.reviews_count}</span>
+                    </span>
+                )}
             </motion.button>
 
             <motion.button

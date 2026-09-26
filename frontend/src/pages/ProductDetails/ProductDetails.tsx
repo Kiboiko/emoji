@@ -8,7 +8,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import type { Product, Review } from '@/types';
-import { StoreLine } from '@/components/StoreLine/StoreLine';
+import { SellerBlock } from '@/components/SellerBlock/SellerBlock';
 import { Stars } from '@/components/Stars/Stars';
 import { pluralRu } from '@/lib/format';
 import { useToastStore, errorText } from '@/store/toastStore';
@@ -281,10 +281,10 @@ export const ProductDetails: React.FC = () => {
                 <div className="product-header">
                     <h1>{product.name}</h1>
 
-                    {/* Чей это товар и переход в его магазин.
-                        Именно здесь, а не в сетке каталога: там магазин
-                        перетягивал внимание с самого товара. */}
-                    <StoreLine product={product} />
+                    {/* Продавец теперь отдельным блоком после описания:
+                        короткой строке негде было рассказать про эскроу,
+                        возврат и чат, а два упоминания магазина на одном
+                        экране читались как сбой. */}
 
                     {product.is_active === false && (
                         <div className="product-unavailable">
@@ -320,6 +320,11 @@ export const ProductDetails: React.FC = () => {
                     <h3>{language === 'ru' ? 'Описание' : 'Description'}</h3>
                     <DescriptionText text={product.description} language={language} />
                 </div>
+
+                {/* Кто продаёт и что защищает покупателя. После описания:
+                    сначала человек читает про товар, потом решает, можно ли
+                    доверять тому, кто его продаёт. */}
+                <SellerBlock product={product} />
 
                 {product.type === 'service' && (
                     <div className="service-details-block">

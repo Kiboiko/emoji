@@ -46,6 +46,8 @@ export interface Product {
     author_avatar?: string | null;
     author_verified?: boolean;
     author_rating?: number | null;
+    /** Сколько отзывов стоит за оценкой продавца. Только на странице товара */
+    author_reviews?: number;
     author_deals?: number;
     /** @username канала — у продавца такого адреса нет */
     author_link?: string | null;
@@ -304,6 +306,8 @@ export interface ListingImage {
 export interface Listing {
     id: string;
     name: string;
+    /** Название для английского интерфейса. null — показываем русское */
+    name_en: string | null;
     description: string;
     price_usd: string;
     status: ListingStatus;
