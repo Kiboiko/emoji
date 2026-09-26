@@ -78,6 +78,11 @@
   --gradient-card: linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(26, 26, 26, 0.7) 100%);
 }
 
+html[data-platform="ios"],
+html[data-platform="android"] {
+  --tg-chrome-top: calc(env(safe-area-inset-top, 0px) + 48px);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -90,6 +95,11 @@
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
+
+  /* Запас под плавающие кнопки Telegram («Закрыть», «⌄ ⋮»). В полноэкранном
+     режиме они висят поверх страницы, и заголовок экрана оказывался под
+     ними. На десктопе их нет — там ноль. */
+  --tg-chrome-top: 0px;
 
   /* --- Отступы ---------------------------------------------------------
      Шкала, а не произвольные числа: до этого в разметке встречались 4, 5, 6,
@@ -199,6 +209,10 @@ html,
 body {
   scrollbar-width: none;
   -ms-overflow-style: none;
+  /* Резиновый отскок за край прокрутки. В обычном браузере это украшение,
+     а внутри Mini App тот же жест Telegram считывает как «тянут окно», и
+     вместе со страницей едет всё приложение. */
+  overscroll-behavior-y: none;
 }
 
 html::-webkit-scrollbar,

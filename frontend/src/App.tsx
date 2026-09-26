@@ -60,6 +60,14 @@ export const App: React.FC = () => {
             // Always expand to use full available height
             tg.expand();
 
+            // Вертикальный свайп по странице Telegram принимает за попытку
+            // утянуть окно Mini App вниз, и вместе с прокруткой уезжала вся
+            // страница. Метод появился в Bot API 7.7 — на клиентах постарше
+            // его просто нет, поэтому проверяем.
+            if (typeof tg.disableVerticalSwipes === 'function') {
+                tg.disableVerticalSwipes();
+            }
+
             // Force fullscreen ONLY on mobile platforms (iOS/Android)
             // This works regardless of BotFather fullscreen setting
             const isMobile = tg.platform === 'ios' || tg.platform === 'android';

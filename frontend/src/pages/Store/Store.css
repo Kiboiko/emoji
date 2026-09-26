@@ -5,8 +5,8 @@
 
 .store-page {
     min-height: 100vh;
-    padding-top: var(--space-4);
-    padding-bottom: var(--space-6, 32px);
+    padding-top: calc(var(--tg-chrome-top) + var(--space-4));
+    padding-bottom: var(--space-6);
 }
 
 .store-head {

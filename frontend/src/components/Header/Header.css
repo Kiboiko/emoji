@@ -105,9 +105,8 @@
     color: var(--accent-primary);
 }
 
-/* На iOS и Android шапка Mini App перекрывает верх страницы, поэтому под
-   ней нужен запас. На десктопе его быть не должно — там пустая полоса. */
-html[data-platform="ios"] .header,
-html[data-platform="android"] .header {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 48px);
+/* Запас под плавающие кнопки Telegram задаёт --tg-chrome-top: на десктопе
+   он ноль, на телефоне — безопасная зона плюс высота кнопок. */
+.header {
+    padding-top: calc(var(--tg-chrome-top) + var(--space-4));
 }

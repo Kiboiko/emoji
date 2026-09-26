@@ -7,7 +7,9 @@
 
 .cart-page {
     min-height: 100vh;
-    padding-top: var(--space-4);
+    /* Заголовок «Корзина» уезжал под кнопки Telegram: запас был 16px,
+       а кнопки висят ниже */
+    padding-top: calc(var(--tg-chrome-top) + var(--space-4));
 }
 
 .cart-title {
