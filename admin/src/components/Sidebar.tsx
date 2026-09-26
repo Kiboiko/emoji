@@ -25,6 +25,28 @@ interface SidebarProps {
     onClose?: () => void;
 }
 
+/**
+ * Разделы админки. Вынесены из компонента: шапка на телефоне показывает по
+ * этому же списку, в каком разделе человек находится, — иначе список
+ * пришлось бы держать в двух местах.
+ */
+export const NAV_ITEMS = [
+    { path: '/', icon: LayoutDashboard, label: 'Дашборд' },
+    { path: '/processing', icon: Zap, label: 'Обработка' },
+    { path: '/products', icon: Package, label: 'Товары' },
+    { path: '/categories', icon: ListTree, label: 'Категории' },
+    { path: '/orders', icon: ShoppingCart, label: 'Заказы' },
+    { path: '/users', icon: Users, label: 'Пользователи' },
+    { path: '/moderation', icon: ShieldCheck, label: 'Модерация' },
+    { path: '/deals', icon: Handshake, label: 'Сделки' },
+    { path: '/subscriptions', icon: Radio, label: 'Каналы' },
+    { path: '/referrals', icon: Share2, label: 'Рефералы' },
+    { path: '/finance', icon: Scale, label: 'Финансы' },
+    { path: '/reviews', icon: MessageSquare, label: 'Отзывы' },
+    { path: '/withdrawals', icon: Wallet, label: 'Выводы' },
+    { path: '/settings', icon: SettingsIcon, label: 'Настройки' },
+];
+
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
     const { logout } = useAuth();
     const navigate = useNavigate();
@@ -34,22 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
         navigate('/login');
     };
 
-    const navItems = [
-        { path: '/', icon: LayoutDashboard, label: 'Дашборд' },
-        { path: '/processing', icon: Zap, label: 'Обработка' },
-        { path: '/products', icon: Package, label: 'Товары' },
-        { path: '/categories', icon: ListTree, label: 'Категории' },
-        { path: '/orders', icon: ShoppingCart, label: 'Заказы' },
-        { path: '/users', icon: Users, label: 'Пользователи' },
-        { path: '/moderation', icon: ShieldCheck, label: 'Модерация' },
-        { path: '/deals', icon: Handshake, label: 'Сделки' },
-        { path: '/subscriptions', icon: Radio, label: 'Каналы' },
-        { path: '/referrals', icon: Share2, label: 'Рефералы' },
-        { path: '/finance', icon: Scale, label: 'Финансы' },
-        { path: '/reviews', icon: MessageSquare, label: 'Отзывы' },
-        { path: '/withdrawals', icon: Wallet, label: 'Выводы' },
-        { path: '/settings', icon: SettingsIcon, label: 'Настройки' },
-    ];
+    const navItems = NAV_ITEMS;
 
     return (
         <>
@@ -67,27 +74,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
                 md:relative md:translate-x-0 flex flex-col
                 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
             `}>
-                <div className="p-6 flex justify-between items-center">
-                    {/* Removed "Admin Panel" text as requested */}
-                    <div className="w-8"></div> {/* Spacer for alignment if needed, or remove */}
+                <div className="px-6 py-4 flex justify-between items-center">
+                    <span className="font-semibold text-white">Админка</span>
 
-                    {/* Close button for mobile */}
                     <button
                         onClick={onClose}
                         className="md:hidden text-gray-400 hover:text-white"
+                        aria-label="Закрыть меню"
                     >
                         <X size={24} />
                     </button>
                 </div>
 
-                <nav className="flex-1 px-4 space-y-2 mt-4">
+                {/* Разделов четырнадцать: на невысоком экране они не помещались
+                    целиком, а список не прокручивался — «Настройки» были
+                    недоступны вовсе */}
+                <nav className="flex-1 overflow-y-auto px-4 space-y-1 pb-4">
                     {navItems.map((item) => (
                         <NavLink
                             key={item.path}
                             to={item.path}
                             onClick={() => onClose && onClose()} // Close on click for mobile
                             className={({ isActive }) =>
-                                `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                                `flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${isActive
                                     ? 'bg-blue-600/10 text-blue-500'
                                     : 'text-gray-400 hover:bg-gray-700 hover:text-white'
                                 }`

@@ -19,7 +19,7 @@ export const Finance: React.FC = () => {
     const [accountId, setAccountId] = useState<string | null>(null);
 
     return (
-        <div className="p-4 md:p-8">
+        <div>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Финансы</h1>
 
             <div className="flex gap-2 mb-5">

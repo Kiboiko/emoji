@@ -78,7 +78,7 @@ export const Dashboard: React.FC = () => {
     const pending = ATTENTION.filter((a) => (attention[a.key] ?? 0) > 0);
 
     return (
-        <div className="p-4 md:p-8">
+        <div>
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <h1 className="text-2xl md:text-3xl font-bold text-white">Дашборд</h1>
 

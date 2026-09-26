@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { adminApi } from '../api/axios';
+import { DataTable, type Column } from '../components/ui/DataTable';
 import {
     Clock,
     CheckCircle,
@@ -73,12 +74,91 @@ export const Withdrawals: React.FC = () => {
 
     const totalPages = Math.ceil(total / limit);
 
+    const money = (w: Withdrawal) => (w.currency === 'TON'
+        // У TON девять знаков — округление до двух показало бы 0.00 вместо
+        // реальной суммы
+        ? `${w.amount.toFixed(9).replace(/0+$/, '').replace(/\.$/, '')} TON`
+        : `$${w.amount.toFixed(2)}`);
+
+    const columns: Column<Withdrawal>[] = [
+        {
+            key: 'user',
+            title: 'Пользователь',
+            // На телефоне это заголовок карточки, подпись ему не нужна
+            wide: true,
+            render: (w) => (
+                <div className="flex flex-col">
+                    <span className="text-white font-medium">{w.user_first_name}</span>
+                    <span className="text-xs text-gray-400">ID: {w.user_telegram_id}</span>
+                </div>
+            ),
+        },
+        {
+            key: 'amount',
+            title: 'Сумма',
+            render: (w) => <span className="text-green-400 font-bold">{money(w)}</span>,
+        },
+        {
+            key: 'wallet',
+            title: 'Кошелёк',
+            render: (w) => (
+                <div className="flex items-center gap-2 justify-end md:justify-start">
+                    {/* На телефоне адрес переносится целиком: обрезанный
+                        кошелёк бесполезен, по нему нельзя свериться */}
+                    <code className="bg-gray-900 border border-gray-700 px-2 py-1 rounded text-blue-400 text-xs break-all md:break-normal md:truncate md:max-w-[200px]">
+                        {w.wallet}
+                    </code>
+                    <button
+                        onClick={() => navigator.clipboard.writeText(w.wallet)}
+                        className="shrink-0 text-gray-500 hover:text-white"
+                        title="Копировать"
+                    >
+                        <ExternalLink size={14} />
+                    </button>
+                </div>
+            ),
+        },
+        {
+            key: 'created_at',
+            title: 'Дата',
+            render: (w) => (
+                <span className="inline-flex items-center gap-2 text-gray-400 text-sm">
+                    <Clock size={14} className="shrink-0" />
+                    {new Date(w.created_at).toLocaleString('ru-RU')}
+                </span>
+            ),
+        },
+        {
+            key: 'action',
+            title: 'Действие',
+            className: 'text-right',
+            wide: true,
+            render: (w) => (w.status === 'pending' ? (
+                /* Подпись в повелительном наклонении: «Выполнено» в колонке
+                   «Действие» читается как статус, и админ решает, что
+                   выплата уже проведена. */
+                <button
+                    onClick={() => handleComplete(w.id, w.amount, w.currency || 'USD')}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors w-full md:w-auto md:ml-auto whitespace-nowrap"
+                >
+                    <CheckCircle size={16} />
+                    Отметить выплаченным
+                </button>
+            ) : (
+                <div className="text-gray-500 flex items-center gap-2 md:justify-end">
+                    <CheckCircle size={16} />
+                    {new Date(w.completed_at!).toLocaleDateString('ru-RU')}
+                </div>
+            )),
+        },
+    ];
+
     return (
-        <div className="p-6">
+        <div>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 {/* Раздел давно не только про реферальный баланс: сюда же
                     приходят выводы заработка продавцов и авторов каналов в TON */}
-                <h1 className="text-3xl font-bold text-white">
+                <h1 className="text-2xl md:text-3xl font-bold text-white">
                     Заявки на вывод
                 </h1>
 
@@ -104,93 +184,13 @@ export const Withdrawals: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-gray-700/50 text-gray-400 text-sm uppercase">
-                            <th className="px-6 py-4 font-semibold">Пользователь</th>
-                            <th className="px-6 py-4 font-semibold">Сумма</th>
-                            <th className="px-6 py-4 font-semibold">Кошелек</th>
-                            <th className="px-6 py-4 font-semibold">Дата</th>
-                            <th className="px-6 py-4 font-semibold">Действие</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                        {loading ? (
-                            <tr>
-                                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                                    Загрузка...
-                                </td>
-                            </tr>
-                        ) : withdrawals.length === 0 ? (
-                            <tr>
-                                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                                    Нет заявок
-                                </td>
-                            </tr>
-                        ) : (
-                            withdrawals.map((w) => (
-                                <tr key={w.id} className="hover:bg-gray-750 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col">
-                                            <span className="text-white font-medium">{w.user_first_name}</span>
-                                            <span className="text-xs text-gray-400">ID: {w.user_telegram_id}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="text-green-400 font-bold">
-                                            {/* У TON девять знаков — округление до двух
-                                                показало бы 0.00 вместо реальной суммы */}
-                                            {w.currency === 'TON'
-                                                ? `${w.amount.toFixed(9).replace(/0+$/, '').replace(/\.$/, '')} TON`
-                                                : `$${w.amount.toFixed(2)}`}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2 group">
-                                            <code className="bg-gray-900 border border-gray-700 px-2 py-1 rounded text-blue-400 text-xs truncate max-w-[200px]">
-                                                {w.wallet}
-                                            </code>
-                                            <button
-                                                onClick={() => navigator.clipboard.writeText(w.wallet)}
-                                                className="text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                                                title="Копировать"
-                                            >
-                                                <ExternalLink size={14} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-gray-400 text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <Clock size={14} />
-                                            {new Date(w.created_at).toLocaleString('ru-RU')}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        {w.status === 'pending' ? (
-                                            /* Подпись в повелительном наклонении: «Выполнено»
-                                               в колонке «Действие» читается как статус, и
-                                               админ решает, что выплата уже проведена. */
-                                            <button
-                                                onClick={() => handleComplete(w.id, w.amount, w.currency || 'USD')}
-                                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ml-auto whitespace-nowrap"
-                                            >
-                                                <CheckCircle size={16} />
-                                                Отметить выплаченным
-                                            </button>
-                                        ) : (
-                                            <div className="text-gray-500 flex items-center gap-2 justify-end">
-                                                <CheckCircle size={16} />
-                                                {new Date(w.completed_at!).toLocaleDateString('ru-RU')}
-                                            </div>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            <DataTable<Withdrawal>
+                columns={columns}
+                rows={withdrawals}
+                rowKey={(w) => w.id}
+                loading={loading}
+                emptyText="Нет заявок"
+            />
 
             {/* Pagination */}
             {totalPages > 1 && (

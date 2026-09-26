@@ -102,7 +102,7 @@ const ProcessingPage: React.FC = () => {
     );
 
     return (
-        <div className="p-6 max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <h1 className="text-2xl font-bold text-white mb-2">Обработка услуг</h1>
@@ -159,7 +159,7 @@ const ProcessingPage: React.FC = () => {
                         {paginatedOrders.map((order) => (
                             <div
                                 key={order.id}
-                                className="bg-gray-900 border border-gray-800 rounded-xl p-6"
+                                className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6"
                             >
                                 <div className="flex flex-col lg:flex-row gap-6 justify-between">
                                     {/* Order Info */}
@@ -191,8 +191,10 @@ const ProcessingPage: React.FC = () => {
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     <div className="space-y-1">
                                                         <div className="text-xs text-gray-500 uppercase tracking-wider">Ссылка</div>
-                                                        <div className="flex items-center gap-2 group">
-                                                            <div className="bg-gray-900 px-3 py-1.5 rounded text-sm text-blue-400 font-mono truncate max-w-[250px]">
+                                                        <div className="flex items-center gap-2 group min-w-0">
+                                                            {/* min-w-0 + flex-1 вместо жёсткой ширины: на телефоне
+                                                                250px плюс две кнопки не помещались в карточку */}
+                                                            <div className="min-w-0 flex-1 md:flex-none md:max-w-[250px] bg-gray-900 px-3 py-1.5 rounded text-sm text-blue-400 font-mono truncate">
                                                                 {item.user_data?.link || 'Нет ссылки'}
                                                             </div>
                                                             {item.user_data?.link && (

@@ -4,6 +4,7 @@ import { productsApi } from '../services/products';
 import { categoriesApi } from '../services/categories';
 import type { Product } from '../services/products';
 import type { Category } from '../services/categories';
+import { DataTable, type Column } from '../components/ui/DataTable';
 import {
     Plus,
     Pencil,
@@ -170,7 +171,29 @@ export const Products: React.FC = () => {
     };
 
     const totalPages = productsData?.pages || 1;
-    const thClass = "p-4 cursor-pointer hover:bg-gray-700 select-none transition-colors";
+    /** Колонки, по которым можно сортировать. Список общий для шапки
+        таблицы и для выбора на телефоне, где шапки нет. */
+    const SORTABLE = [
+        { key: 'name', label: 'Название' },
+        { key: 'price', label: 'Цена' },
+        { key: 'category', label: 'Категория' },
+        { key: 'type', label: 'Тип' },
+        { key: 'stock', label: 'Остаток' },
+        { key: 'is_top', label: 'TOP' },
+        { key: 'created_at', label: 'Дате добавления' },
+    ];
+
+    const sortable = (key: string, title: string, className?: string): Column<Product> => ({
+        key,
+        title,
+        className,
+        onHeaderClick: () => handleSort(key),
+        header: (
+            <div className={`flex items-center ${className?.includes('center') ? 'justify-center' : ''}`}>
+                {title} <SortIcon column={key} sortBy={sortBy} sortOrder={sortOrder} />
+            </div>
+        ),
+    });
 
     if (isLoading) return (
         <div className="flex justify-center items-center h-64">
@@ -178,11 +201,116 @@ export const Products: React.FC = () => {
         </div>
     );
 
+    const columns: Column<Product>[] = [
+        {
+            key: 'image',
+            title: 'Фото',
+            hideOnMobile: true,
+            render: (product) => (
+                <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-900">
+                    <img
+                        src={product.image_url}
+                        alt={product.name_ru}
+                        className="w-full h-full object-cover"
+                    />
+                </div>
+            ),
+        },
+        {
+            ...sortable('name', 'Название'),
+            // На телефоне это заголовок карточки: картинка идёт рядом с ним,
+            // отдельной строкой «Фото: [квадрат]» она выглядела бы нелепо
+            wide: true,
+            render: (product) => (
+                <div className="flex items-center gap-3">
+                    <div className="md:hidden w-12 h-12 shrink-0 rounded-lg overflow-hidden bg-gray-900">
+                        <img
+                            src={product.image_url}
+                            alt=""
+                            className="w-full h-full object-cover"
+                        />
+                    </div>
+                    <div className="min-w-0">
+                        <div className="font-medium text-white break-words">{product.name_ru}</div>
+                        <div className="text-xs text-gray-500 break-words">{product.name_en}</div>
+                    </div>
+                </div>
+            ),
+        },
+        {
+            ...sortable('price', 'Цена'),
+            render: (product) => (
+                <span className="text-green-400 font-medium">${product.price_usdt}</span>
+            ),
+        },
+        {
+            ...sortable('category', 'Категория'),
+            render: (product) => {
+                const category = categories?.find((c) => c.id === product.category_id);
+                return <span className="text-gray-300">{category ? category.name_ru : '-'}</span>;
+            },
+        },
+        {
+            ...sortable('type', 'Тип'),
+            render: (product) => (
+                <span className={`text-xs px-2 py-1 rounded ${product.type === 'service'
+                    ? 'bg-purple-500/10 text-purple-400'
+                    : 'bg-blue-500/10 text-blue-400'}`}>
+                    {product.type === 'service'
+                        ? 'Услуга'
+                        : product.type === 'instruction' ? 'Инструкция' : 'Цифровой'}
+                </span>
+            ),
+        },
+        {
+            ...sortable('stock', 'Остаток'),
+            render: (product) => (
+                <span className="text-gray-300">
+                    {product.type === 'digital' ? product.stock : '\u221e'}
+                </span>
+            ),
+        },
+        {
+            ...sortable('is_top', 'TOP', 'text-center'),
+            render: (product) => (product.is_top
+                ? <Flame size={20} className="text-orange-600 md:mx-auto" />
+                : <span className="text-gray-600">—</span>),
+        },
+        {
+            key: 'actions',
+            title: 'Действия',
+            className: 'text-right',
+            wide: true,
+            render: (product) => (
+                <div className="flex gap-2 md:justify-end">
+                    <button
+                        onClick={() => handleEditOpen(product)}
+                        className="p-2 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors"
+                        aria-label="Править"
+                    >
+                        <Pencil size={18} />
+                    </button>
+                    <button
+                        onClick={() => {
+                            if (window.confirm('Удалить товар?')) {
+                                deleteMutation.mutate(product.id);
+                            }
+                        }}
+                        className="p-2 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors"
+                        aria-label="Удалить"
+                    >
+                        <Trash2 size={18} />
+                    </button>
+                </div>
+            ),
+        },
+    ];
+
     return (
         <div>
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                <h1 className="text-3xl font-bold">Товары</h1>
+                <h1 className="text-2xl md:text-3xl font-bold">Товары</h1>
 
                 <div className="flex gap-4 w-full md:w-auto">
                     <div className="relative flex-1 md:w-64">
@@ -205,114 +333,35 @@ export const Products: React.FC = () => {
                 </div>
             </div>
 
-            {/* Table */}
-            <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-x-auto">
-                <table className="w-full text-left min-w-[800px]">
-                    <thead className="bg-gray-700/50 text-gray-400">
-                        <tr>
-                            <th className="p-4">Фото</th>
-                            <th className={thClass} onClick={() => handleSort('name')}>
-                                <div className="flex items-center">Название <SortIcon column="name" sortBy={sortBy} sortOrder={sortOrder} /></div>
-                            </th>
-                            <th className={thClass} onClick={() => handleSort('price')}>
-                                <div className="flex items-center">Цена <SortIcon column="price" sortBy={sortBy} sortOrder={sortOrder} /></div>
-                            </th>
-                            <th className={thClass} onClick={() => handleSort('category')}>
-                                <div className="flex items-center">Категория <SortIcon column="category" sortBy={sortBy} sortOrder={sortOrder} /></div>
-                            </th>
-                            <th className={thClass} onClick={() => handleSort('type')}>
-                                <div className="flex items-center">Тип <SortIcon column="type" sortBy={sortBy} sortOrder={sortOrder} /></div>
-                            </th>
-                            <th className={thClass} onClick={() => handleSort('stock')}>
-                                <div className="flex items-center">Остаток <SortIcon column="stock" sortBy={sortBy} sortOrder={sortOrder} /></div>
-                            </th>
-                            <th className={`${thClass} text-center`} onClick={() => handleSort('is_top')}>
-                                <div className="flex items-center justify-center">TOP <SortIcon column="is_top" sortBy={sortBy} sortOrder={sortOrder} /></div>
-                            </th>
-                            <th className="p-4 text-right">Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                        {!productsData?.items.length && (
-                            <tr>
-                                <td colSpan={8} className="p-8 text-center text-gray-500">
-                                    Нет товаров
-                                </td>
-                            </tr>
-                        )}
-                        {productsData?.items.map((product) => {
-                            const category = categories?.find(c => c.id === product.category_id);
-                            // Backend saves as /uploads/products/xxx. Nginx serves /uploads directly.
-                            // We construct the URL by ensuring it is relative if it was localhost, or kept as is.
-                            const imageUrl = product.image_url.startsWith('http://localhost')
-                                ? product.image_url.replace('http://localhost:8000', '')
-                                : product.image_url;
-                            // Actually, backend returns /uploads/products/xxx. 
-                            // Nginx serves /uploads/. 
-                            // If backendUrl is /api, then we get /api/uploads... which is wrong if uploads is root.
-                            // If product.image_url is "/uploads/products/file.jpg"
-                            // And nginx serves /uploads/
-                            // Then we just need product.image_url (relative to root)
-
-                            return (
-                                <tr key={product.id} className="hover:bg-gray-700/50 transition-colors">
-                                    <td className="p-4">
-                                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-900">
-                                            <img
-                                                src={imageUrl}
-                                                alt={product.name_ru}
-                                                className="w-full h-full object-cover"
-                                            />
-                                        </div>
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="font-medium text-white">{product.name_ru}</div>
-                                        <div className="text-xs text-gray-500">{product.name_en}</div>
-                                    </td>
-                                    <td className="p-4 text-green-400 font-medium">
-                                        ${product.price_usdt}
-                                    </td>
-                                    <td className="p-4 text-gray-300">
-                                        {category ? category.name_ru : '-'}
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`text-xs px-2 py-1 rounded ${product.type === 'service' ? 'bg-purple-500/10 text-purple-400' : 'bg-blue-500/10 text-blue-400'
-                                            }`}>
-                                            {product.type === 'service' ? 'Услуга' : product.type === 'instruction' ? 'Инструкция' : 'Цифровой'}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-gray-300">
-                                        {product.type === 'digital' ? product.stock : '∞'}
-                                    </td>
-                                    <td className="p-4 text-center">
-                                        {product.is_top && (
-                                            <Flame size={20} className="text-orange-600 mx-auto" />
-                                        )}
-                                    </td>
-                                    <td className="p-4 flex justify-end gap-2">
-                                        <button
-                                            onClick={() => handleEditOpen(product)}
-                                            className="p-2 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors"
-                                        >
-                                            <Pencil size={18} />
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                if (window.confirm('Delete this product?')) {
-                                                    deleteMutation.mutate(product.id);
-                                                }
-                                            }}
-                                            className="p-2 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors"
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+            {/* Сортировка на телефоне: шапки таблицы там нет, а без неё
+                порядок товаров изменить было бы нечем */}
+            <div className="md:hidden flex items-center gap-2 mb-3">
+                <label htmlFor="sort" className="text-sm text-gray-400 shrink-0">Сортировка</label>
+                <select
+                    id="sort"
+                    value={sortBy}
+                    onChange={(e) => handleSort(e.target.value)}
+                    className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    {SORTABLE.map((item) => (
+                        <option key={item.key} value={item.key}>{item.label}</option>
+                    ))}
+                </select>
+                <button
+                    onClick={() => handleSort(sortBy)}
+                    className="shrink-0 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm"
+                    aria-label="Обратный порядок"
+                >
+                    {sortOrder === 'asc' ? '\u2191' : '\u2193'}
+                </button>
             </div>
+
+            <DataTable<Product>
+                columns={columns}
+                rows={productsData?.items ?? []}
+                rowKey={(product) => product.id}
+                emptyText="Нет товаров"
+            />
 
             {/* Pagination */}
             {totalPages > 1 && (

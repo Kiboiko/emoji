@@ -82,7 +82,7 @@ export const Settings: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="p-8 text-gray-400">
+            <div className="text-gray-400">
                 <Loader2 size={22} className="animate-spin" />
             </div>
         );
@@ -99,7 +99,7 @@ export const Settings: React.FC = () => {
     ].filter((s) => s.items.length > 0);
 
     return (
-        <div className="p-4 md:p-8 max-w-4xl">
+        <div className="max-w-4xl">
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Настройки</h1>
             <p className="text-gray-400 text-sm mb-6">
                 Применяются сразу, перезапуск не нужен. Проценты задаются в базисных

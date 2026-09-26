@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { adminApi } from '../api/axios';
 import { Loader2, Trash2, Plus, X, Star } from 'lucide-react';
+import { DataTable, type Column } from '../components/ui/DataTable';
 
 interface ReviewUser {
     first_name: string;
@@ -174,11 +175,87 @@ export const Reviews: React.FC = () => {
         </div>
     );
 
+    const columns: Column<Review>[] = [
+        {
+            key: 'user',
+            title: 'Пользователь',
+            // Заголовок карточки на телефоне — подпись ему не нужна
+            wide: true,
+            render: (review) => (
+                <div>
+                    <span className="font-medium text-white">{getDisplayName(review)}</span>
+                    {review.is_fake && (
+                        <span className="text-xs text-purple-400 ml-2">фейк</span>
+                    )}
+                    {review.is_hidden && (
+                        <span className="text-xs text-yellow-400 ml-1">скрыт</span>
+                    )}
+                </div>
+            ),
+        },
+        {
+            key: 'product',
+            title: 'Товар',
+            render: (review) => (
+                <span className="text-sm text-gray-300">{review.product?.name_ru || '—'}</span>
+            ),
+        },
+        {
+            key: 'text',
+            title: 'Текст',
+            wide: true,
+            render: (review) => (
+                /* На телефоне текст показываем целиком: отзыв в одну
+                   обрезанную строку не даёт понять, за что его удалять */
+                <div className="text-sm text-gray-300 md:max-w-xs md:truncate" title={review.text}>
+                    {review.text}
+                </div>
+            ),
+        },
+        {
+            key: 'rating',
+            title: 'Рейтинг',
+            render: (review) => <span className="text-sm">{renderStars(review.rating)}</span>,
+        },
+        {
+            key: 'created_at',
+            title: 'Дата',
+            render: (review) => (
+                <span className="text-sm text-gray-400 whitespace-nowrap">
+                    {new Date(review.created_at).toLocaleString('ru-RU')}
+                </span>
+            ),
+        },
+        {
+            key: 'actions',
+            title: 'Действия',
+            className: 'text-right',
+            wide: true,
+            render: (review) => (
+                <div className="flex md:justify-end">
+                    <button
+                        onClick={() => handleDelete(review.id)}
+                        disabled={deletingId === review.id}
+                        className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                        title="Удалить отзыв"
+                        aria-label="Удалить отзыв"
+                    >
+                        {deletingId === review.id ? (
+                            <Loader2 className="animate-spin" size={18} />
+                        ) : (
+                            <Trash2 size={18} />
+                        )}
+                    </button>
+                </div>
+            ),
+        },
+    ];
+
     return (
         <div>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                <h1 className="text-3xl font-bold">Отзывы</h1>
-                <div className="flex items-center gap-4">
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
+                <h1 className="text-2xl md:text-3xl font-bold">Отзывы</h1>
+                <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-gray-400 text-sm">Всего: {reviews.length}</span>
                     <button
                         onClick={openModal}
@@ -190,73 +267,12 @@ export const Reviews: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-x-auto">
-                <table className="w-full text-left min-w-[700px]">
-                    <thead className="bg-gray-700/50 text-gray-400">
-                        <tr>
-                            <th className="p-4">Пользователь</th>
-                            <th className="p-4">Товар</th>
-                            <th className="p-4">Текст</th>
-                            <th className="p-4">Рейтинг</th>
-                            <th className="p-4">Дата</th>
-                            <th className="p-4 text-right">Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                        {paginatedReviews.length === 0 ? (
-                            <tr>
-                                <td colSpan={6} className="p-8 text-center text-gray-500">
-                                    Отзывов нет
-                                </td>
-                            </tr>
-                        ) : (
-                            paginatedReviews.map((review) => (
-                                <tr key={review.id} className="hover:bg-gray-700/50 transition-colors">
-                                    <td className="p-4">
-                                        <div className="font-medium text-white">
-                                            {getDisplayName(review)}
-                                        </div>
-                                        {review.is_fake && (
-                                            <span className="text-xs text-purple-400">фейк</span>
-                                        )}
-                                        {review.is_hidden && (
-                                            <span className="text-xs text-yellow-400 ml-1">скрыт</span>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-sm text-gray-300">
-                                        {review.product?.name_ru || '—'}
-                                    </td>
-                                    <td className="p-4 text-sm text-gray-300 max-w-xs">
-                                        <div className="truncate" title={review.text}>
-                                            {review.text}
-                                        </div>
-                                    </td>
-                                    <td className="p-4 text-sm">
-                                        {renderStars(review.rating)}
-                                    </td>
-                                    <td className="p-4 text-sm text-gray-400 whitespace-nowrap">
-                                        {new Date(review.created_at).toLocaleString('ru-RU')}
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <button
-                                            onClick={() => handleDelete(review.id)}
-                                            disabled={deletingId === review.id}
-                                            className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
-                                            title="Удалить отзыв"
-                                        >
-                                            {deletingId === review.id ? (
-                                                <Loader2 className="animate-spin" size={18} />
-                                            ) : (
-                                                <Trash2 size={18} />
-                                            )}
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            <DataTable<Review>
+                columns={columns}
+                rows={paginatedReviews}
+                rowKey={(review) => review.id}
+                emptyText="Отзывов нет"
+            />
 
             {totalPages > 1 && (
                 <div className="flex justify-center gap-2 mt-8">

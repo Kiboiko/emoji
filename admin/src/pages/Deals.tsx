@@ -91,7 +91,7 @@ export const Deals: React.FC = () => {
     ];
 
     return (
-        <div className="p-4 md:p-8">
+        <div>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Сделки</h1>
 
             <div className="flex gap-2 mb-5 flex-wrap">

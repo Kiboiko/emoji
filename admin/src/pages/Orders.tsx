@@ -131,7 +131,7 @@ export const Orders: React.FC = () => {
     ];
 
     return (
-        <div className="p-4 md:p-8">
+        <div>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Заказы</h1>
 
             <div className="flex flex-wrap gap-3 mb-4">

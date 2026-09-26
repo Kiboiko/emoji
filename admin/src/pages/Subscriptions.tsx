@@ -28,7 +28,7 @@ export const Subscriptions: React.FC = () => {
     const [tab, setTab] = useState<'channels' | 'subs'>('channels');
 
     return (
-        <div className="p-4 md:p-8">
+        <div>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Каналы и подписки</h1>
 
             <div className="flex gap-2 mb-5">

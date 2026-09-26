@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { categoriesApi } from '../services/categories';
 import type { Category, CategoryCreate, CategoryUpdate } from '../services/categories';
+import { DataTable, type Column } from '../components/ui/DataTable';
 import {
     Plus,
     Pencil,
@@ -93,12 +94,60 @@ export const Categories: React.FC = () => {
         }
     };
 
-    if (isLoading) return <div>Загрузка...</div>;
+    const columns: Column<Category>[] = [
+        {
+            key: 'name_ru',
+            title: 'Название (RU)',
+            wide: true,
+            render: (category) => (
+                <span className="font-medium">{category.name_ru}</span>
+            ),
+        },
+        {
+            key: 'name_en',
+            title: 'Название (EN)',
+            render: (category) => <span className="text-gray-400">{category.name_en}</span>,
+        },
+        {
+            key: 'sort_order',
+            title: 'Сорт.',
+            className: 'text-center',
+            render: (category) => (
+                <span className="bg-gray-700 px-2 py-1 rounded text-sm">
+                    {category.sort_order}
+                </span>
+            ),
+        },
+        {
+            key: 'actions',
+            title: 'Действия',
+            className: 'text-right',
+            wide: true,
+            render: (category) => (
+                <div className="flex gap-2 md:justify-end">
+                    <button
+                        onClick={() => openEditModal(category)}
+                        className="p-2 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors"
+                        aria-label="Править"
+                    >
+                        <Pencil size={18} />
+                    </button>
+                    <button
+                        onClick={() => handleDelete(category.id)}
+                        className="p-2 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors"
+                        aria-label="Удалить"
+                    >
+                        <Trash2 size={18} />
+                    </button>
+                </div>
+            ),
+        },
+    ];
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Категории</h1>
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
+                <h1 className="text-2xl md:text-3xl font-bold">Категории</h1>
                 <button
                     onClick={openCreateModal}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
@@ -108,52 +157,13 @@ export const Categories: React.FC = () => {
                 </button>
             </div>
 
-            <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-x-auto">
-                <table className="w-full text-left min-w-[600px]">
-                    <thead className="bg-gray-700/50 text-gray-400">
-                        <tr>
-                            <th className="p-4">Название (RU)</th>
-                            <th className="p-4">Название (EN)</th>
-                            <th className="p-4 text-center">Сорт.</th>
-                            <th className="p-4 text-right">Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                        {categories?.length === 0 && (
-                            <tr>
-                                <td colSpan={4} className="p-8 text-center text-gray-500">
-                                    Нет категорий
-                                </td>
-                            </tr>
-                        )}
-                        {categories?.map((category) => (
-                            <tr key={category.id} className="hover:bg-gray-700/50 transition-colors">
-                                <td className="p-4 font-medium">{category.name_ru}</td>
-                                <td className="p-4 text-gray-400">{category.name_en}</td>
-                                <td className="p-4 text-center">
-                                    <span className="bg-gray-700 px-2 py-1 rounded text-sm">
-                                        {category.sort_order}
-                                    </span>
-                                </td>
-                                <td className="p-4 flex justify-end gap-2">
-                                    <button
-                                        onClick={() => openEditModal(category)}
-                                        className="p-2 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors"
-                                    >
-                                        <Pencil size={18} />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(category.id)}
-                                        className="p-2 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            <DataTable<Category>
+                columns={columns}
+                rows={categories ?? []}
+                rowKey={(category) => category.id}
+                loading={isLoading}
+                emptyText="Нет категорий"
+            />
 
             {/* Modal */}
             {isModalOpen && (
