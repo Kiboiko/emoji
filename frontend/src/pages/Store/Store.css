@@ -9,11 +9,13 @@
     padding-bottom: var(--space-6);
 }
 
+/* Аватар слева, всё про магазин справа — как на витринах, где продавец
+   и есть главное. Подложки нет: страница уже даёт поля, а рамка вокруг
+   шапки повторяла границу экрана и съедала ширину. */
 .store-head {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-4);
+    gap: var(--space-4);
     margin: 0 0 var(--space-3);
 }
 
@@ -24,13 +26,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 64px;
-    height: 64px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
     overflow: hidden;
     background: rgba(var(--accent-rgb), 0.15);
     color: var(--accent-primary);
-    font-size: 26px;
+    font-size: 32px;
     font-weight: 700;
     line-height: 1;
 }
@@ -42,6 +44,9 @@
 }
 
 .store-ident {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
     min-width: 0;
     flex: 1;
 }
@@ -52,10 +57,11 @@
     display: flex;
     align-items: center;
     gap: var(--space-1-5);
-    margin: 0 0 var(--space-1-5);
-    font-size: 20px;
-    font-weight: 700;
+    margin: 0;
+    font-size: 24px;
+    font-weight: var(--weight-bold);
     line-height: 1.2;
+    letter-spacing: -0.01em;
     color: var(--text-primary);
     overflow-wrap: anywhere;
 }
@@ -65,34 +71,48 @@
     color: var(--accent-primary);
 }
 
-.store-stats {
+/* Оценка отдельной строкой и крупно: до сделки это единственное, по чему
+   покупатель судит о продавце. Красят её сами звёзды — число рядом обычным
+   цветом, иначе вся строка уходит в янтарный. */
+.store-rating {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
     gap: var(--space-2);
+    font-size: 16px;
+}
+
+.store-rating-icon {
+    color: var(--text-secondary);
+}
+
+.store-rating-value {
+    font-weight: var(--weight-bold);
+    color: var(--text-primary);
+}
+
+/* Число отзывов не ссылка: отдельного экрана с отзывами магазина нет, и
+   красить его акцентом значило бы обещать переход, которого не будет. */
+.store-rating-count {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--font-md);
+    color: var(--text-secondary);
+}
+
+.store-since {
     font-size: 13px;
     color: var(--text-secondary);
 }
 
-.store-stat {
+.store-link {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    font-weight: 600;
-}
-
-/* Оценку красят сами звёзды, а число рядом — обычный текст. Раньше строка
-   целиком шла янтарным, и «3 сделок» рядом читалось как продолжение оценки. */
-.store-stat:first-child {
-    color: var(--text-primary);
-}
-
-.store-stat-dim {
-    font-weight: 400;
-    color: var(--text-tertiary);
-}
-
-.store-link {
+    align-self: flex-start;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: var(--weight-medium);
     color: var(--accent-primary);
     text-decoration: none;
 }
@@ -150,7 +170,7 @@
 /* Скелетоны повторяют размеры настоящих блоков, чтобы страница не прыгала
    при загрузке */
 .store-head-skeleton {
-    height: 96px;
+    height: 80px;
     border-radius: var(--radius-lg);
     margin-bottom: var(--space-3);
 }

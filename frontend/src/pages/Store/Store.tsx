@@ -8,6 +8,7 @@ import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { ProductCard } from '@/components/ProductCard/ProductCard';
 import { Stars } from '@/components/Stars/Stars';
+import { monthYear, pluralRu } from '@/lib/format';
 import type { Store as StoreData } from '@/types';
 import './Store.css';
 
@@ -100,6 +101,22 @@ export const Store: React.FC = () => {
 
     const initial = store.name.trim().charAt(0).toUpperCase();
 
+    // Сколько человек здесь. Точная дата не нужна и выглядит слежкой —
+    // месяц отвечает на единственный настоящий вопрос покупателя.
+    const since = monthYear(store.created_at, language);
+
+    const reviewsWord = (n: number) => (language === 'ru'
+        ? pluralRu(n, ['отзыв', 'отзыва', 'отзывов'])
+        : (n === 1 ? 'review' : 'reviews'));
+
+    const dealsWord = (n: number) => (language === 'ru'
+        ? pluralRu(n, ['сделка', 'сделки', 'сделок'])
+        : (n === 1 ? 'deal' : 'deals'));
+
+    const subscribersWord = (n: number) => (language === 'ru'
+        ? pluralRu(n, ['подписчик', 'подписчика', 'подписчиков'])
+        : (n === 1 ? 'subscriber' : 'subscribers'));
+
     return (
         <div className="store-page">
             <div className="container">
@@ -108,11 +125,14 @@ export const Store: React.FC = () => {
                     <span>{t('Назад', 'Back')}</span>
                 </button>
 
-                <section className="store-head glass-card">
+                {/* Шапка лежит прямо на странице, без подложки: своя
+                    карточка вокруг неё отбирала 32px ширины и ещё раз
+                    повторяла границу, которую и так рисует край экрана. */}
+                <header className="store-head">
                     <div className="store-avatar">
                         {store.avatar_url
                             ? <img src={store.avatar_url} alt="" />
-                            : <span aria-hidden="true">{initial || <StoreIcon size={24} />}</span>}
+                            : <span aria-hidden="true">{initial || <StoreIcon size={32} />}</span>}
                     </div>
 
                     <div className="store-ident">
@@ -121,7 +141,7 @@ export const Store: React.FC = () => {
                             {store.is_verified && (
                                 <BadgeCheck
                                     className="store-verified"
-                                    size={18}
+                                    size={20}
                                     aria-label={t('Проверенный продавец', 'Verified seller')}
                                 />
                             )}
@@ -129,40 +149,48 @@ export const Store: React.FC = () => {
 
                         {/* Показываем только то, что действительно посчитано.
                             У канала рейтинга нет — отзывы собираются по
-                            сделкам, а подписка идёт не через сделку. */}
-                        <div className="store-stats">
-                            {store.rating != null && (
-                                <span className="store-stat">
-                                    <Stars value={store.rating} size={13} />
-                                    {store.rating}
-                                    <span className="store-stat-dim">({store.rating_count})</span>
+                            сделкам, а подписка идёт не через сделку, — зато
+                            есть живые подписчики. */}
+                        {store.rating != null ? (
+                            <div className="store-rating">
+                                <Stars value={store.rating} size={17} />
+                                <span className="store-rating-value">{store.rating}</span>
+                                <span className="store-rating-count">
+                                    {store.rating_count} {reviewsWord(store.rating_count)}
                                 </span>
-                            )}
-                            {store.deals_completed > 0 && (
-                                <span className="store-stat">
-                                    {store.deals_completed} {t('сделок', 'deals')}
+                            </div>
+                        ) : !!store.subscribers && (
+                            <div className="store-rating">
+                                <Users size={16} className="store-rating-icon" />
+                                <span className="store-rating-value">{store.subscribers}</span>
+                                <span className="store-rating-count">
+                                    {subscribersWord(store.subscribers)}
                                 </span>
-                            )}
-                            {store.subscribers != null && store.subscribers > 0 && (
-                                <span className="store-stat">
-                                    <Users size={13} />
-                                    {store.subscribers}
-                                </span>
-                            )}
-                            {store.link && (
-                                <a
-                                    className="store-stat store-link"
-                                    href={`https://t.me/${store.link}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                >
-                                    <Link2 size={13} />
-                                    @{store.link}
-                                </a>
-                            )}
-                        </div>
+                            </div>
+                        )}
+
+                        {(since || store.deals_completed > 0) && (
+                            <div className="store-since">
+                                {since && t(`на площадке с ${since}`, `on the marketplace since ${since}`)}
+                                {since && store.deals_completed > 0 && ' · '}
+                                {store.deals_completed > 0
+                                    && `${store.deals_completed} ${dealsWord(store.deals_completed)}`}
+                            </div>
+                        )}
+
+                        {store.link && (
+                            <a
+                                className="store-link"
+                                href={`https://t.me/${store.link}`}
+                                target="_blank"
+                                rel="noreferrer"
+                            >
+                                <Link2 size={14} />
+                                @{store.link}
+                            </a>
+                        )}
                     </div>
-                </section>
+                </header>
 
                 {store.description && (
                     <p className="store-description">{store.description}</p>

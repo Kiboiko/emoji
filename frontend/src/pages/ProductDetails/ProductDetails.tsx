@@ -10,6 +10,7 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import type { Product, Review } from '@/types';
 import { StoreLine } from '@/components/StoreLine/StoreLine';
 import { Stars } from '@/components/Stars/Stars';
+import { pluralRu } from '@/lib/format';
 import { useToastStore, errorText } from '@/store/toastStore';
 import './ProductDetails.css';
 
@@ -235,14 +236,10 @@ export const ProductDetails: React.FC = () => {
     const rating = product.rating ?? null;
     const reviewsCount = product.reviews_count ?? 0;
 
-    const reviewWord = (n: number) => {
-        if (language !== 'ru') return n === 1 ? 'review' : 'reviews';
-        const tail = n % 10;
-        const hundred = n % 100;
-        if (tail === 1 && hundred !== 11) return 'отзыв';
-        if (tail >= 2 && tail <= 4 && (hundred < 12 || hundred > 14)) return 'отзыва';
-        return 'отзывов';
-    };
+    // Склонение общее с витриной магазина: там та же строка «N отзывов»
+    const reviewWord = (n: number) => (language === 'ru'
+        ? pluralRu(n, ['отзыв', 'отзыва', 'отзывов'])
+        : (n === 1 ? 'review' : 'reviews'));
 
     // Столько же, сколько уйдёт в корзину: handleAddToCart зажимает
     // количество теми же границами
