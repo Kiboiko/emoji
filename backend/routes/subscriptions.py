@@ -47,12 +47,14 @@ class ChannelCreate(BaseModel):
     # Либо @username, либо числовой chat_id канала
     chat_identifier: str = Field(..., min_length=2, max_length=100)
     description: Optional[str] = Field(None, max_length=2000)
+    description_en: Optional[str] = Field(None, max_length=2000)
     payout_wallet: str = Field(..., min_length=10, max_length=80)
     accept_terms: bool
 
 
 class ChannelUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=2000)
+    description_en: Optional[str] = Field(None, max_length=2000)
     payout_wallet: Optional[str] = Field(None, min_length=10, max_length=80)
 
 
@@ -77,6 +79,7 @@ def _channel_dto(channel: Channel, plans: list[SubscriptionPlan] | None = None) 
         "title": channel.title,
         "username": channel.username,
         "description": channel.description,
+        "description_en": channel.description_en,
         "avatar_url": channel.avatar_url,
         "cover_url": channel.cover_url,
         "status": channel.status.value,
@@ -280,6 +283,7 @@ async def connect_channel(
         title=chat.get("title") or str(chat_id),
         username=chat.get("username"),
         description=payload.description,
+        description_en=payload.description_en,
         payout_wallet=payload.payout_wallet.strip(),
         status=ChannelStatus.DRAFT,
         terms_version=terms_version,
@@ -437,7 +441,10 @@ async def create_plan(
         name_ru=f"{channel.title} — {payload.title_ru}",
         name_en=f"{channel.title} — {payload.title_en}",
         description_ru=channel.description or f"Доступ в закрытый канал на {payload.duration_days} дн.",
-        description_en=channel.description or f"Private channel access for {payload.duration_days} days",
+        # Английское описание берём английское: раньше сюда шло русское, и
+        # подписка в англоязычном каталоге читалась по-русски
+        description_en=(channel.description_en or channel.description
+                        or f"Private channel access for {payload.duration_days} days"),
         price_usdt=payload.price_usd,
         image_url=channel.cover_url or channel.avatar_url or PLACEHOLDER_IMAGE,
         category_id=category_id,
@@ -482,15 +489,27 @@ async def update_channel(
     if payload.payout_wallet is not None:
         channel.payout_wallet = payload.payout_wallet.strip()
 
+    changed_text = False
+
     if payload.description is not None:
         new_description = payload.description.strip() or None
         if new_description != channel.description:
             channel.description = new_description
-            if channel.status == ChannelStatus.ACTIVE:
-                channel.status = ChannelStatus.DRAFT
-                channel.moderation_comment = (
-                    "Описание изменено — канал снят с публикации до повторной проверки"
-                )
+            changed_text = True
+
+    # Английское описание проверяет тот же модератор, поэтому и оно уводит
+    # канал на повторную проверку
+    if payload.description_en is not None:
+        new_english = payload.description_en.strip() or None
+        if new_english != channel.description_en:
+            channel.description_en = new_english
+            changed_text = True
+
+    if changed_text and channel.status == ChannelStatus.ACTIVE:
+        channel.status = ChannelStatus.DRAFT
+        channel.moderation_comment = (
+            "Описание изменено — канал снят с публикации до повторной проверки"
+        )
 
     await subscription_service.sync_plan_products(db, channel)
     await db.commit()

@@ -365,19 +365,34 @@ async def test_listing_keeps_english_name(db, seller_user, listing_factory):
     assert listing.name_en == "Mechanical keyboard"
 
 
-async def test_empty_english_name_clears_it(db, seller_user, listing_factory):
+async def test_english_name_cannot_be_wiped(db, seller_user, listing_factory):
     """
-    Пустая строка — это осознанное «убрать английское название», а не
-    «поле не прислали»: иначе стереть его было бы нечем.
+    Английские тексты обязательны, поэтому стереть их правкой нельзя. Строка
+    из пробелов проходит проверку длины, но в каталоге дала бы товар без
+    названия у англоязычного покупателя.
     """
     listing = await listing_factory(status=ListingStatus.DRAFT)
     listing.name_en = "Keyboard"
     await db.flush()
 
+    with pytest.raises(HTTPException) as exc:
+        await p2p.update_listing(
+            listing.id,
+            p2p.ListingUpdate(name_en="   "),
+            user=seller_user, db=db,
+        )
+
+    assert exc.value.status_code == 400
+    assert listing.name_en == "Keyboard"
+
+
+async def test_listing_keeps_english_description(db, seller_user, listing_factory):
+    listing = await listing_factory(status=ListingStatus.DRAFT)
+
     await p2p.update_listing(
         listing.id,
-        p2p.ListingUpdate(name_en="   "),
+        p2p.ListingUpdate(description_en="Mechanical, almost new"),
         user=seller_user, db=db,
     )
 
-    assert listing.name_en is None
+    assert listing.description_en == "Mechanical, almost new"

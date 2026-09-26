@@ -66,10 +66,11 @@ class SellerUpdate(BaseModel):
 
 class ListingCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=500)
-    # Необязательное: у кого товар только для русскоязычных, второе название
-    # заполнять незачем
-    name_en: Optional[str] = Field(None, min_length=3, max_length=500)
+    # Английские обязательны: каталог двуязычный, и товар без второго
+    # текста показывался англоязычному покупателю по-русски
+    name_en: str = Field(..., min_length=3, max_length=500)
     description: str = Field(..., min_length=10, max_length=5000)
+    description_en: str = Field(..., min_length=10, max_length=5000)
     price_usd: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2)
     category_id: Optional[uuid.UUID] = None
     accept_terms: bool
@@ -78,8 +79,9 @@ class ListingCreate(BaseModel):
 class ListingUpdate(BaseModel):
     """Правка заявки. Любое поле необязательно — меняем только присланные."""
     name: Optional[str] = Field(None, min_length=3, max_length=500)
-    name_en: Optional[str] = Field(None, max_length=500)
+    name_en: Optional[str] = Field(None, min_length=3, max_length=500)
     description: Optional[str] = Field(None, min_length=10, max_length=5000)
+    description_en: Optional[str] = Field(None, min_length=10, max_length=5000)
     price_usd: Optional[Decimal] = Field(None, gt=0, max_digits=10, decimal_places=2)
     category_id: Optional[uuid.UUID] = None
 
@@ -356,6 +358,7 @@ async def my_listings(
             "name": l.name,
             "name_en": l.name_en,
             "description": l.description,
+            "description_en": l.description_en,
             "price_usd": str(l.price_usd),
             "status": l.status.value,
             "moderation_comment": l.moderation_comment,
@@ -410,8 +413,9 @@ async def create_listing(
         seller_id=profile.id,
         category_id=payload.category_id,
         name=payload.name.strip(),
-        name_en=(payload.name_en or "").strip() or None,
+        name_en=payload.name_en.strip(),
         description=payload.description.strip(),
+        description_en=payload.description_en.strip(),
         price_usd=payload.price_usd,
         status=ListingStatus.DRAFT,
     )
@@ -527,12 +531,22 @@ async def update_listing(
     if payload.name is not None and payload.name.strip() != listing.name:
         listing.name = payload.name.strip()
         changed = True
+    # Английские тексты обязательны, поэтому стереть их правкой нельзя:
+    # пустая строка из одних пробелов проходит проверку длины, но в каталоге
+    # дала бы товар без названия у англоязычного покупателя
     if payload.name_en is not None:
-        # Пустая строка — осознанное «убрать английское название», поэтому
-        # None, а не пропуск: иначе стереть его было бы нечем
-        value = payload.name_en.strip() or None
+        value = payload.name_en.strip()
+        if not value:
+            raise HTTPException(status_code=400, detail="Английское название не может быть пустым")
         if value != listing.name_en:
             listing.name_en = value
+            changed = True
+    if payload.description_en is not None:
+        value = payload.description_en.strip()
+        if not value:
+            raise HTTPException(status_code=400, detail="Английское описание не может быть пустым")
+        if value != listing.description_en:
+            listing.description_en = value
             changed = True
     if payload.description is not None and payload.description.strip() != listing.description:
         listing.description = payload.description.strip()

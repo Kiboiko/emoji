@@ -259,6 +259,7 @@ const ConnectForm: React.FC<{
     const [identifier, setIdentifier] = useState('');
     const [wallet, setWallet] = useState('');
     const [description, setDescription] = useState('');
+    const [descriptionEn, setDescriptionEn] = useState('');
     const [accepted, setAccepted] = useState(false);
     const [termsOpen, setTermsOpen] = useState(false);
     const [termsText, setTermsText] = useState<string | null>(null);
@@ -286,6 +287,7 @@ const ConnectForm: React.FC<{
                 chat_identifier: identifier.trim(),
                 payout_wallet: wallet.trim(),
                 description: description.trim() || undefined,
+                description_en: descriptionEn.trim() || undefined,
                 accept_terms: accepted,
             });
             haptic.notification('success');
@@ -347,11 +349,24 @@ const ConnectForm: React.FC<{
             </label>
 
             <label className="channel-label">
-                {t('Описание (необязательно)', 'Description (optional)')}
+                {t('Описание по-русски', 'Description in Russian')}
                 <textarea
                     className="channel-input channel-textarea"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
+                    maxLength={2000}
+                />
+            </label>
+
+            {/* Описание канала становится описанием подписки в каталоге, а
+                каталог двуязычный: без английского текста покупатель с
+                английским языком читал русский */}
+            <label className="channel-label">
+                {t('Описание по-английски', 'Description in English')}
+                <textarea
+                    className="channel-input channel-textarea"
+                    value={descriptionEn}
+                    onChange={(e) => setDescriptionEn(e.target.value)}
                     maxLength={2000}
                 />
             </label>
@@ -753,12 +768,15 @@ const ChannelEditForm: React.FC<{
     const { haptic } = useTelegram();
     const showToast = useToastStore((s) => s.show);
     const [description, setDescription] = useState(channel.description ?? '');
+    const [descriptionEn, setDescriptionEn] = useState(channel.description_en ?? '');
     const [wallet, setWallet] = useState(channel.payout_wallet ?? '');
     const [busy, setBusy] = useState(false);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
-    const descriptionChanged = description.trim() !== (channel.description ?? '').trim();
+    const descriptionChanged =
+        description.trim() !== (channel.description ?? '').trim()
+        || descriptionEn.trim() !== (channel.description_en ?? '').trim();
     const willUnpublish = channel.status === 'active' && descriptionChanged;
 
     const submit = async (e: React.FormEvent) => {
@@ -767,6 +785,7 @@ const ChannelEditForm: React.FC<{
         try {
             await subscriptionsApi.updateChannel(channel.id, {
                 description: description.trim(),
+                description_en: descriptionEn.trim(),
                 payout_wallet: wallet.trim(),
             });
             haptic.notification('success');
@@ -790,11 +809,21 @@ const ChannelEditForm: React.FC<{
     return (
         <form className="channel-form channel-form-inline" onSubmit={submit}>
             <label className="channel-label">
-                {t('Описание', 'Description')}
+                {t('Описание по-русски', 'Description in Russian')}
                 <textarea
                     className="channel-input channel-textarea"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
+                    maxLength={2000}
+                />
+            </label>
+
+            <label className="channel-label">
+                {t('Описание по-английски', 'Description in English')}
+                <textarea
+                    className="channel-input channel-textarea"
+                    value={descriptionEn}
+                    onChange={(e) => setDescriptionEn(e.target.value)}
                     maxLength={2000}
                 />
             </label>
@@ -863,9 +892,7 @@ const PlanForm: React.FC<{
         try {
             const payload = {
                 title_ru: titleRu.trim(),
-                // Если английское не заполнили — дублируем русское: бэкенд
-                // требует непустое, а пустая строка в каталоге хуже русской
-                title_en: titleEn.trim() || titleRu.trim(),
+                title_en: titleEn.trim(),
                 duration_days: Number(days),
                 price_usd: price.trim(),
             };
@@ -903,13 +930,14 @@ const PlanForm: React.FC<{
             {/* Второе название нужно английскому интерфейсу: без него
                 покупатель с английским языком видел в каталоге русское */}
             <label className="channel-label">
-                {t('По-английски — необязательно', 'In English — optional')}
+                {t('Название по-английски', 'Plan name in English')}
                 <input
                     className="channel-input"
                     value={titleEn}
                     onChange={(e) => setTitleEn(e.target.value)}
                     placeholder="Month"
                     maxLength={255}
+                    required
                 />
             </label>
 

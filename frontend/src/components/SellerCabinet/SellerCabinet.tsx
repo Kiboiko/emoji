@@ -37,15 +37,16 @@ const DELETABLE = ['draft', 'rejected', 'withdrawn'];
 
 interface DraftForm {
     name: string;
-    /** Необязательное: у товара только для русскоязычных его заполнять незачем */
     name_en: string;
     description: string;
+    description_en: string;
     price_usd: string;
     category_id: string;
 }
 
 const EMPTY_FORM: DraftForm = {
-    name: '', name_en: '', description: '', price_usd: '', category_id: '',
+    name: '', name_en: '', description: '', description_en: '',
+    price_usd: '', category_id: '',
 };
 
 /**
@@ -693,6 +694,7 @@ const ListingManager: React.FC<{
             name: listing.name,
             name_en: listing.name_en ?? '',
             description: listing.description,
+            description_en: listing.description_en ?? '',
             price_usd: listing.price_usd,
             category_id: listing.category_id ?? '',
         });
@@ -708,6 +710,7 @@ const ListingManager: React.FC<{
                 name: form.name.trim(),
                 name_en: form.name_en.trim(),
                 description: form.description.trim(),
+                description_en: form.description_en.trim(),
                 price_usd: form.price_usd,
                 category_id: form.category_id || undefined,
             };
@@ -833,22 +836,34 @@ const ListingManager: React.FC<{
                         maxLength={500}
                         required
                     />
-                    {/* Второе название нужно английскому интерфейсу: без него
-                        покупатель с английским языком видел в каталоге
-                        русское имя, и переключатель на такой товар не влиял */}
+                    {/* Английские тексты обязательны: каталог двуязычный, и
+                        без них покупатель с английским языком видел русское,
+                        а переключатель языка на такой товар не влиял */}
                     <input
                         className="seller-input"
                         value={form.name_en}
                         onChange={(e) => setForm({ ...form, name_en: e.target.value })}
-                        placeholder={t('Название по-английски — необязательно',
-                                       'Title in English — optional')}
+                        placeholder={t('Название по-английски', 'Title in English')}
+                        minLength={3}
                         maxLength={500}
+                        required
                     />
                     <textarea
                         className="seller-input seller-textarea"
                         value={form.description}
                         onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        placeholder={t('Описание (минимум 10 символов)', 'Description (min 10 chars)')}
+                        placeholder={t('Описание по-русски (минимум 10 символов)',
+                                       'Description in Russian (min 10 chars)')}
+                        minLength={10}
+                        maxLength={5000}
+                        required
+                    />
+                    <textarea
+                        className="seller-input seller-textarea"
+                        value={form.description_en}
+                        onChange={(e) => setForm({ ...form, description_en: e.target.value })}
+                        placeholder={t('Описание по-английски (минимум 10 символов)',
+                                       'Description in English (min 10 chars)')}
                         minLength={10}
                         maxLength={5000}
                         required

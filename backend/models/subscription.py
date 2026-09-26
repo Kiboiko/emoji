@@ -62,6 +62,9 @@ class Channel(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Описание для английского интерфейса: в каталоге подписка показывается
+    # обычным товаром, и её описание берётся отсюда
+    description_en: Mapped[str | None] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Обложка подписок — картинка, которую автор загрузил сам. Отдельно от

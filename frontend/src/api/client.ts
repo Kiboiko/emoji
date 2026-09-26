@@ -284,7 +284,8 @@ export const p2pApi = {
     getMyListings: async () => (await apiClient.get('/p2p/seller/listings')).data,
 
     updateListing: async (listingId: string, data: {
-        name?: string; name_en?: string; description?: string;
+        name?: string; name_en?: string;
+        description?: string; description_en?: string;
         price_usd?: string; category_id?: string;
     }) => (await apiClient.patch(`/p2p/seller/listings/${listingId}`, data)).data,
 
@@ -301,8 +302,9 @@ export const p2pApi = {
         (await apiClient.post(`/p2p/seller/listings/${listingId}/republish`)).data,
 
     createListing: async (data: {
-        name: string; name_en?: string; description: string; price_usd: string;
-        category_id?: string; accept_terms: boolean;
+        name: string; name_en: string;
+        description: string; description_en: string;
+        price_usd: string; category_id?: string; accept_terms: boolean;
     }) => (await apiClient.post('/p2p/seller/listings', data)).data,
 
     uploadListingImage: async (listingId: string, file: File) => {
@@ -373,6 +375,7 @@ export const subscriptionsApi = {
         chat_identifier: string;
         payout_wallet: string;
         description?: string;
+        description_en?: string;
         accept_terms: boolean;
     }): Promise<AuthorChannel> =>
         (await apiClient.post('/subscriptions/author/channels', data)).data,
@@ -394,6 +397,7 @@ export const subscriptionsApi = {
 
     updateChannel: async (channelId: string, data: {
         description?: string;
+        description_en?: string;
         payout_wallet?: string;
     }): Promise<AuthorChannel> =>
         (await apiClient.patch(`/subscriptions/author/channels/${channelId}`, data)).data,

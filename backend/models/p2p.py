@@ -152,6 +152,10 @@ class ProductListing(Base):
     # публикации в обе колонки товара уходит русское — как было раньше.
     name_en: Mapped[str | None] = mapped_column(String(500), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    # Английское описание. Как и название, необязательное в базе: у заявок,
+    # заведённых до его появления, текста нет, и подставлять туда русский
+    # нельзя — потом не отличить «так и хотели» от «поля не было».
+    description_en: Mapped[str | None] = mapped_column(Text, nullable=True)
     price_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
 
     status: Mapped[ListingStatus] = mapped_column(

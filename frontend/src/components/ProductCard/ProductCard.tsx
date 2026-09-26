@@ -52,25 +52,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     {/* Без огонька: иконка мельче подписи, на фотографии
                         превращалась в жёлтую кляксу и клиенту не нравилась */}
                     {product.is_top && <span className="product-tag">Хит</span>}
+
+                    {/* Оценка лежит на картинке, а не под названием.
+                        Под названием она встречалась не у всех товаров, и
+                        карточки в ряду выходили разной высоты: держать под
+                        неё пустую строку — дыра над кнопкой, не держать —
+                        кнопки вразнобой. На картинке место есть всегда, и
+                        текстовый блок у всех карточек одинаковый. */}
+                    {rating != null && (
+                        <span className="product-score">
+                            <Stars value={rating} size={11} />
+                            {rating}
+                        </span>
+                    )}
                 </span>
 
                 <span className="product-name">{product.name}</span>
-
-                {/* Пять звёзд с дробной заливкой и число рядом: по одной
-                    звезде не видно, 4.2 там или 4.9, а число без звёзд не
-                    читается с одного взгляда.
-
-                    Пустую строку под оценку больше не держим. Она выравнивала
-                    кнопки в ряду, но у товара без отзывов оставляла над
-                    кнопкой заметный пустой кусок — а он мозолит глаза сильнее,
-                    чем кнопки на разной высоте. */}
-                {rating != null && (
-                    <span className="product-rating">
-                        <Stars value={rating} size={12} />
-                        <span className="product-rating-value">{rating}</span>
-                        <span className="product-reviews">· {product.reviews_count}</span>
-                    </span>
-                )}
             </motion.button>
 
             <motion.button

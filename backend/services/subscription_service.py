@@ -155,6 +155,12 @@ async def sync_plan_products(db: AsyncSession, channel: Channel) -> None:
         product.is_active = live and plan.is_active
         product.name_ru = f"{channel.title} — {plan.title_ru}"
         product.name_en = f"{channel.title} — {plan.title_en}"
+        # Описание канала тоже подтягиваем: автор правит его в кабинете, а в
+        # каталоге до этого висел текст, с которым тариф когда-то завели
+        if channel.description:
+            product.description_ru = channel.description
+        if channel.description_en or channel.description:
+            product.description_en = channel.description_en or channel.description
         # Обложка главнее аватара: её автор загрузил сам, а аватар подтянут
         # из Telegram и у канала без фотографии его просто нет
         picture = channel.cover_url or channel.avatar_url

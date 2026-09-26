@@ -238,6 +238,8 @@ export interface AuthorChannel {
     title: string;
     username: string | null;
     description: string | null;
+    /** Описание для английского интерфейса */
+    description_en: string | null;
     avatar_url: string | null;
     /** Обложка подписок — картинка, которую автор загрузил сам */
     cover_url: string | null;
@@ -306,9 +308,11 @@ export interface ListingImage {
 export interface Listing {
     id: string;
     name: string;
-    /** Название для английского интерфейса. null — показываем русское */
+    /** Название для английского интерфейса */
     name_en: string | null;
     description: string;
+    /** Описание для английского интерфейса */
+    description_en: string | null;
     price_usd: string;
     status: ListingStatus;
     moderation_comment: string | null;

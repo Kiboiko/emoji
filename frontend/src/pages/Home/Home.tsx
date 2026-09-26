@@ -281,9 +281,10 @@ export const Home: React.FC = () => {
                     ))}
                 </div>
 
-                {/* Магазины. Одного магазина мало: строка из единственного
-                    кружка ничего не рассказывает и только занимает место. */}
-                {isBrowsing && !isLoading && stores.length > 1 && (
+                {/* Даже один магазин показываем: строка отвечает на вопрос
+                    «кто здесь торгует», и при единственном продавце ответ
+                    не менее важен, чем при десяти. */}
+                {isBrowsing && !isLoading && stores.length > 0 && (
                     <>
                         <h2 className="home-section">{t('Магазины', 'Stores')}</h2>
                         <StoreStrip stores={stores} />
@@ -292,7 +293,7 @@ export const Home: React.FC = () => {
 
                 {/* Заголовок нужен только когда выше стоят магазины: иначе
                     сетка повисает под чужим разделом */}
-                {isBrowsing && !isLoading && stores.length > 1 && (
+                {isBrowsing && !isLoading && stores.length > 0 && (
                     <h2 className="home-section">{t('Товары', 'Products')}</h2>
                 )}
 

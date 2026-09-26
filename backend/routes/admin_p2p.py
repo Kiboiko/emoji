@@ -208,7 +208,8 @@ async def moderate_listing(
     # стоит русское — так было всегда, и это лучше пустой строки
     product.name_en = listing.name_en or listing.name
     product.description_ru = listing.description
-    product.description_en = listing.description
+    # Английского описания может не быть у старых заявок — тогда русское
+    product.description_en = listing.description_en or listing.description
     product.price_usdt = listing.price_usd
     product.image_url = image_url
     product.category_id = category_id
