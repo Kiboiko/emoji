@@ -7,11 +7,29 @@ import { p2pApi, categoriesApi, termsApi, withdrawalsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
+import { CommissionNote } from '@/components/CommissionNote/CommissionNote';
+import { usePublicSettings } from '@/hooks/usePublicSettings';
 import type { Category, Listing, SellerProfile } from '@/types';
 import './SellerCabinet.css';
 
-/** Статусы, в которых заявку ещё можно править — зеркало EDITABLE_STATUSES на бэкенде */
-const EDITABLE = ['draft', 'rejected'];
+/**
+ * Статусы, в которых заявку ещё можно править — зеркало EDITABLE_STATUSES
+ * на бэкенде. Там в наборе всегда были и approved с withdrawn, а здесь
+ * стояли только два: сервер правку опубликованного товара принимал, а
+ * кнопки «Править» у него не было — продавец мог только снять его с
+ * продажи и завести заново, потеряв отзывы и историю.
+ */
+const EDITABLE = ['draft', 'rejected', 'approved', 'withdrawn'];
+
+/** Отправить на проверку можно только то, что там ещё не было или вернулось */
+const SUBMITTABLE = ['draft', 'rejected'];
+
+/**
+ * Удалять опубликованное и ждущее проверки нельзя: сначала «снять с
+ * продажи». Сервер это и так запрещает — кнопка просто не должна вести
+ * в отказ.
+ */
+const DELETABLE = ['draft', 'rejected', 'withdrawn'];
 
 interface DraftForm {
     name: string;
@@ -566,6 +584,8 @@ const ListingManager: React.FC<{
     const { haptic } = useTelegram();
     const [creating, setCreating] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const commissions = usePublicSettings();
+    const showToast = useToastStore((s) => s.show);
     const [form, setForm] = useState<DraftForm>(EMPTY_FORM);
     const [busyId, setBusyId] = useState<string | null>(null);
     const fileInput = useRef<HTMLInputElement>(null);
@@ -594,6 +614,11 @@ const ListingManager: React.FC<{
         setCreating(true);
     };
 
+    // Правка уже одобренного товара уводит его на повторную проверку —
+    // об этом надо сказать до нажатия «Сохранить», а не после
+    const editingApproved = editingId !== null
+        && listings.find((item) => item.id === editingId)?.status === 'approved';
+
     const startEdit = (listing: Listing) => {
         setForm({
             name: listing.name,
@@ -617,7 +642,16 @@ const ListingManager: React.FC<{
             };
 
             if (editingId) {
-                await p2pApi.updateListing(editingId, payload);
+                const result = await p2pApi.updateListing(editingId, payload);
+                // Сервер снимает изменённый товар с витрины и отправляет его
+                // на повторную проверку. Без этой строки он просто пропадал
+                // из каталога, и продавец решал, что что-то сломалось.
+                if (result?.remoderating) {
+                    showToast(t(
+                        'Товар снят с витрины и ушёл на повторную проверку',
+                        'The item was unlisted and sent back for review',
+                    ), 'info');
+                }
             } else {
                 await p2pApi.createListing({ ...payload, accept_terms: true });
             }
@@ -647,7 +681,15 @@ const ListingManager: React.FC<{
 
         setBusyId(uploadTarget);
         try {
-            await p2pApi.uploadListingImage(uploadTarget, file);
+            const result = await p2pApi.uploadListingImage(uploadTarget, file);
+            // Фотография — такая же часть карточки, как текст, поэтому у
+            // опубликованного товара она тоже уводит его на проверку
+            if (result?.remoderating) {
+                showToast(t(
+                    'Товар снят с витрины и ушёл на повторную проверку',
+                    'The item was unlisted and sent back for review',
+                ), 'info');
+            }
             haptic.notification('success');
             await reload();
         } catch (err) {
@@ -735,6 +777,24 @@ const ListingManager: React.FC<{
                         </select>
                     </div>
 
+                    {/* Сколько удержит площадка — рядом с полем цены, а не
+                        в условиях мелким шрифтом: процент нужен ровно в тот
+                        момент, когда цену назначают */}
+                    <CommissionNote
+                        price={form.price_usd}
+                        bp={commissions?.commission_p2p_bp ?? null}
+                    />
+
+                    {editingApproved && (
+                        <p className="seller-hint seller-hint--warn">
+                            <AlertTriangle size={13} />
+                            {t(
+                                'Товар уже в каталоге. После сохранения он уйдёт на повторную проверку и пропадёт с витрины до её окончания.',
+                                'This item is live. Saving sends it back for review and hides it from the catalog until that is done.',
+                            )}
+                        </p>
+                    )}
+
                     <div className="seller-row-btns">
                         <button className="seller-btn" type="submit" disabled={busyId === 'form'}>
                             {editingId ? t('Сохранить', 'Save') : t('Создать', 'Create')}
@@ -768,6 +828,8 @@ const ListingManager: React.FC<{
             <div className="listings-list">
                 {listings.map((listing) => {
                     const editable = EDITABLE.includes(listing.status);
+                    const submittable = SUBMITTABLE.includes(listing.status);
+                    const deletable = DELETABLE.includes(listing.status);
                     const working = busyId === listing.id;
 
                     return (
@@ -827,26 +889,32 @@ const ListingManager: React.FC<{
                                             <Pencil size={13} />
                                             {t('Править', 'Edit')}
                                         </button>
-                                        <button
-                                            className="seller-btn seller-btn-sm"
-                                            disabled={working || listing.images.length === 0 || blocked}
-                                            onClick={() => act(listing, () => p2pApi.submitListing(listing.id))}
-                                        >
-                                            <Send size={13} />
-                                            {t('На модерацию', 'Submit')}
-                                        </button>
-                                        <button
-                                            className="seller-btn seller-btn-sm seller-btn-danger"
-                                            disabled={working}
-                                            onClick={() => act(
-                                                listing,
-                                                () => p2pApi.deleteListing(listing.id),
-                                                t('Удалить объявление?', 'Delete this listing?'),
-                                            )}
-                                        >
-                                            <Trash2 size={13} />
-                                        </button>
                                     </>
+                                )}
+
+                                {submittable && (
+                                    <button
+                                        className="seller-btn seller-btn-sm"
+                                        disabled={working || listing.images.length === 0 || blocked}
+                                        onClick={() => act(listing, () => p2pApi.submitListing(listing.id))}
+                                    >
+                                        <Send size={13} />
+                                        {t('На модерацию', 'Submit')}
+                                    </button>
+                                )}
+
+                                {deletable && (
+                                    <button
+                                        className="seller-btn seller-btn-sm seller-btn-danger"
+                                        disabled={working}
+                                        onClick={() => act(
+                                            listing,
+                                            () => p2pApi.deleteListing(listing.id),
+                                            t('Удалить объявление?', 'Delete this listing?'),
+                                        )}
+                                    >
+                                        <Trash2 size={13} />
+                                    </button>
                                 )}
 
                                 {listing.status === 'approved' && (
@@ -876,7 +944,7 @@ const ListingManager: React.FC<{
                                 )}
                             </div>
 
-                            {editable && listing.images.length === 0 && (
+                            {submittable && listing.images.length === 0 && (
                                 <p className="seller-hint">
                                     {t(
                                         'Добавьте хотя бы одно фото — без него заявку не примут.',

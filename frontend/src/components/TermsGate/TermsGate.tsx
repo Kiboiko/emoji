@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import { termsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import type { Terms } from '@/types';
@@ -22,7 +23,6 @@ export const TermsGate: React.FC<TermsGateProps> = ({ onChange }) => {
     const [terms, setTerms] = useState<Terms | null>(null);
     const [needed, setNeeded] = useState<boolean | null>(null);
     const [checked, setChecked] = useState(false);
-    const [expanded, setExpanded] = useState(false);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
@@ -60,39 +60,21 @@ export const TermsGate: React.FC<TermsGateProps> = ({ onChange }) => {
         <div className="terms-gate">
             <label className="terms-check">
                 <input type="checkbox" checked={checked} onChange={toggle} />
-                <span>
-                    {t('Я соглашаюсь с ', 'I agree to the ')}
-                    <button
-                        type="button"
-                        className="terms-link"
-                        onClick={(e) => { e.preventDefault(); setExpanded(!expanded); }}
-                    >
-                        {t('условиями площадки', 'platform terms')}
-                        {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                    </button>
-                </span>
+                <span>{t('Я соглашаюсь с условиями площадки', 'I agree to the platform terms')}</span>
             </label>
 
-            {expanded && (
-                <div className="terms-body">
-                    {terms?.is_empty ? (
-                        <p className="terms-empty">
-                            <FileText size={14} />
-                            {t(
-                                'Текст условий пока не заполнен администрацией.',
-                                'The terms text has not been filled in yet.',
-                            )}
-                        </p>
-                    ) : (
-                        <pre className="terms-text">{terms?.text}</pre>
-                    )}
-                    {terms && (
-                        <div className="terms-version">
-                            {t('Редакция ', 'Version ')}{terms.version}
-                        </div>
-                    )}
-                </div>
-            )}
+            {/* Ссылка вынесена из <label>: клик по ссылке внутри ярлыка
+                переключал бы галочку заодно с переходом.
+
+                Текст открывается на своём экране, а не раскрывается здесь:
+                условий много, и внутри формы оформления заказа они
+                отодвигали кнопку оплаты на несколько экранов вниз. */}
+            <Link className="terms-link" to="/terms">
+                {terms?.is_empty
+                    ? t('Открыть условия', 'Open the terms')
+                    : t('Читать условия площадки', 'Read the platform terms')}
+                <ChevronRight size={14} />
+            </Link>
         </div>
     );
 };

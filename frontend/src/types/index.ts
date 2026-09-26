@@ -53,6 +53,12 @@ export interface Product {
 
 export type StoreKind = 'seller' | 'channel' | 'platform';
 
+/** Настройки площадки, видимые снаружи. Базисные пункты: 200 = 2% */
+export interface PublicSettings {
+    commission_p2p_bp: number;
+    commission_subscription_bp: number;
+}
+
 /**
  * Магазин в строке на главной: только то, что помещается под кружком.
  * Полная витрина — Store ниже.

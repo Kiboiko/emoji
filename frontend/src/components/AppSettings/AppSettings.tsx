@@ -1,5 +1,6 @@
 import React from 'react';
-import { Globe, Palette } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChevronRight, FileText, Globe, Palette } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
 import { useTelegram } from '@/hooks/useTelegram';
@@ -103,6 +104,16 @@ export const AppSettings: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Условия площадки читают редко, но искать их человек идёт
+                именно в настройки, а не в форму оформления заказа */}
+            <Link className="appsettings-link" to="/terms">
+                <span className="appsettings-icon" aria-hidden="true">
+                    <FileText size={18} />
+                </span>
+                <span className="appsettings-label">{t('Условия площадки', 'Platform terms')}</span>
+                <ChevronRight className="appsettings-chevron" size={18} />
+            </Link>
         </section>
     );
 };

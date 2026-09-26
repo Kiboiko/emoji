@@ -7,6 +7,8 @@ import { subscriptionsApi, termsApi, withdrawalsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
+import { CommissionNote } from '@/components/CommissionNote/CommissionNote';
+import { usePublicSettings } from '@/hooks/usePublicSettings';
 import type { AuthorChannel, ChannelPlan, ChannelStatus } from '@/types';
 import './ChannelCabinet.css';
 
@@ -778,6 +780,7 @@ const PlanForm: React.FC<{
     onError: (e: unknown, fallback: string) => void;
 }> = ({ channelId, plan, language, onDone, onCancel, onError }) => {
     const { haptic } = useTelegram();
+    const commissions = usePublicSettings();
     const [titleRu, setTitleRu] = useState(plan?.title_ru ?? '');
     const [days, setDays] = useState(String(plan?.duration_days ?? 30));
     const [price, setPrice] = useState(plan?.price_usd ?? '');
@@ -858,6 +861,13 @@ const PlanForm: React.FC<{
                     />
                 </label>
             </div>
+
+            {/* У подписок своя ставка комиссии — она задаётся в админке
+                отдельно от комиссии на обычные товары */}
+            <CommissionNote
+                price={price}
+                bp={commissions?.commission_subscription_bp ?? null}
+            />
 
             <div className="channel-row">
                 <button className="channel-btn" type="submit" disabled={busy}>

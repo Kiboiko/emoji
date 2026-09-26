@@ -14,6 +14,7 @@ import { Checkout } from './pages/Checkout/Checkout';
 import { ProductDetails } from './pages/ProductDetails/ProductDetails';
 import { Profile } from './pages/Profile/Profile';
 import { Store } from './pages/Store/Store';
+import { TermsPage } from './pages/Terms/TermsPage';
 import {
     MyListingsPage, MyChannelsPage, MyOrdersPage, MyDealsPage, MySubscriptionsPage,
 } from './pages/Cabinet/CabinetRoutes';
@@ -239,6 +240,15 @@ const AppContent: React.FC = () => {
                 <Route path="/my/subscriptions" element={
                     <PageTransition>
                         <MySubscriptionsPage />
+                    </PageTransition>
+                } />
+
+                {/* Условия площадки отдельным экраном: документ на
+                    несколько страниц не помещался в раскрывающийся блок
+                    внутри формы оформления заказа */}
+                <Route path="/terms" element={
+                    <PageTransition>
+                        <TermsPage />
                     </PageTransition>
                 } />
 

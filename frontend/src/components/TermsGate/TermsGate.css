@@ -1,4 +1,12 @@
+/* --- Галочка «согласен с условиями» ------------------------------------
+   Сам текст условий отсюда уехал на свой экран: документ на несколько
+   страниц не помещался в раскрывающийся блок посреди формы оформления
+   заказа — он отодвигал кнопку оплаты далеко вниз. */
+
 .terms-gate {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
     margin: var(--space-3) 0;
 }
 
@@ -21,53 +29,25 @@
     cursor: pointer;
 }
 
+/* Ссылка стоит отдельной строкой, а не внутри ярлыка: клик по ссылке
+   внутри <label> переключал бы галочку заодно с переходом.
+
+   Отступ слева равен ширине галочки с зазором — так ссылка встаёт под
+   текстом согласия, а не под самим квадратиком. */
 .terms-link {
     display: inline-flex;
     align-items: center;
+    align-self: flex-start;
     gap: 2px;
-    padding: 0;
-    border: none;
-    background: none;
+    margin-left: calc(16px + var(--space-2));
     color: var(--accent-primary);
     font-size: var(--font-sm);
     font-weight: var(--weight-semibold);
-    cursor: pointer;
-    text-decoration: underline;
+    text-decoration: none;
 }
 
-.terms-body {
-    margin-top: var(--space-2-5);
-    padding: var(--space-2-5) var(--space-3);
-    border-radius: var(--radius-md);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-}
-
-.terms-text {
-    margin: 0;
-    max-height: 240px;
-    overflow-y: auto;
-    /* Текст условий пишет владелец площадки: переносим длинные строки,
-       чтобы вёрстка не разъезжалась по горизонтали */
-    white-space: pre-wrap;
-    word-break: break-word;
-    font-family: inherit;
-    font-size: var(--font-sm);
-    line-height: 1.5;
-    color: var(--text-secondary);
-}
-
-.terms-empty {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1-5);
-    margin: 0;
-    font-size: var(--font-sm);
-    color: var(--text-tertiary);
-}
-
-.terms-version {
-    margin-top: var(--space-2);
-    font-size: var(--font-xs);
-    color: var(--text-tertiary);
+@media (hover: hover) {
+    .terms-link:hover {
+        text-decoration: underline;
+    }
 }

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/authStore';
-import type { AuthorChannel, ChannelStatus, ProfileSummary, Store, StoreCard } from '@/types';
+import type { AuthorChannel, ChannelStatus, ProfileSummary, Store, StoreCard, PublicSettings } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -231,6 +231,12 @@ export const usersApi = {
 
 // Витрины магазинов. Площадка — такой же продавец, поэтому отдельного
 // метода под неё нет: у неё такой же id, как у остальных.
+// Настройки площадки: пока только комиссии
+export const settingsApi = {
+    getPublic: async (): Promise<PublicSettings> =>
+        (await apiClient.get('/settings/public')).data,
+};
+
 export const storesApi = {
     // Магазины, у которых есть что купить: строка на главной
     getStores: async (): Promise<StoreCard[]> =>

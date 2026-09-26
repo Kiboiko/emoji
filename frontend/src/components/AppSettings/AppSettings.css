@@ -81,6 +81,26 @@
     transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
+/* Строка-переход: те же ярлык и значок, но вместо переключателя стрелка */
+.appsettings-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-4) 0;
+    border-top: 1px solid var(--border-color);
+    text-decoration: none;
+}
+
+.appsettings-link .appsettings-label {
+    flex: 1;
+    min-width: 0;
+}
+
+.appsettings-chevron {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+}
+
 .appsettings-switch button.active {
     background: var(--bg-primary);
     color: var(--accent-primary);
