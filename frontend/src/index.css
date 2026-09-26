@@ -242,6 +242,27 @@ body::-webkit-scrollbar {
   background: var(--text-secondary);
 }
 
+/* --- Запасная прокрутка для старых клиентов Telegram --------------------
+   Класс вешает App, когда у клиента нет disableVerticalSwipes (Bot API 7.7).
+   Документ перестаёт прокручиваться совсем, прокрутка живёт внутри #root —
+   вертикальный жест тогда не доходит до Telegram, и окно Mini App не едет
+   вниз вслед за пальцем.
+
+   На клиентах поновее класса нет: там работает штатный запрет, а он не
+   ломает ни якорные переходы, ни position: sticky. */
+.tg-inner-scroll,
+.tg-inner-scroll body {
+  height: 100%;
+  overflow: hidden;
+}
+
+.tg-inner-scroll #root {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
 /* --- Поверхность карточки ----------------------------------------------
    Было стекло: полупрозрачный фон и backdrop-filter: blur(20px). Размытие
    считается на каждый кадр прокрутки для каждого такого блока, а их на

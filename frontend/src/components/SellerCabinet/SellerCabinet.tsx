@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
-    Store, Star, Plus, Upload, X, Send, Pencil, Trash2,
+    Store, Star, Plus, Upload, X, Send, Pencil, Trash2, Camera, ChevronRight,
     EyeOff, Eye, AlertTriangle, ChevronDown, ChevronUp, Check, Wallet,
 } from 'lucide-react';
 import { p2pApi, categoriesApi, termsApi, withdrawalsApi } from '@/api/client';
@@ -319,30 +320,52 @@ const SellerSummary: React.FC<{
                     className="seller-logo"
                     onClick={() => avatarInput.current?.click()}
                     disabled={saving}
-                    title={t('Загрузить логотип', 'Upload a logo')}
+                    aria-label={profile.avatar_url
+                        ? t('Заменить логотип магазина', 'Replace the store logo')
+                        : t('Загрузить логотип магазина', 'Upload a store logo')}
                 >
                     {profile.avatar_url
                         ? <img src={profile.avatar_url} alt="" />
                         : <span aria-hidden="true">
                             {(profile.display_name ?? '?').trim().charAt(0).toUpperCase()}
                           </span>}
-                    <span className="seller-logo-edit"><Upload size={12} /></span>
+                    {/* Фотоаппарат, а не стрелка вверх: стрелка читается как
+                        «отправить», а здесь выбирают картинку */}
+                    <span className="seller-logo-edit" aria-hidden="true">
+                        <Camera size={13} />
+                    </span>
                 </button>
 
                 <div className="seller-brand-text">
                     <div className="seller-brand-name">{profile.display_name}</div>
+
                     {/* Продавец должен видеть свой магазин глазами покупателя:
-                        иначе непонятно, что вообще даёт логотип и описание */}
+                        иначе непонятно, что вообще даёт логотип и описание.
+
+                        Link, а не <a href>: обычная ссылка перезагружала всё
+                        приложение целиком — медленно, и тема при этом
+                        сбрасывалась на светлую. */}
                     {profile.id && (
-                        <a className="seller-storefront" href={`/store/seller/${profile.id}`}>
+                        <Link className="seller-storefront" to={`/store/seller/${profile.id}`}>
                             {t('Открыть витрину', 'Open storefront')}
-                        </a>
+                            <ChevronRight size={14} />
+                        </Link>
                     )}
-                    <div className="seller-brand-hint">
+
+                    {/* Настоящая кнопка вместо серой подписи: подпись выглядела
+                        ярлыком, и было неясно, что логотип вообще куда-то
+                        грузится — значок на кружке к тому же обрезался его
+                        собственным скруглением */}
+                    <button
+                        className="seller-logo-btn"
+                        onClick={() => avatarInput.current?.click()}
+                        disabled={saving}
+                    >
+                        <Upload size={13} />
                         {profile.avatar_url
-                            ? t('Нажмите, чтобы заменить логотип', 'Tap to replace the logo')
-                            : t('Добавьте логотип магазина', 'Add a store logo')}
-                    </div>
+                            ? t('Заменить логотип', 'Replace the logo')
+                            : t('Загрузить логотип', 'Upload a logo')}
+                    </button>
                 </div>
             </div>
 

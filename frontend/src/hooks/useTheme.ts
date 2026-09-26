@@ -1,37 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useTelegram } from './useTelegram';
 import { applyTelegramTheme, clearTelegramTheme } from '@/lib/telegramTheme';
-import type { Theme } from '@/types';
+import { useThemeStore } from '@/store/themeStore';
 
 /**
- * Ключ хранит тему, ВЫБРАННУЮ пользователем вручную.
+ * Применяет тему к документу и отдаёт управление ею.
  *
- * Прежняя версия писала сюда тему на каждом рендере, в том числе значение по
- * умолчанию. Из-за этого ключ появлялся сразу после первого запуска, а проверка
- * «пользователь ничего не выбирал» больше никогда не срабатывала: тема Telegram
- * не подхватывалась вообще. Хуже того, useTelegram узнаёт colorScheme
- * асинхронно, поэтому в хранилище успевала попасть светлая тема — и человек с
- * тёмным Telegram всегда получал светлое приложение.
+ * Хук обязан быть смонтирован всегда — его вызывает App. Раньше он висел на
+ * шапке каталога, а после её переработки остался только в настройках
+ * профиля: на всех остальных экранах тему не применял никто. Пока человек
+ * ходил по приложению внутри роутера, атрибут data-theme, выставленный при
+ * заходе в профиль, сохранялся, — но любая полная перезагрузка страницы
+ * (например, по обычной ссылке <a href>) открывала приложение светлым.
+ *
+ * Состояние лежит в общем сторе, поэтому второй вызов из настроек профиля
+ * не заводит свою копию темы, а работает с той же.
  */
-const STORAGE_KEY = 'theme';
-
-function storedTheme(): Theme | null {
-    const value = localStorage.getItem(STORAGE_KEY);
-    return value === 'light' || value === 'dark' ? value : null;
-}
-
 export const useTheme = () => {
     const { colorScheme, webApp } = useTelegram();
-    const [theme, setThemeState] = useState<Theme>(() => storedTheme() ?? 'light');
-    const [followsTelegram, setFollowsTelegram] = useState(() => storedTheme() === null);
+    const theme = useThemeStore((s) => s.theme);
+    const followsTelegram = useThemeStore((s) => s.followsTelegram);
+    const setTheme = useThemeStore((s) => s.setTheme);
+    const adoptTelegram = useThemeStore((s) => s.adoptTelegram);
+    const followTelegramRaw = useThemeStore((s) => s.followTelegram);
 
-    // Пока человек не выбрал тему сам, следуем за Telegram — в том числе когда
-    // он переключает оформление мессенджера при открытом приложении
+    // Пока человек не выбрал тему сам, следуем за Telegram — в том числе
+    // когда он переключает оформление мессенджера при открытом приложении
     useEffect(() => {
-        if (followsTelegram && colorScheme) {
-            setThemeState(colorScheme);
-        }
-    }, [colorScheme, followsTelegram]);
+        if (followsTelegram && colorScheme) adoptTelegram(colorScheme);
+    }, [colorScheme, followsTelegram, adoptTelegram]);
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
@@ -52,32 +49,19 @@ export const useTheme = () => {
 
         const onThemeChanged = () => {
             applyTelegramTheme(webApp.themeParams);
-            if (webApp.colorScheme) setThemeState(webApp.colorScheme);
+            if (webApp.colorScheme) adoptTelegram(webApp.colorScheme);
         };
 
         webApp.onEvent('themeChanged', onThemeChanged);
         return () => webApp.offEvent('themeChanged', onThemeChanged);
-    }, [webApp, followsTelegram]);
-
-    const setTheme = (next: Theme) => {
-        setThemeState(next);
-        setFollowsTelegram(false);
-        localStorage.setItem(STORAGE_KEY, next);
-    };
-
-    const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
+    }, [webApp, followsTelegram, adoptTelegram]);
 
     /** Вернуться к оформлению Telegram — отменяет ручной выбор. */
-    const followTelegram = () => {
-        localStorage.removeItem(STORAGE_KEY);
-        setFollowsTelegram(true);
-        if (colorScheme) setThemeState(colorScheme);
-    };
+    const followTelegram = () => followTelegramRaw(colorScheme ?? null);
 
     return {
         theme,
         setTheme,
-        toggleTheme,
         followTelegram,
         followsTelegram,
         isDark: theme === 'dark',

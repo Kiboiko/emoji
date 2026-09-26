@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTelegram } from './hooks/useTelegram';
+import { useTheme } from './hooks/useTheme';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAuthStore } from './store/authStore';
 import { useCartStore } from './store/cartStore';
@@ -30,6 +31,11 @@ const Orders = () => <Navigate to="/my/orders" replace />;
 
 export const App: React.FC = () => {
     const { initData, startParam, isReady } = useTelegram();
+    // Тема применяется здесь, на корне: это свойство документа, а не
+    // отдельного экрана. Раньше хук висел на шапке каталога, после её
+    // переработки остался только в настройках профиля — и приложение
+    // открывалось светлым везде, куда заходили в обход профиля.
+    useTheme();
     const { setUser, setAccessToken, isAuthenticated } = useAuthStore();
     const [isAuthenticating, setIsAuthenticating] = React.useState(true);
 
@@ -67,6 +73,11 @@ export const App: React.FC = () => {
             // его просто нет, поэтому проверяем.
             if (typeof tg.disableVerticalSwipes === 'function') {
                 tg.disableVerticalSwipes();
+            } else {
+                // До Bot API 7.7 официального способа нет. Убираем прокрутку
+                // у самого документа и переносим её внутрь #root: жест тогда
+                // не доходит до Telegram и окно не едет.
+                document.documentElement.classList.add('tg-inner-scroll');
             }
 
             // Force fullscreen ONLY on mobile platforms (iOS/Android)
