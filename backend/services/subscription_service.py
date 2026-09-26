@@ -155,8 +155,11 @@ async def sync_plan_products(db: AsyncSession, channel: Channel) -> None:
         product.is_active = live and plan.is_active
         product.name_ru = f"{channel.title} — {plan.title_ru}"
         product.name_en = f"{channel.title} — {plan.title_en}"
-        if channel.avatar_url:
-            product.image_url = channel.avatar_url
+        # Обложка главнее аватара: её автор загрузил сам, а аватар подтянут
+        # из Telegram и у канала без фотографии его просто нет
+        picture = channel.cover_url or channel.avatar_url
+        if picture:
+            product.image_url = picture
 
 
 # ---------------------------------------------------------------------------

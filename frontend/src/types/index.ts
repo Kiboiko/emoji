@@ -237,6 +237,8 @@ export interface AuthorChannel {
     username: string | null;
     description: string | null;
     avatar_url: string | null;
+    /** Обложка подписок — картинка, которую автор загрузил сам */
+    cover_url: string | null;
     status: ChannelStatus;
     /** Галочку проверенного автора ставит только администратор */
     is_verified: boolean;

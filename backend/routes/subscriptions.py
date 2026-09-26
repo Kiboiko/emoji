@@ -12,7 +12,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,6 +78,7 @@ def _channel_dto(channel: Channel, plans: list[SubscriptionPlan] | None = None) 
         "username": channel.username,
         "description": channel.description,
         "avatar_url": channel.avatar_url,
+        "cover_url": channel.cover_url,
         "status": channel.status.value,
         "is_verified": channel.is_verified,
         "moderation_comment": channel.moderation_comment,
@@ -309,6 +310,70 @@ async def verify_channel_rights(
     return {"bot_is_admin": ok, "error": error}
 
 
+@router.post("/author/channels/{channel_id}/cover")
+async def upload_channel_cover(
+    channel_id: uuid.UUID,
+    image: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Обложка подписок канала.
+
+    Картинку товара тариф брал из аватара, а аватар подтягивается из
+    Telegram: у канала без фотографии его нет вовсе, и подписка стояла в
+    каталоге с серой заглушкой рядом с обычными товарами.
+
+    Проверку файла берём у объявлений: там тип определяется по содержимому
+    через Pillow, а не по расширению и не по content-type — и то и другое
+    подделывается тривиально.
+    """
+    # Импорт внутри функции: модули роутов грузятся по очереди, и
+    # верхнеуровневый ссылался бы на порядок регистрации в main.py
+    from routes.p2p import _save_listing_image
+
+    channel = await _own_channel(db, channel_id, user)
+
+    channel.cover_url = await _save_listing_image(image, subdir="channels")
+    # Картинка видна в каталоге, поэтому сразу переносим её в товары тарифов
+    await subscription_service.sync_plan_products(db, channel)
+    await db.commit()
+
+    return {"cover_url": channel.cover_url}
+
+
+@router.delete("/author/channels/{channel_id}/cover")
+async def delete_channel_cover(
+    channel_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Снять обложку. Товары тарифов возвращаются к аватару канала, а если
+    его нет — к заглушке.
+
+    Файл с диска не удаляем: он мог уже уйти в товар как картинка, и
+    удаление оставило бы битую ссылку до ближайшей пересборки.
+    """
+    channel = await _own_channel(db, channel_id, user)
+    channel.cover_url = None
+
+    picture = channel.avatar_url or PLACEHOLDER_IMAGE
+    plans = (
+        await db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.channel_id == channel.id)
+        )
+    ).scalars().all()
+    for plan in plans:
+        if plan.product_id:
+            product = await db.get(Product, plan.product_id)
+            if product is not None:
+                product.image_url = picture
+
+    await db.commit()
+    return {"cover_url": None}
+
+
 @router.post("/author/channels/{channel_id}/submit")
 async def submit_for_moderation(
     channel_id: uuid.UUID,
@@ -374,7 +439,7 @@ async def create_plan(
         description_ru=channel.description or f"Доступ в закрытый канал на {payload.duration_days} дн.",
         description_en=channel.description or f"Private channel access for {payload.duration_days} days",
         price_usdt=payload.price_usd,
-        image_url=channel.avatar_url or PLACEHOLDER_IMAGE,
+        image_url=channel.cover_url or channel.avatar_url or PLACEHOLDER_IMAGE,
         category_id=category_id,
         type="subscription",
         min_quantity=1,

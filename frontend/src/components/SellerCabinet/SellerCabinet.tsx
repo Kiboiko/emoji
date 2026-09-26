@@ -22,6 +22,9 @@ import './SellerCabinet.css';
  */
 const EDITABLE = ['draft', 'rejected', 'approved', 'withdrawn'];
 
+/** Столько фото принимает одна заявка — зеркало MAX_IMAGES_PER_LISTING */
+const MAX_PHOTOS = 8;
+
 /** Отправить на проверку можно только то, что там ещё не было или вернулось */
 const SUBMITTABLE = ['draft', 'rejected'];
 
@@ -609,6 +612,39 @@ const ListingManager: React.FC<{
     const [editingId, setEditingId] = useState<string | null>(null);
     const commissions = usePublicSettings();
     const showToast = useToastStore((s) => s.show);
+
+    // Фото, выбранные в форме создания. Заявки ещё нет, грузить некуда —
+    // ждут до её создания. Раньше товар приходилось сначала создать, потом
+    // найти в списке и только там добавить фотографии.
+    const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    const formInput = useRef<HTMLInputElement>(null);
+
+    const previews = React.useMemo(
+        () => pendingFiles.map((file) => URL.createObjectURL(file)),
+        [pendingFiles],
+    );
+
+    // Ссылки на объекты держат файл в памяти, пока их не отозвать
+    useEffect(() => () => { previews.forEach(URL.revokeObjectURL); }, [previews]);
+
+    const onFormFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const chosen = Array.from(e.target.files ?? []);
+        // Сбрасываем сразу: иначе повторный выбор того же файла не даст события
+        e.target.value = '';
+        if (!chosen.length) return;
+
+        const room = MAX_PHOTOS - pendingFiles.length;
+        if (chosen.length > room) {
+            showToast(t(
+                `Больше ${MAX_PHOTOS} фото в одну заявку не поместится`,
+                `A listing takes at most ${MAX_PHOTOS} photos`,
+            ), 'info');
+        }
+        setPendingFiles((prev) => [...prev, ...chosen.slice(0, Math.max(room, 0))]);
+    };
+
+    const dropPending = (index: number) =>
+        setPendingFiles((prev) => prev.filter((_, i) => i !== index));
     const [form, setForm] = useState<DraftForm>(EMPTY_FORM);
     const [busyId, setBusyId] = useState<string | null>(null);
     const fileInput = useRef<HTMLInputElement>(null);
@@ -641,6 +677,12 @@ const ListingManager: React.FC<{
     // об этом надо сказать до нажатия «Сохранить», а не после
     const editingApproved = editingId !== null
         && listings.find((item) => item.id === editingId)?.status === 'approved';
+
+    const closeForm = () => {
+        setCreating(false);
+        setEditingId(null);
+        setPendingFiles([]);
+    };
 
     const startEdit = (listing: Listing) => {
         setForm({
@@ -676,12 +718,29 @@ const ListingManager: React.FC<{
                     ), 'info');
                 }
             } else {
-                await p2pApi.createListing({ ...payload, accept_terms: true });
+                const created = await p2pApi.createListing({ ...payload, accept_terms: true });
+
+                // Заявка уже создана, поэтому неудачную загрузку фото нельзя
+                // показывать как «не удалось сохранить заявку»: человек решит,
+                // что товара нет, и заведёт его второй раз
+                let failed = 0;
+                for (const file of pendingFiles) {
+                    try {
+                        await p2pApi.uploadListingImage(created.id, file);
+                    } catch {
+                        failed += 1;
+                    }
+                }
+                if (failed) {
+                    showToast(t(
+                        `Заявка создана, но ${failed} фото не загрузилось — добавьте их в списке`,
+                        `The listing was created, but ${failed} photo(s) failed — add them from the list`,
+                    ), 'error');
+                }
             }
 
             haptic.notification('success');
-            setCreating(false);
-            setEditingId(null);
+            closeForm();
             setForm(EMPTY_FORM);
             await reload();
         } catch (err) {
@@ -800,6 +859,53 @@ const ListingManager: React.FC<{
                         </select>
                     </div>
 
+                    {/* Фото выбирают здесь же. Заявки ещё нет, поэтому файлы
+                        ждут до её создания и уходят сразу после — раньше товар
+                        надо было сначала создать, потом найти в списке и
+                        только там добавить фотографии. */}
+                    {creating && (
+                        <div className="form-photos">
+                            <input
+                                ref={formInput}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                multiple
+                                hidden
+                                onChange={onFormFiles}
+                            />
+
+                            {previews.length > 0 && (
+                                <div className="form-photos-list">
+                                    {previews.map((url, index) => (
+                                        <div key={url} className="form-photo">
+                                            <img src={url} alt="" />
+                                            <button
+                                                type="button"
+                                                className="thumb-remove"
+                                                onClick={() => dropPending(index)}
+                                                aria-label={t('Убрать фото', 'Remove photo')}
+                                            >
+                                                <X size={11} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <button
+                                className="seller-btn seller-btn-sm seller-btn-ghost"
+                                type="button"
+                                onClick={() => formInput.current?.click()}
+                                disabled={pendingFiles.length >= MAX_PHOTOS}
+                            >
+                                <Upload size={13} />
+                                {previews.length
+                                    ? t('Ещё фото', 'More photos')
+                                    : t('Добавить фото', 'Add photos')}
+                            </button>
+                        </div>
+                    )}
+
                     {/* Сколько удержит площадка — рядом с полем цены, а не
                         в условиях мелким шрифтом: процент нужен ровно в тот
                         момент, когда цену назначают */}
@@ -825,7 +931,7 @@ const ListingManager: React.FC<{
                         <button
                             className="seller-btn seller-btn-ghost"
                             type="button"
-                            onClick={() => { setCreating(false); setEditingId(null); }}
+                            onClick={closeForm}
                         >
                             {t('Отмена', 'Cancel')}
                         </button>
@@ -833,10 +939,15 @@ const ListingManager: React.FC<{
 
                     {!editingId && (
                         <p className="seller-hint">
-                            {t(
-                                'После создания добавьте фото и отправьте на модерацию.',
-                                'After creating, add photos and submit for review.',
-                            )}
+                            {previews.length
+                                ? t(
+                                    'Фото загрузятся вместе с заявкой. Дальше останется отправить её на модерацию.',
+                                    'Photos upload together with the listing. Then just submit it for review.',
+                                )
+                                : t(
+                                    'Без фото заявку не примут — добавьте хотя бы одно.',
+                                    'A listing needs at least one photo.',
+                                )}
                         </p>
                     )}
                 </form>

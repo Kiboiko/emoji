@@ -331,6 +331,20 @@ export const p2pApi = {
 
 // Subscriptions API
 export const subscriptionsApi = {
+    // Обложка подписок канала. Content-Type снимаем по той же причине, что
+    // и у фото объявления — см. uploadListingImage.
+    uploadChannelCover: async (channelId: string, file: File) => {
+        const form = new FormData();
+        form.append('image', file);
+        return (await apiClient.post(
+            `/subscriptions/author/channels/${channelId}/cover`, form,
+            { headers: { 'Content-Type': undefined } },
+        )).data;
+    },
+
+    deleteChannelCover: async (channelId: string) =>
+        (await apiClient.delete(`/subscriptions/author/channels/${channelId}/cover`)).data,
+
     // Каталог каналов с активными тарифами
     getChannels: async () => {
         const response = await apiClient.get('/subscriptions/channels');

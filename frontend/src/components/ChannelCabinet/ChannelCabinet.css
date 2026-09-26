@@ -282,6 +282,65 @@
 
 /* --- тарифы --------------------------------------------------------- */
 
+/* --- Обложка подписок ---------------------------------------------------
+   Слева квадрат с тем, что сейчас видит покупатель, справа подпись и
+   кнопки. Пропорция квадратная, а не как у карточки товара: сюда чаще
+   кладут аватар канала, и широкая рамка резала бы его по краям. */
+.channel-cover {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.channel-cover-frame {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+}
+
+.channel-cover-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.channel-cover-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.channel-cover-title {
+    font-size: var(--font-md);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+}
+
+.channel-cover-hint {
+    font-size: var(--font-sm);
+    line-height: 1.35;
+    color: var(--text-secondary);
+}
+
+.channel-cover-btns {
+    flex-shrink: 0;
+    display: flex;
+    gap: var(--space-1-5);
+}
+
 .channel-plans {
     display: flex;
     flex-direction: column;

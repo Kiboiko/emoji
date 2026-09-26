@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Radio, Plus, Send, ShieldCheck, ShieldAlert, RefreshCw,
-    ChevronDown, ChevronUp, Check, Wallet, Pencil, Trash2, EyeOff, BadgeCheck,
+    Radio, Plus, Send, ShieldCheck, ShieldAlert, RefreshCw, Image as ImageIcon,
+    ChevronDown, ChevronUp, Check, Wallet, Pencil, Trash2, EyeOff, BadgeCheck, X,
 } from 'lucide-react';
 import { subscriptionsApi, termsApi, withdrawalsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
@@ -402,6 +402,19 @@ const ChannelCard: React.FC<{
     const [addingPlan, setAddingPlan] = useState(false);
     const [editing, setEditing] = useState(false);
     const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+    const coverInput = useRef<HTMLInputElement>(null);
+
+    // Что сейчас показывается покупателю: своя обложка главнее аватара из
+    // Telegram — её автор выбрал руками
+    const picture = channel.cover_url || channel.avatar_url;
+
+    const onCoverChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        // Сбрасываем сразу: иначе повторный выбор того же файла не даст события
+        e.target.value = '';
+        if (!file) return;
+        await act(() => subscriptionsApi.uploadChannelCover(channel.id, file));
+    };
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
     const [labelRu, labelEn] = STATUS_LABEL[channel.status];
@@ -535,6 +548,61 @@ const ChannelCard: React.FC<{
                     </button>
                 </div>
             )}
+
+            {/* Обложка. Картинку товара тариф брал из аватара канала, а тот
+                подтягивается из Telegram: у канала без фотографии её нет
+                вовсе, и подписка стояла в каталоге серой заглушкой. */}
+            <div className="channel-cover">
+                <input
+                    ref={coverInput}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    hidden
+                    onChange={onCoverChosen}
+                />
+
+                <div className="channel-cover-frame">
+                    {picture
+                        ? <img src={picture} alt="" />
+                        : <ImageIcon size={22} aria-hidden="true" />}
+                </div>
+
+                <div className="channel-cover-text">
+                    <span className="channel-cover-title">
+                        {t('Обложка подписок', 'Subscription cover')}
+                    </span>
+                    <span className="channel-cover-hint">
+                        {channel.cover_url
+                            ? t('Своя картинка', 'Your own picture')
+                            : channel.avatar_url
+                                ? t('Сейчас берётся аватар канала из Telegram',
+                                     'Currently using the channel photo from Telegram')
+                                : t('Без неё подписка стоит в каталоге заглушкой',
+                                     'Without it the subscription shows a placeholder')}
+                    </span>
+                </div>
+
+                <div className="channel-cover-btns">
+                    <button
+                        className="channel-btn-inline"
+                        onClick={() => coverInput.current?.click()}
+                        disabled={busy}
+                    >
+                        <ImageIcon size={14} />
+                        {channel.cover_url ? t('Заменить', 'Replace') : t('Загрузить', 'Upload')}
+                    </button>
+                    {channel.cover_url && (
+                        <button
+                            className="channel-btn-inline channel-btn-danger"
+                            disabled={busy}
+                            onClick={() => act(() => subscriptionsApi.deleteChannelCover(channel.id))}
+                            aria-label={t('Убрать обложку', 'Remove the cover')}
+                        >
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
+            </div>
 
             {/* Состояние прав бота — главный признак работоспособности канала */}
             <div className={`channel-rights ${channel.bot_is_admin ? 'ok' : 'bad'}`}>

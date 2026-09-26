@@ -336,3 +336,75 @@ async def test_catalog_shows_channel_as_author(db, channel_factory, author):
     assert item.author_kind == "channel"
     assert item.author_name == channel.title
     assert item.author_verified is True
+
+
+# ---------------------------------------------------------------------------
+# Обложка подписок
+# ---------------------------------------------------------------------------
+
+async def test_cover_wins_over_avatar_in_plan_product(db, channel_factory, author):
+    """
+    Картинку товара тариф брал из аватара, а тот подтягивается из Telegram.
+    У канала без фотографии аватара нет вовсе, и подписка стояла в каталоге
+    с серой заглушкой. Загруженная обложка главнее: её выбрали руками.
+    """
+    channel = await channel_factory(ChannelStatus.ACTIVE)
+    channel.avatar_url = "/uploads/channels/from-telegram.jpg"
+    plan = await _add_plan(db, channel, author)
+
+    channel.cover_url = "/uploads/channels/uploaded.png"
+    await subs.sync_plan_products(db, channel)
+    await db.flush()
+
+    product = await db.get(Product, plan.product_id)
+    assert product.image_url == "/uploads/channels/uploaded.png"
+
+
+async def test_plan_product_falls_back_to_avatar(db, channel_factory, author):
+    channel = await channel_factory(ChannelStatus.ACTIVE)
+    channel.avatar_url = "/uploads/channels/from-telegram.jpg"
+    plan = await _add_plan(db, channel, author)
+
+    product = await db.get(Product, plan.product_id)
+    assert product.image_url == "/uploads/channels/from-telegram.jpg"
+
+
+async def test_deleting_cover_returns_plan_product_to_avatar(
+    db, channel_factory, author,
+):
+    channel = await channel_factory(ChannelStatus.ACTIVE)
+    channel.avatar_url = "/uploads/channels/from-telegram.jpg"
+    channel.cover_url = "/uploads/channels/uploaded.png"
+    plan = await _add_plan(db, channel, author)
+
+    await subscriptions.delete_channel_cover(channel.id, user=author, db=db)
+
+    product = await db.get(Product, plan.product_id)
+    assert channel.cover_url is None
+    assert product.image_url == "/uploads/channels/from-telegram.jpg"
+
+
+async def test_deleting_cover_without_avatar_returns_placeholder(
+    db, channel_factory, author,
+):
+    """
+    У канала без фотографии в Telegram возвращаться некуда, кроме заглушки.
+    Пустая ссылка на картинку дала бы битое изображение в каталоге.
+    """
+    channel = await channel_factory(ChannelStatus.ACTIVE)
+    channel.cover_url = "/uploads/channels/uploaded.png"
+    plan = await _add_plan(db, channel, author)
+
+    await subscriptions.delete_channel_cover(channel.id, user=author, db=db)
+
+    product = await db.get(Product, plan.product_id)
+    assert product.image_url == subscriptions.PLACEHOLDER_IMAGE
+
+
+async def test_cover_is_visible_in_channel_payload(db, channel_factory, author):
+    channel = await channel_factory(ChannelStatus.DRAFT)
+    channel.cover_url = "/uploads/channels/uploaded.png"
+    await db.flush()
+
+    payload = subscriptions._channel_dto(channel, [])
+    assert payload["cover_url"] == "/uploads/channels/uploaded.png"

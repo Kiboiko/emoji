@@ -64,6 +64,11 @@ class Channel(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Обложка подписок — картинка, которую автор загрузил сам. Отдельно от
+    # аватара: тот подтягивается из Telegram при каждой проверке прав бота и
+    # затёр бы загруженное. При показе обложка главнее — её выбрали руками.
+    cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     # Кошелёк автора для выплат. Заполняется при подключении канала.
     payout_wallet: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
