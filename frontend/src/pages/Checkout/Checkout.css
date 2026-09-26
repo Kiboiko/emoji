@@ -13,7 +13,9 @@
     font-family: inherit;
     font-size: var(--font-lg);
     cursor: pointer;
-    padding: var(--space-2) var(--space-4);
+    /* Боковые поля даёт .container. Свои сдвигали кнопку на 16px вправо от
+       края содержимого, и она стояла не по одной линии с карточками. */
+    padding: var(--space-2) 0;
     margin-bottom: var(--space-3);
 }
 
@@ -30,7 +32,6 @@
     font-weight: var(--weight-bold);
     letter-spacing: -0.02em;
     margin-bottom: var(--space-5);
-    padding: 0 var(--space-4);
     color: var(--text-primary);
 }
 
@@ -45,11 +46,14 @@
     margin-bottom: var(--space-3);
 }
 
+/* Поля по краям экрана задаёт .container — здесь только отступ вниз.
+   Раньше карточки добавляли свои 16px поверх его 16px: поля выходили вдвое
+   шире, чем в корзине, а сама карточка на 32px уже. */
 .order-summary,
 .payment-section,
 .total-section {
     padding: var(--space-4);
-    margin: 0 var(--space-4) var(--space-3);
+    margin: 0 0 var(--space-3);
     border-radius: var(--radius-xl);
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -58,18 +62,18 @@
 .summary-items {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    /* Без подложки строки разделяет только воздух, поэтому его больше */
+    gap: var(--space-4);
 }
 
-/* Фон был задан как rgba(255,255,255,.03) — приём из тёмной темы. В светлой
-   он давал невидимую подложку, и строки заказа сливались с карточкой. */
+/* Строка заказа лежит прямо на карточке. Своя подложка у неё была ещё со
+   времён стекла, когда карточка просвечивала и отличалась по цвету; после
+   перехода на плоские поверхности обе стали одного цвета — подложка
+   перестала быть видна, но продолжала съедать по 10px с каждой стороны. */
 .summary-item {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-2-5);
-    border-radius: var(--radius-md);
-    background: var(--bg-secondary);
 }
 
 .summary-item img {

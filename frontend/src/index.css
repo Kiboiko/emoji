@@ -3,8 +3,12 @@
   --bg-primary: #ffffff;
   --bg-secondary: #f8f9fa;
   --bg-tertiary: #e9ecef;
-  --bg-card: rgba(255, 255, 255, 0.8);
-  --bg-glass: rgba(255, 255, 255, 0.7);
+  /* Полупрозрачными они были под стекло: сквозь карточку просвечивала
+     страница, и размытие делало из этого матовое окно. Стекла больше нет,
+     поэтому здесь обычные непрозрачные поверхности. Имена оставлены —
+     переменные стоят в десятке файлов. */
+  --bg-card: var(--bg-secondary);
+  --bg-glass: var(--bg-primary);
 
   --text-primary: #1a1a1a;
   --text-secondary: #6c757d;
@@ -52,8 +56,8 @@
   --bg-primary: #0f0f0f;
   --bg-secondary: #1a1a1a;
   --bg-tertiary: #262626;
-  --bg-card: rgba(26, 26, 26, 0.8);
-  --bg-glass: rgba(26, 26, 26, 0.7);
+  --bg-card: var(--bg-secondary);
+  --bg-glass: var(--bg-primary);
 
   --text-primary: #f5f5f5;
   --text-secondary: #a3a3a3;
