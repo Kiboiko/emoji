@@ -3,27 +3,8 @@
     padding: var(--space-5) 0 100px;
 }
 
-.btn-back {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    font-family: inherit;
-    font-size: var(--font-lg);
-    cursor: pointer;
-    /* Боковые поля даёт .container. Свои сдвигали кнопку на 16px вправо от
-       края содержимого, и она стояла не по одной линии с карточками. */
-    padding: var(--space-2) 0;
-    margin-bottom: var(--space-3);
-}
-
-@media (hover: hover) {
-    .btn-back:hover {
-        color: var(--text-primary);
-    }
-}
+/* .btn-back переехал в index.css: его используют четыре экрана, а объявлен
+   он был здесь — и второй раз, по-другому, в ProductDetails.css. */
 
 /* Заголовок раньше заливался градиентом «белый -> серый»: в тёмной теме это
    читалось, а в светлой он становился белым по белому и пропадал. */

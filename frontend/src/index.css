@@ -338,6 +338,34 @@ body::-webkit-scrollbar {
   border-radius: 8px;
 }
 
+/* --- Кнопка «Назад» ----------------------------------------------------
+   Стоит на четырёх экранах: оформление заказа, витрина магазина, разделы
+   кабинета и страница товара. Жила в Checkout.css, а в ProductDetails.css
+   лежало второе, совсем другое определение того же класса — серая плашка.
+   Какое из двух возьмёт верх, решал порядок склейки файлов.
+
+   Боковых полей нет: их даёт .container, и стрелка встаёт по одной линии
+   с содержимым под ней. */
+.btn-back {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  margin-bottom: var(--space-3);
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--font-lg);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .btn-back:hover {
+    color: var(--text-primary);
+  }
+}
+
 /* Ярлык только для экранного диктора: поле поиска подписано плейсхолдером,
    а он подписью не считается — пропадает, как только начали печатать. */
 .visually-hidden {

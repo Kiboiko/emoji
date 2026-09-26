@@ -221,7 +221,7 @@ export const ProductDetails: React.FC = () => {
             <div className="product-details-page">
                 <div className="container">
                     <p>{language === 'ru' ? 'Товар не найден' : 'Product not found'}</p>
-                    <button className="btn-back" onClick={() => navigate(-1)}>
+                    <button className="btn-notfound" onClick={() => navigate(-1)}>
                         {language === 'ru' ? 'Вернуться назад' : 'Go back'}
                     </button>
                 </div>

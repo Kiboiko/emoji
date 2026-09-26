@@ -206,14 +206,18 @@
     cursor: pointer;
 }
 
-.btn-back {
+/* Кнопка из состояния «товар не найден» — не та же, что «Назад» со
+   стрелкой на других экранах, хотя класс раньше был общий. Своё имя, чтобы
+   одно определение не перебивало другое по порядку склейки файлов. */
+.btn-notfound {
     padding: 10px 20px;
-    background: var(--bg-tertiary);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
     color: var(--text-primary);
+    font-family: inherit;
+    font-weight: var(--weight-medium);
     cursor: pointer;
-    font-weight: 500;
 }
 
 .product-description-block p {
