@@ -419,3 +419,110 @@ async def test_store_list_counts_only_active_products(
 
     assert mine, "магазин не попал в список"
     assert mine[0]["products"] == 1
+
+
+def _add_review(db, buyer, product, rating: int, hidden: bool = False) -> None:
+    """Отзыв на товар. Своя функция, потому что общей фикстуры в наборе нет."""
+    from models.review import Review
+    db.add(Review(
+        id=uuid.uuid4(), user_id=buyer.id, product_id=product.id,
+        text="отзыв", rating=rating, is_hidden=hidden,
+    ))
+
+# ---------------------------------------------------------------------------
+# Оценка магазина
+# ---------------------------------------------------------------------------
+
+async def test_store_rating_counts_product_reviews(
+    db, user_factory, product_factory,
+):
+    """
+    Раньше в шапку шёл счётчик из seller_profiles: он растёт только от
+    отзывов по сделкам P2P, а обычная покупка сделкой не оформляется — и у
+    магазина с отзывами на карточках рейтинг оставался пустым.
+    """
+    owner = await user_factory(username="rated_owner")
+    seller = SellerProfile(
+        id=uuid.uuid4(), user_id=owner.id,
+        display_name="С отзывами", payout_wallet="UQRated000000001",
+    )
+    db.add(seller)
+    await db.flush()
+
+    buyer = await user_factory(username="rated_buyer")
+    product = await product_factory(owner=owner, name="Товар с отзывами")
+    _add_review(db, buyer, product, 5)
+    _add_review(db, buyer, product, 4)
+    await db.flush()
+
+    store = await stores.seller_store(seller.id, db=db)
+
+    assert store["rating"] == 4.5
+    assert store["rating_count"] == 2
+
+
+async def test_store_rating_ignores_hidden_reviews(
+    db, user_factory, product_factory,
+):
+    owner = await user_factory(username="hidden_owner")
+    seller = SellerProfile(
+        id=uuid.uuid4(), user_id=owner.id,
+        display_name="Со скрытым", payout_wallet="UQHidden00000001",
+    )
+    db.add(seller)
+    await db.flush()
+
+    buyer = await user_factory(username="hidden_buyer")
+    product = await product_factory(owner=owner, name="Товар")
+    _add_review(db, buyer, product, 5)
+    _add_review(db, buyer, product, 1, hidden=True)
+    await db.flush()
+
+    store = await stores.seller_store(seller.id, db=db)
+
+    assert store["rating"] == 5.0
+    assert store["rating_count"] == 1
+
+
+async def test_store_rating_counts_withdrawn_products_too(
+    db, user_factory, product_factory,
+):
+    """
+    Отзыв на товар, который продавец потом снял, говорит о продавце ровно
+    столько же: для витрины берутся живые товары, для оценки — все.
+    """
+    owner = await user_factory(username="withdrawn_owner")
+    seller = SellerProfile(
+        id=uuid.uuid4(), user_id=owner.id,
+        display_name="Со снятым", payout_wallet="UQWithdrawn00001",
+    )
+    db.add(seller)
+    await db.flush()
+
+    buyer = await user_factory(username="withdrawn_buyer")
+    gone = await product_factory(owner=owner, name="Снятый", active=False)
+    _add_review(db, buyer, gone, 3)
+    await db.flush()
+
+    store = await stores.seller_store(seller.id, db=db)
+
+    assert store["rating"] == 3.0
+    assert store["rating_count"] == 1
+    assert store["products"] == [], "снятый товар не должен быть на витрине"
+
+
+async def test_store_without_reviews_has_no_rating(db, user_factory, product_factory):
+    """Пустые звёзды читаются как нулевая оценка — лучше не показывать вовсе."""
+    owner = await user_factory(username="quiet_owner")
+    seller = SellerProfile(
+        id=uuid.uuid4(), user_id=owner.id,
+        display_name="Без отзывов", payout_wallet="UQQuiet000000001",
+    )
+    db.add(seller)
+    await db.flush()
+    await product_factory(owner=owner, name="Товар")
+
+    store = await stores.seller_store(seller.id, db=db)
+
+    assert store["rating"] is None
+    assert store["rating_count"] == 0

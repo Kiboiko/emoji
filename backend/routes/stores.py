@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from models.p2p import SellerProfile, SellerStatus
 from models.product import Product
+from models.review import Review
 from models.subscription import (
     Channel, ChannelStatus, Subscription, SubscriptionPlan, SubscriptionStatus,
 )
@@ -75,6 +76,56 @@ async def _product_cards(db: AsyncSession, products: list, lang: str) -> list[di
         ).model_dump(mode="json")
         for p in products
     ]
+
+
+async def _rating_over(db: AsyncSession, product_ids: list) -> tuple[float | None, int]:
+    """
+    Оценка магазина — среднее по отзывам на его товары.
+
+    Раньше сюда шёл счётчик из seller_profiles. Он растёт только от отзывов
+    по сделкам P2P, а обычная покупка сделкой не оформляется — и у магазина
+    с десятком отзывов на карточках рейтинг в шапке оставался пустым.
+
+    Считаем по тем же отзывам, что покупатель видит на товарах: скрытые
+    модератором и без оценки не берём. Счётчик в seller_profiles не трогаем —
+    это внутренняя репутация по сделкам, её смотрит администратор.
+    """
+    if not product_ids:
+        return None, 0
+
+    average, count = (
+        await db.execute(
+            select(func.avg(Review.rating), func.count(Review.id))
+            .where(
+                Review.product_id.in_(product_ids),
+                Review.rating.is_not(None),
+                Review.is_hidden.is_(False),
+            )
+        )
+    ).one()
+
+    if not count:
+        return None, 0
+    return round(float(average), 2), int(count)
+
+
+async def _seller_product_ids(db: AsyncSession, seller: SellerProfile) -> list:
+    """
+    Все товары магазина, включая снятые с продажи.
+
+    Для витрины берутся только живые, а для оценки — все: отзыв на товар,
+    который продавец потом снял, говорит о продавце ровно столько же.
+    """
+    stmt = select(Product.id)
+    if seller.is_platform:
+        stmt = stmt.where(
+            Product.owner_user_id.is_(None),
+            Product.type != "subscription",
+        )
+    else:
+        stmt = stmt.where(Product.owner_user_id == seller.user_id)
+
+    return [row for (row,) in (await db.execute(stmt)).all()]
 
 
 async def _seller_products(db: AsyncSession, seller: SellerProfile, lang: str) -> list[dict]:
@@ -247,6 +298,8 @@ async def seller_store(
     if seller.status == SellerStatus.BANNED and not seller.is_platform:
         raise HTTPException(status_code=404, detail="Магазин не найден")
 
+    rating, rating_count = await _rating_over(db, await _seller_product_ids(db, seller))
+
     return {
         "kind": "platform" if seller.is_platform else "seller",
         "id": str(seller.id),
@@ -254,8 +307,8 @@ async def seller_store(
         "avatar_url": seller.avatar_url,
         "description": seller.description,
         "is_verified": seller.is_verified,
-        "rating": seller.rating,
-        "rating_count": seller.rating_count,
+        "rating": rating,
+        "rating_count": rating_count,
         "deals_completed": seller.deals_completed,
         "created_at": seller.created_at.isoformat(),
         "products": await _seller_products(db, seller, lang),
@@ -313,6 +366,11 @@ async def channel_store(
         )
     ).scalar() or 0
 
+    # У канала оценка появляется, только если отзывы на тарифы действительно
+    # оставляли: подписка идёт не через сделку, и раньше здесь всегда стоял
+    # пустой рейтинг
+    rating, rating_count = await _rating_over(db, product_ids)
+
     return {
         "kind": "channel",
         "id": str(channel.id),
@@ -320,8 +378,8 @@ async def channel_store(
         "avatar_url": channel.avatar_url,
         "description": channel.description,
         "is_verified": channel.is_verified,
-        "rating": None,
-        "rating_count": 0,
+        "rating": rating,
+        "rating_count": rating_count,
         "deals_completed": 0,
         "link": channel.username,
         "subscribers": subscribers,
