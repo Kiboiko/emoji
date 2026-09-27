@@ -9,7 +9,9 @@
     display: flex;
     align-items: center;
     justify-content: space-around;
-    padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px));
+    /* Через переменную, а не env() напрямую: в полноэкранном Mini App
+       env() равен нулю, и настоящий отступ приходит из Telegram (см. App.tsx) */
+    padding: 6px 0 calc(6px + var(--safe-area-bottom));
     border-top: 1px solid var(--border-color);
     background: var(--bg-primary);
     z-index: var(--z-nav);

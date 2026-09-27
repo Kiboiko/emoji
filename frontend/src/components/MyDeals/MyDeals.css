@@ -26,10 +26,18 @@
     border: 1px solid var(--border-color);
 }
 
-.deal-released,
-.deal-refunded,
-.deal-cancelled {
-    opacity: 0.65;
+/* Гасим цветом, а не прозрачностью: opacity < 1 на целой карточке — это
+   группа прозрачности, которую браузер рисует в отдельный буфер. В WebView
+   Telegram под Android на длинном списке этот буфер иногда не
+   дорисовывается, и карточка остаётся пустым прямоугольником нужной
+   высоты — без текста и кнопок. */
+.deal-released .deal-product,
+.deal-refunded .deal-product,
+.deal-cancelled .deal-product,
+.deal-released .deal-amount,
+.deal-refunded .deal-amount,
+.deal-cancelled .deal-amount {
+    color: var(--text-secondary);
 }
 
 .deal-disputed {

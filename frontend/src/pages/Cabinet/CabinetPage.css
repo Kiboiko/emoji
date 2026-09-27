@@ -13,7 +13,7 @@
 }
 
 .cabinet-bottom-spacer {
-    height: 100px;
+    height: calc(100px + var(--safe-area-bottom));
 }
 
 /* Внутри своего экрана у кабинета нет карточки-обёртки: её роль играет сама

@@ -97,6 +97,32 @@ export const App: React.FC = () => {
                 console.log('[Telegram] Desktop platform detected, skipping fullscreen');
             }
 
+            // Полноэкранный режим кладёт страницу под системные кнопки
+            // Android и под «шторку» iPhone, а env(safe-area-inset-bottom) в
+            // этом WebView равен нулю — нижнее меню оказывалось прямо под
+            // кнопками системы, и подписи читались сквозь них.
+            //
+            // Настоящие отступы Telegram сообщает сам, начиная с Bot API 8.0.
+            // Переопределяем ими --safe-area-bottom: его уже используют и
+            // меню, и панель покупки, и запас в конце списков.
+            const applySafeArea = () => {
+                const bottom = Math.max(
+                    tg.safeAreaInset?.bottom ?? 0,
+                    tg.contentSafeAreaInset?.bottom ?? 0,
+                );
+                if (bottom > 0) {
+                    document.documentElement.style.setProperty(
+                        '--safe-area-bottom', `${bottom}px`,
+                    );
+                }
+            };
+            applySafeArea();
+            if (typeof tg.onEvent === 'function') {
+                tg.onEvent('safeAreaChanged', applySafeArea);
+                tg.onEvent('contentSafeAreaChanged', applySafeArea);
+                tg.onEvent('viewportChanged', applySafeArea);
+            }
+
             // Set theme colors
             if (tg.setHeaderColor) tg.setHeaderColor('bg_color');
             if (tg.setBackgroundColor) tg.setBackgroundColor('bg_color');
@@ -269,17 +295,44 @@ const AppContent: React.FC = () => {
     );
 };
 
-const PageTransition: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -10 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-        className="page-transition"
-    >
-        {children}
-    </motion.div>
-);
+/**
+ * Появление экрана.
+ *
+ * После анимации inline-стили снимаются, и это не украшательство. Элемент с
+ * трансформом живёт в собственном слое композитора, а слой выше предела
+ * текстуры (у большинства Android это 4096px) растрируется не целиком:
+ * на длинных экранах — в списке объявлений, в заказах — часть карточек
+ * занимала своё место, но оставалась незакрашенной. Пустой прямоугольник
+ * вместо товара, и при прокрутке пустым оказывался уже другой.
+ *
+ * Снятый трансформ возвращает страницу в общий слой страницы, который
+ * рисуется кусками по мере прокрутки и в предел не упирается.
+ */
+const PageTransition: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const ref = React.useRef<HTMLDivElement>(null);
+
+    return (
+        <motion.div
+            ref={ref}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="page-transition"
+            onAnimationComplete={() => {
+                const el = ref.current;
+                if (!el) return;
+                // Пустая строка убирает свойство целиком, а не ставит
+                // «none»: none тоже создаёт слой на части движков
+                el.style.transform = '';
+                el.style.willChange = '';
+                el.style.opacity = '';
+            }}
+        >
+            {children}
+        </motion.div>
+    );
+};
 
 const HomeWithProductOverlay: React.FC = () => {
     const location = useLocation();

@@ -352,9 +352,17 @@
     border: 1px solid var(--border-color);
 }
 
-.listing-withdrawn,
-.listing-archived {
-    opacity: 0.65;
+/* Снятый с продажи гасим цветом, а не прозрачностью.
+   opacity < 1 на целой карточке — это группа прозрачности: браузер рисует
+   её в отдельный буфер и накладывает поверх страницы. В WebView Telegram
+   под Android этот буфер на длинном списке иногда не дорисовывается, и
+   карточка занимала своё место пустым прямоугольником — без названия,
+   фото и кнопок. Цвет тот же эффект даёт без отдельного слоя. */
+.listing-withdrawn .listing-name,
+.listing-archived .listing-name,
+.listing-withdrawn .listing-price,
+.listing-archived .listing-price {
+    color: var(--text-secondary);
 }
 
 .listing-rejected {
