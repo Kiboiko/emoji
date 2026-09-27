@@ -577,6 +577,27 @@ async def delete_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
         
+    # Товар мог прийти из заявки продавца. Ссылка на него обнуляется сама
+    # (SET NULL), а вот статус заявки — нет: она оставалась «опубликованной»
+    # со ссылкой в никуда. Продавец видел товар в кабинете как живой, в
+    # каталоге его не было, а вернуть в продажу было нечем — возврат только
+    # меняет сток у несуществующего товара.
+    #
+    # Отклонённую заявку можно отправить на проверку заново, и причина видна
+    # продавцу — в отличие от молчаливого черновика.
+    from models.p2p import ListingStatus, ProductListing
+
+    listing = (
+        await db.execute(
+            select(ProductListing).where(ProductListing.product_id == product.id)
+        )
+    ).scalars().first()
+    if listing is not None:
+        listing.status = ListingStatus.REJECTED
+        listing.moderation_comment = (
+            "Товар удалён администратором. Отправьте заявку на проверку заново."
+        )
+
     await db.delete(product)
     await db.commit()
     

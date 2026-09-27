@@ -452,3 +452,25 @@ async def test_republish_returns_only_unsold_units(
 
     product = await db.get(Product, listing.product_id)
     assert product.stock == 2
+
+
+async def test_deleting_product_returns_listing_to_the_seller(db, listing_factory, user_factory):
+    """
+    Товар удалён из админки — заявка не остаётся «опубликованной».
+
+    Ссылка на товар обнуляется внешним ключом, а статус нет: продавец видел
+    в кабинете живой товар, которого в каталоге уже не было, и вернуть его
+    в продажу было нечем.
+    """
+    from routes import products as products_routes
+
+    listing = await listing_factory(status=ListingStatus.APPROVED, with_product=True)
+    admin = await user_factory(username="catalog_admin", is_admin=True)
+    product_id = listing.product_id
+
+    await products_routes.delete_product(str(product_id), admin=admin, db=db)
+
+    await db.refresh(listing)
+    assert listing.status == ListingStatus.REJECTED
+    assert listing.product_id is None
+    assert "удалён" in (listing.moderation_comment or "")
