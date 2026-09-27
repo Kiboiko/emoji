@@ -106,10 +106,17 @@ export const App: React.FC = () => {
             // Переопределяем ими --safe-area-bottom: его уже используют и
             // меню, и панель покупки, и запас в конце списков.
             const applySafeArea = () => {
-                const bottom = Math.max(
-                    tg.safeAreaInset?.bottom ?? 0,
-                    tg.contentSafeAreaInset?.bottom ?? 0,
-                );
+                // Только safeAreaInset — реальный отступ устройства (жест-бар
+                // Android, полоса Home на iPhone). contentSafeAreaInset — про
+                // элементы интерфейса самого Telegram (шапку с «Закрыть» и
+                // «⋮» сверху), а не про системные кнопки; на части версий
+                // клиента снизу это давало на глаз лишний, вложенный запас, и
+                // Math.max выбирал именно его вместо реального отступа.
+                const bottom = tg.safeAreaInset?.bottom ?? 0;
+                // Только когда Telegram сообщил ненулевой отступ: иначе
+                // затираем нулём то, что для этого устройства уже верно
+                // считает сам браузер через env(safe-area-inset-bottom) —
+                // на iPhone без edge-to-edge он и так корректен.
                 if (bottom > 0) {
                     document.documentElement.style.setProperty(
                         '--safe-area-bottom', `${bottom}px`,
