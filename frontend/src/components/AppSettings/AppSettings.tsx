@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, FileText, Globe, LifeBuoy, Palette } from 'lucide-react';
+import { ChevronRight, FileText, Globe, Headset, Palette } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
 import { useTelegram } from '@/hooks/useTelegram';
@@ -155,8 +155,11 @@ export const AppSettings: React.FC = () => {
                 target="_blank"
                 rel="noreferrer"
             >
+                {/* Гарнитура, а не спасательный круг: круг читается как
+                    «аварийная ситуация», а наушники с микрофоном — это
+                    привычный значок живого оператора */}
                 <span className="appsettings-icon" aria-hidden="true">
-                    <LifeBuoy size={18} />
+                    <Headset size={18} />
                 </span>
                 <span className="appsettings-label">
                     {t('Связаться с поддержкой', 'Contact support')}
