@@ -66,6 +66,16 @@ class SellerProfile(Base):
     )
 
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    # Название выбрано владельцем и больше не меняется.
+    #
+    # Пустой флаг остаётся у магазинов, заведённых автоматически при
+    # подключении канала: имя там подставлено по названию канала, владелец
+    # его не выбирал, и один раз назвать свой магазин он вправе.
+    name_locked: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+
     payout_wallet: Mapped[str] = mapped_column(String(80), nullable=False)
 
     # Витрина магазина: логотип и описание. Логотип продавец грузит сам —

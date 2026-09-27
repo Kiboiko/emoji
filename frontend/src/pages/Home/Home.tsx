@@ -37,7 +37,7 @@ const readView = (): CatalogView => {
 export const Home: React.FC = () => {
     const navigate = useNavigate();
     const { language } = useAuthStore();
-    const { setCart } = useCartStore();
+    const { cart, setCart } = useCartStore();
     const { haptic } = useTelegram();
     const showToast = useToastStore((s) => s.show);
 
@@ -190,6 +190,23 @@ export const Home: React.FC = () => {
         if (product.type === 'service') {
             haptic.impact('light');
             navigate(`/product/${productId}`);
+            return;
+        }
+
+        // Товар уже в корзине, и больше взять нельзя: вещь продавца
+        // существует в одном экземпляре. Раньше повторное нажатие упиралось
+        // в отказ сервера — человек видел красную ошибку там, где ничего не
+        // сломалось и надо было просто открыть корзину.
+        const inCart = cart?.items
+            .filter((item) => item.product_id === productId)
+            .reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+        const ceiling = Math.min(
+            product.max_quantity ?? Number.MAX_SAFE_INTEGER,
+            product.stock ?? Number.MAX_SAFE_INTEGER,
+        );
+        if (inCart > 0 && inCart >= ceiling) {
+            haptic.impact('light');
+            navigate('/cart');
             return;
         }
 

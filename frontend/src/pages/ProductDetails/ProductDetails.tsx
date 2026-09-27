@@ -30,7 +30,7 @@ export const ProductDetails: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { language } = useAuthStore();
-    const { setCart } = useCartStore();
+    const { cart, setCart } = useCartStore();
     const { haptic } = useTelegram();
     const showToast = useToastStore((state) => state.show);
 
@@ -180,7 +180,17 @@ export const ProductDetails: React.FC = () => {
         if (finalQuantity < min) finalQuantity = min;
         if (finalQuantity > max) finalQuantity = max;
 
-        console.log(`Adding to cart: ${product.name} (ID: ${product.id}), Quantity: ${finalQuantity}, Min: ${min}, Max: ${max}`);
+        // Товар уже в корзине и добрал свой потолок — открываем корзину
+        // вместо отказа сервера: ошибка там, где ничего не сломалось,
+        // выглядит поломкой приложения
+        const inCart = cart?.items
+            .filter((item) => item.product_id === product.id)
+            .reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+        if (inCart > 0 && inCart + finalQuantity > max) {
+            haptic.impact('light');
+            navigate('/cart');
+            return;
+        }
 
         try {
             haptic.impact('light');

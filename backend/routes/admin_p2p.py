@@ -392,7 +392,13 @@ async def update_platform_store(
     store = await _platform_store(db)
 
     if payload.display_name is not None:
-        store.display_name = payload.display_name.strip()
+        name = payload.display_name.strip()
+        # Названия магазинов уникальны: два одинаковых в каталоге
+        # неразличимы, и покупатель не поймёт, куда он попал
+        if name.lower() != store.display_name.lower():
+            from routes.p2p import _assert_name_is_free
+            await _assert_name_is_free(db, name, exclude_id=store.id)
+        store.display_name = name
     if payload.description is not None:
         store.description = payload.description.strip() or None
 

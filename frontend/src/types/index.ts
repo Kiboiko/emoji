@@ -63,6 +63,8 @@ export type StoreKind = 'seller' | 'channel' | 'platform';
 export interface PublicSettings {
     commission_p2p_bp: number;
     commission_subscription_bp: number;
+    /** Куда писать в поддержку: @username или ссылка. Пусто — адрес не задан */
+    support_contact: string;
 }
 
 /**
@@ -289,6 +291,8 @@ export interface SellerProfile {
     /** id профиля — по нему строится адрес витрины магазина */
     id?: string;
     display_name?: string;
+    /** Название уже выбрано владельцем и больше не меняется */
+    name_locked?: boolean;
     payout_wallet?: string;
     /** Логотип магазина. Грузится вручную: аватар Telegram сделал бы магазин похожим на личный аккаунт */
     avatar_url?: string | null;

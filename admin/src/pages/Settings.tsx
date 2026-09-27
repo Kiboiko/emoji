@@ -38,6 +38,10 @@ const GROUPS: Array<{ title: string; keys: string[] }> = [
         title: 'Условия площадки',
         keys: ['terms_version', 'terms_text'],
     },
+    {
+        title: 'Поддержка',
+        keys: ['support_contact'],
+    },
 ];
 
 export const Settings: React.FC = () => {

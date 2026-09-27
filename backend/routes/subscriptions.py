@@ -325,11 +325,39 @@ async def _ensure_store(db: AsyncSession, user: User, channel: Channel) -> None:
     db.add(SellerProfile(
         id=uuid.uuid4(),
         user_id=user.id,
-        display_name=channel.title[:100],
+        display_name=await _free_store_name(db, channel.title[:100]),
+        # Имя подставлено по каналу, а не выбрано владельцем: один раз
+        # назвать свой магазин он ещё сможет
+        name_locked=False,
         payout_wallet=channel.payout_wallet or "",
         terms_version=channel.terms_version,
         terms_accepted_at=channel.terms_accepted_at,
     ))
+
+
+async def _free_store_name(db: AsyncSession, base: str) -> str:
+    """
+    Свободное название магазина рядом с желаемым.
+
+    Названия магазинов уникальны, а канал с таким именем мог существовать
+    раньше магазина. Ронять подключение канала из-за этого нельзя: имя
+    здесь временное, владелец всё равно назовёт магазин сам.
+    """
+    from models.p2p import SellerProfile
+
+    name = base.strip() or "Магазин"
+    for attempt in range(1, 50):
+        taken = (
+            await db.execute(
+                select(SellerProfile.id).where(
+                    func.lower(SellerProfile.display_name) == name.lower()
+                ).limit(1)
+            )
+        ).scalars().first()
+        if taken is None:
+            return name
+        name = f"{base[:88].strip()} #{attempt + 1}"
+    return f"{base[:80].strip()} {uuid.uuid4().hex[:6]}"
 
 
 @router.post("/author/channels/{channel_id}/verify")

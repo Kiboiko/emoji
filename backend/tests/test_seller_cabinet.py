@@ -474,3 +474,73 @@ async def test_deleting_product_returns_listing_to_the_seller(db, listing_factor
     assert listing.status == ListingStatus.REJECTED
     assert listing.product_id is None
     assert "удалён" in (listing.moderation_comment or "")
+
+
+# ---------------------------------------------------------------------------
+# Название магазина
+# ---------------------------------------------------------------------------
+
+async def test_chosen_store_name_cannot_be_changed(db, seller_user):
+    """
+    Название выбирается один раз.
+
+    По нему покупатель узнаёт магазин, в котором уже покупал, и на нём же
+    висят отзывы: свободная правка позволяла бы назваться чужим именем
+    после того, как чужая репутация набрана.
+    """
+    profile = (await db.execute(
+        select(SellerProfile).where(SellerProfile.user_id == seller_user.id)
+    )).scalars().one()
+    profile.name_locked = True
+    await db.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        await p2p.update_seller(
+            p2p.SellerUpdate(display_name="Другое имя"), user=seller_user, db=db,
+        )
+
+    assert exc.value.status_code == 400
+    await db.refresh(profile)
+    assert profile.display_name == "Продавец"
+
+
+async def test_auto_created_store_can_be_named_once(db, seller_user):
+    """
+    Магазин, заведённый при подключении канала, владелец не называл: имя там
+    подставлено по каналу. Один раз назвать его он вправе — но только один.
+    """
+    profile = (await db.execute(
+        select(SellerProfile).where(SellerProfile.user_id == seller_user.id)
+    )).scalars().one()
+    profile.name_locked = False
+    await db.flush()
+
+    await p2p.update_seller(
+        p2p.SellerUpdate(display_name="Мой маркет"), user=seller_user, db=db,
+    )
+    await db.refresh(profile)
+    assert profile.display_name == "Мой маркет"
+    assert profile.name_locked is True
+
+    with pytest.raises(HTTPException):
+        await p2p.update_seller(
+            p2p.SellerUpdate(display_name="Ещё раз"), user=seller_user, db=db,
+        )
+
+
+async def test_store_name_cannot_repeat_someone_elses(db, seller_user, user_factory):
+    """Два магазина с одним именем в каталоге неразличимы."""
+    newcomer = await user_factory(username="second_seller")
+
+    with pytest.raises(HTTPException) as exc:
+        await p2p.register_seller(
+            p2p.SellerRegister(
+                display_name="продавец",   # тот же, но другим регистром
+                payout_wallet="UQOtherWallet00000",
+                accept_terms=True,
+            ),
+            user=newcomer, db=db,
+        )
+
+    assert exc.value.status_code == 400
+    assert "занято" in exc.value.detail

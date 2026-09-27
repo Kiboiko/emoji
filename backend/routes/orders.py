@@ -352,7 +352,7 @@ async def _reserve_digital_items(
     if len(available) < quantity:
         raise HTTPException(
             status_code=400,
-            detail=f"Not enough stock for product '{product.name_ru}'",
+            detail=f"«{product.name_ru}»: столько уже нет в наличии",
         )
 
     for item in available:

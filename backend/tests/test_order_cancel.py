@@ -97,7 +97,9 @@ class TestCartQuantityLimit:
             await cart_routes.add_to_cart(item_data=payload, user=buyer, db=db)
 
         assert exc.value.status_code == 400
-        assert "Maximum quantity is 1" in exc.value.detail
+        # Текст по-русски и про суть: товар уже в корзине покупателя,
+        # а не «превышено максимальное количество»
+        assert "уже в корзине" in exc.value.detail
 
         rows = (await db.execute(
             CartItem.__table__.select().where(CartItem.user_id == buyer.id)
@@ -126,7 +128,7 @@ class TestCartQuantityLimit:
             await cart_routes.add_to_cart(item_data=payload, user=buyer, db=db)
 
         assert exc.value.status_code == 400
-        assert "stock" in exc.value.detail.lower()
+        assert "2" in exc.value.detail
 
 
 # ---------------------------------------------------------------------------

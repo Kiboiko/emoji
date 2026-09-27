@@ -98,6 +98,30 @@ class DisputeOpen(BaseModel):
 # Вспомогательное
 # ---------------------------------------------------------------------------
 
+async def _assert_name_is_free(
+    db: AsyncSession, name: str, *, exclude_id: uuid.UUID | None = None
+) -> None:
+    """
+    Название магазина не должно повторяться.
+
+    Сравнение без учёта регистра: «Market» и «market» покупатель не
+    различит, а на этом и строится подмена чужого магазина. Индекс в базе
+    тот же самый — проверка здесь нужна ради понятного ответа вместо
+    ошибки уникальности.
+    """
+    stmt = select(SellerProfile.id).where(
+        func.lower(SellerProfile.display_name) == name.lower()
+    )
+    if exclude_id is not None:
+        stmt = stmt.where(SellerProfile.id != exclude_id)
+
+    if (await db.execute(stmt.limit(1))).scalars().first() is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Такое название магазина уже занято — придумайте другое",
+        )
+
+
 async def _get_seller(db: AsyncSession, user: User) -> SellerProfile:
     profile = (
         await db.execute(select(SellerProfile).where(SellerProfile.user_id == user.id))
@@ -243,6 +267,9 @@ async def seller_profile(
         "registered": True,
         "id": str(profile.id),
         "display_name": profile.display_name,
+        # Витрина по этому флагу решает, показывать поле имени или надпись
+        # «название навсегда»
+        "name_locked": profile.name_locked,
         "payout_wallet": profile.payout_wallet,
         "avatar_url": profile.avatar_url,
         "description": profile.description,
@@ -272,11 +299,25 @@ async def update_seller(
     который подтверждает администратор вручную, так что подмена перед выплатой
     ничего не даёт злоумышленнику, зато потеря доступа к старому кошельку —
     обычное дело.
+
+    С названием наоборот: оно выбирается один раз. По названию покупатель
+    узнаёт магазин, в котором уже покупал, и оставляет отзывы — свободная
+    правка позволяла бы назваться чужим именем после того, как чужая
+    репутация набрана, и отзывы оставались бы висеть на другом магазине.
     """
     profile = await _get_seller(db, user)
 
     if payload.display_name is not None:
-        profile.display_name = payload.display_name.strip()
+        name = payload.display_name.strip()
+        if name != profile.display_name:
+            if profile.name_locked:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Название магазина менять нельзя — оно выбирается один раз",
+                )
+            await _assert_name_is_free(db, name, exclude_id=profile.id)
+            profile.display_name = name
+            profile.name_locked = True
     if payload.payout_wallet is not None:
         profile.payout_wallet = payload.payout_wallet.strip()
     if payload.description is not None:
@@ -326,11 +367,16 @@ async def register_seller(
     if existing is not None:
         raise HTTPException(status_code=400, detail="Вы уже зарегистрированы как продавец")
 
+    name = payload.display_name.strip()
+    await _assert_name_is_free(db, name)
+
     version = await terms_service.record(db, user, context="listing")
     profile = SellerProfile(
         id=uuid.uuid4(),
         user_id=user.id,
-        display_name=payload.display_name.strip(),
+        display_name=name,
+        # Имя выбрано владельцем — дальше оно не меняется
+        name_locked=True,
         payout_wallet=payload.payout_wallet.strip(),
         terms_version=version,
         terms_accepted_at=datetime.utcnow(),
@@ -355,6 +401,22 @@ async def my_listings(
             .order_by(ProductListing.created_at.desc())
         )
     ).scalars().all()
+
+    # Заявка без товара, но с пометкой «опубликовано» — сломанное состояние:
+    # товар удалили из админки, внешний ключ обнулил ссылку, а статус остался.
+    # Продавец видел живой товар, которого в каталоге нет, и вернуть его в
+    # продажу было нечем. Чиним при открытии кабинета: отклонённую заявку
+    # можно отправить на проверку заново.
+    repaired = False
+    for l in listings:
+        if l.status == ListingStatus.APPROVED and l.product_id is None:
+            l.status = ListingStatus.REJECTED
+            l.moderation_comment = (
+                "Товар удалён администратором. Отправьте заявку на проверку заново."
+            )
+            repaired = True
+    if repaired:
+        await db.commit()
 
     return [
         {

@@ -1,10 +1,30 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, FileText, Globe, Palette } from 'lucide-react';
+import { ChevronRight, FileText, Globe, LifeBuoy, Palette } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
 import { useTelegram } from '@/hooks/useTelegram';
+import { usePublicSettings } from '@/hooks/usePublicSettings';
 import './AppSettings.css';
+
+/**
+ * Адрес поддержки в виде ссылки.
+ *
+ * Владелец площадки пишет его в админке как придётся: «@support»,
+ * «t.me/support» или готовым адресом. Пока адрес не задан, ведём в чат с
+ * ботом — это единственное место, которое точно существует, и молчащая
+ * кнопка там лучше кнопки, ведущей в никуда.
+ */
+const supportLink = (contact: string): string => {
+    const value = contact.trim();
+    if (!value) {
+        return `https://t.me/${import.meta.env.VITE_BOT_USERNAME || ''}`;
+    }
+    if (/^https?:\/\//i.test(value)) return value;
+    if (value.startsWith('@')) return `https://t.me/${value.slice(1)}`;
+    if (value.startsWith('t.me/')) return `https://${value}`;
+    return `https://t.me/${value}`;
+};
 
 /**
  * Язык и оформление.
@@ -23,6 +43,7 @@ export const AppSettings: React.FC = () => {
     const { theme, setTheme, followTelegram, followsTelegram } = useTheme();
     const { language, setLanguage } = useAuthStore();
     const { haptic } = useTelegram();
+    const settings = usePublicSettings();
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
@@ -114,6 +135,34 @@ export const AppSettings: React.FC = () => {
                 <span className="appsettings-label">{t('Условия площадки', 'Platform terms')}</span>
                 <ChevronRight className="appsettings-chevron" size={18} />
             </Link>
+
+            {/* Поддержка там же, где условия: человек, у которого что-то
+                пошло не так, идёт в настройки, а не ищет контакт в описании
+                бота. openTelegramLink открывает чат внутри мессенджера —
+                обычная ссылка увела бы его в браузер поверх приложения. */}
+            <a
+                className="appsettings-link"
+                href={supportLink(settings?.support_contact ?? '')}
+                onClick={(e) => {
+                    const link = supportLink(settings?.support_contact ?? '');
+                    const tg = (window as any).Telegram?.WebApp;
+                    if (tg?.openTelegramLink && link.startsWith('https://t.me/')) {
+                        e.preventDefault();
+                        haptic.impact('light');
+                        tg.openTelegramLink(link);
+                    }
+                }}
+                target="_blank"
+                rel="noreferrer"
+            >
+                <span className="appsettings-icon" aria-hidden="true">
+                    <LifeBuoy size={18} />
+                </span>
+                <span className="appsettings-label">
+                    {t('Связаться с поддержкой', 'Contact support')}
+                </span>
+                <ChevronRight className="appsettings-chevron" size={18} />
+            </a>
         </section>
     );
 };

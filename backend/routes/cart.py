@@ -25,6 +25,26 @@ def _quantity_ceiling(product: Product) -> int | None:
     return min(limits) if limits else None
 
 
+def _limit_message(product: Product, in_cart: int, ceiling: int) -> str:
+    """
+    Почему больше взять нельзя — по-русски и по делу.
+
+    Раньше отсюда уходило «Maximum quantity is 1»: английская строка
+    всплывала поверх русского интерфейса и не говорила главного — что
+    товар уже лежит в корзине покупателя и ничего не сломалось.
+    """
+    if in_cart >= ceiling:
+        if ceiling == 1:
+            return "Этот товар уже в корзине: он продаётся в одном экземпляре"
+        return f"В корзине уже {in_cart} шт. — больше по этому товару взять нельзя"
+
+    # Про остаток говорим прямо: покупателю полезнее знать, что товара
+    # просто нет, чем что ему «не положено»
+    if product.stock is not None and product.stock <= ceiling:
+        return f"Осталось всего {product.stock} шт."
+    return f"Больше {ceiling} шт. в одни руки взять нельзя"
+
+
 @router.get("", response_model=CartResponse)
 async def get_cart(
     lang: str = "ru",
@@ -93,13 +113,23 @@ async def add_to_cart(
     if not product.is_active:
         raise HTTPException(status_code=400, detail="Товар снят с продажи")
 
-    # Validate quantity limits
     if product.min_quantity and item_data.quantity < product.min_quantity:
-        raise HTTPException(status_code=400, detail=f"Minimum quantity is {product.min_quantity}")
-    
-    if product.max_quantity and item_data.quantity > product.max_quantity:
-        raise HTTPException(status_code=400, detail=f"Maximum quantity is {product.max_quantity}")
-    
+        raise HTTPException(
+            status_code=400,
+            detail=f"Меньше {product.min_quantity} шт. заказать нельзя",
+        )
+
+    # Потолок считаем сразу по обоим ограничениям. Раньше здесь смотрели
+    # только на max_quantity, а сток — лишь при добавлении к уже лежащей
+    # позиции: первым же нажатием в корзину можно было положить больше,
+    # чем есть на складе, и упереться в отказ только при оплате.
+    ceiling = _quantity_ceiling(product)
+    if ceiling is not None and item_data.quantity > ceiling:
+        raise HTTPException(
+            status_code=400,
+            detail=_limit_message(product, 0, ceiling),
+        )
+
     # Check if item already in cart
     # For digital products (no user_data required), check only product_id
     # For service products, also check user_data to allow multiple orders with different links
@@ -123,15 +153,11 @@ async def add_to_cart(
         # экземпляре, и заказ уходил бы на количество, которого не существует.
         new_quantity = existing_item.quantity + item_data.quantity
 
-        if product.max_quantity and new_quantity > product.max_quantity:
+        ceiling = _quantity_ceiling(product)
+        if ceiling is not None and new_quantity > ceiling:
             raise HTTPException(
                 status_code=400,
-                detail=f"Maximum quantity is {product.max_quantity}",
-            )
-        if product.stock is not None and new_quantity > product.stock:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Only {product.stock} left in stock",
+                detail=_limit_message(product, existing_item.quantity, ceiling),
             )
 
         existing_item.quantity = new_quantity
@@ -169,13 +195,19 @@ async def update_cart_item(
     product = await db.get(Product, cart_item.product_id)
     if product:
         if product.min_quantity and item_data.quantity < product.min_quantity:
-            raise HTTPException(status_code=400, detail=f"Minimum quantity is {product.min_quantity}")
-        if product.max_quantity and item_data.quantity > product.max_quantity:
-            raise HTTPException(status_code=400, detail=f"Maximum quantity is {product.max_quantity}")
-        # Сток проверялся только при добавлении в корзину: можно было
-        # положить последнюю штуку, а потом плюсом набрать больше, чем есть
-        if product.stock is not None and item_data.quantity > product.stock:
-            raise HTTPException(status_code=400, detail=f"Only {product.stock} left in stock")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Меньше {product.min_quantity} шт. заказать нельзя",
+            )
+        # Сток проверяется наравне с лимитом на одни руки: раньше сюда
+        # смотрели только при добавлении в корзину, и последнюю штуку можно
+        # было положить, а потом плюсом набрать больше, чем есть
+        ceiling = _quantity_ceiling(product)
+        if ceiling is not None and item_data.quantity > ceiling:
+            raise HTTPException(
+                status_code=400,
+                detail=_limit_message(product, cart_item.quantity, ceiling),
+            )
     
     cart_item.quantity = item_data.quantity
     await db.commit()

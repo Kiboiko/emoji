@@ -33,4 +33,7 @@ async def public_settings(db: AsyncSession = Depends(get_db)):
         "commission_subscription_bp": await settings_service.get_int(
             db, "commission_subscription_bp"
         ),
+        # Контакт поддержки: кнопка в приложении должна вести в живой чат, а
+        # адрес этого чата меняется без выкладки
+        "support_contact": (await settings_service.get_str(db, "support_contact")).strip(),
     }

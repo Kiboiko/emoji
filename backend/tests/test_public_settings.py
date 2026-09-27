@@ -35,4 +35,6 @@ async def test_public_settings_expose_nothing_else(db):
     """
     data = await settings_routes.public_settings(db=db)
 
-    assert set(data) == {"commission_p2p_bp", "commission_subscription_bp"}
+    assert set(data) == {
+        "commission_p2p_bp", "commission_subscription_bp", "support_contact",
+    }

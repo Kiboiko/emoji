@@ -279,6 +279,30 @@
     color: var(--accent-warning);
 }
 
+/* Запертое название: не поле ввода, а строка с пояснением. Серое поле
+   только для чтения выглядело бы сломанным вводом — человек тыкал бы в него
+   и не понимал, почему не печатается. */
+.seller-locked {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2-5) var(--space-3);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+}
+
+.seller-locked-value {
+    font-size: var(--font-md);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.seller-locked-note {
+    font-size: var(--font-xs);
+    color: var(--text-secondary);
+}
+
 .seller-hint {
     margin: var(--space-2) 0 0;
     font-size: var(--font-xs);

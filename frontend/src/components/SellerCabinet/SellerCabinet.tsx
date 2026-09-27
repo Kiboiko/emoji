@@ -211,7 +211,7 @@ const SellerRegistration: React.FC<{
             </p>
 
             <label className="seller-label">
-                {t('Имя продавца', 'Seller name')}
+                {t('Название маркета', 'Store name')}
                 <input
                     className="seller-input"
                     value={name}
@@ -222,6 +222,16 @@ const SellerRegistration: React.FC<{
                     required
                 />
             </label>
+
+            {/* Предупреждение до кнопки, а не после: сказать «имя навсегда»
+                нужно до того, как человек его отправит */}
+            <p className="seller-hint seller-hint--warn">
+                <AlertTriangle size={13} />
+                {t(
+                    'Название навсегда: поменять его потом нельзя, и занять чужое тоже.',
+                    'The name is permanent: it cannot be changed later, and a name someone already took is unavailable.',
+                )}
+            </p>
 
             <label className="seller-label">
                 {t('Кошелёк TON для выплат', 'TON payout wallet')}
@@ -288,7 +298,9 @@ const SellerSummary: React.FC<{
         setSaving(true);
         try {
             await p2pApi.updateSeller({
-                display_name: name.trim(),
+                // Запертое имя не отправляем вовсе: сервер такую правку
+                // отклоняет, и сохранение кошелька падало бы вместе с ней
+                display_name: profile.name_locked ? undefined : name.trim(),
                 payout_wallet: wallet.trim(),
                 description: about.trim(),
             });
@@ -444,14 +456,37 @@ const SellerSummary: React.FC<{
                 </div>
             ) : (
                 <form className="seller-form seller-form-inline" onSubmit={save}>
-                    <input
-                        className="seller-input"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        minLength={2}
-                        maxLength={100}
-                        required
-                    />
+                    {/* Название выбирается один раз. У магазина, заведённого
+                        вместе с каналом, владелец его ещё не выбирал — там
+                        поле есть, но с тем же предупреждением. */}
+                    {profile.name_locked ? (
+                        <div className="seller-locked">
+                            <span className="seller-locked-value">{profile.display_name}</span>
+                            <span className="seller-locked-note">
+                                {t('Название магазина изменить нельзя',
+                                   'The store name cannot be changed')}
+                            </span>
+                        </div>
+                    ) : (
+                        <>
+                            <input
+                                className="seller-input"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder={t('Название маркета', 'Store name')}
+                                minLength={2}
+                                maxLength={100}
+                                required
+                            />
+                            <p className="seller-hint seller-hint--warn">
+                                <AlertTriangle size={13} />
+                                {t(
+                                    'Название навсегда: после сохранения поменять его нельзя.',
+                                    'The name is permanent: once saved it cannot be changed.',
+                                )}
+                            </p>
+                        </>
+                    )}
                     <textarea
                         className="seller-input seller-textarea"
                         value={about}
