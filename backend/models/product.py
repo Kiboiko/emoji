@@ -24,6 +24,17 @@ class Product(Base):
     
     # Media
     image_url: Mapped[str] = mapped_column(String(500), nullable=False)
+
+    # Все фотографии товара по порядку. Первая совпадает с image_url: на него
+    # смотрят карточки каталога, корзина и снапшоты заказов, и убирать его
+    # ради галереи значило бы переписать половину витрины.
+    #
+    # Список, а не отдельная таблица: фотографии принадлежат товару целиком,
+    # по одной их никто не ищет и не считает, а у заявки такая таблица уже
+    # есть (listing_images) — вторая ничего бы не добавила.
+    images: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
     
     # Category
     category_id: Mapped[uuid.UUID] = mapped_column(

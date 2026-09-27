@@ -63,6 +63,8 @@ async def _product_cards(db: AsyncSession, products: list, lang: str) -> list[di
             price_usdt=p.price_usdt,
             price_ton=p.price_ton,
             image_url=p.image_url,
+            images=p.images or [],
+            stock=p.stock,
             category_id=p.category_id,
             is_top=p.is_top,
             type=p.type,

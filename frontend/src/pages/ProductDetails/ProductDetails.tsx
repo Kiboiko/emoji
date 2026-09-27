@@ -14,6 +14,18 @@ import { pluralRu } from '@/lib/format';
 import { useToastStore, errorText } from '@/store/toastStore';
 import './ProductDetails.css';
 
+/**
+ * Сколько штук можно взять за раз.
+ *
+ * Меньшее из двух: ограничения на одну корзину (max_quantity) и того, что
+ * вообще осталось (stock). Раньше здесь стояло только первое — у товара
+ * продавца оно всегда было равно единице, и вопрос не возникал.
+ */
+const maxUnits = (p: Product): number => Math.min(
+    p.max_quantity || 999999,
+    p.stock ?? 999999,
+);
+
 export const ProductDetails: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -35,6 +47,8 @@ export const ProductDetails: React.FC = () => {
     const [serviceInput, setServiceInput] = useState('');
     const [inputError, setInputError] = useState(false);
     const [quantity, setQuantity] = useState(1);
+    /** Какая фотография сейчас на экране — по ней подсвечивается точка */
+    const [shot, setShot] = useState(0);
 
     useWebSocket((message) => {
         if (!id) return;
@@ -160,7 +174,7 @@ export const ProductDetails: React.FC = () => {
 
         // Validate Quantity Locally
         const min = product.min_quantity || 1;
-        const max = product.max_quantity || 999999;
+        const max = maxUnits(product);
 
         let finalQuantity = quantity;
         if (finalQuantity < min) finalQuantity = min;
@@ -195,7 +209,7 @@ export const ProductDetails: React.FC = () => {
         if (!product) return;
         const newQuantity = quantity + delta;
         const min = product.min_quantity || 1;
-        const max = product.max_quantity || 999999;
+        const max = maxUnits(product);
 
         if (newQuantity >= min && newQuantity <= max) {
             setQuantity(newQuantity);
@@ -245,9 +259,17 @@ export const ProductDetails: React.FC = () => {
     // количество теми же границами
     const chargedQuantity = Math.min(
         Math.max(quantity, product.min_quantity || 1),
-        product.max_quantity || 999999,
+        maxUnits(product),
     );
     const total = (product.price_usdt * chargedQuantity).toFixed(2);
+
+    // Фотографии товара. У товаров площадки она по-прежнему одна, у товара
+    // продавца их может быть до восьми — раньше доезжала только первая.
+    const gallery = product.images?.length ? product.images : [product.image_url];
+
+    // Выбор количества нужен там, где взять можно больше одной штуки. У услуг
+    // так было всегда, у товара продавца зависит от того, сколько он выставил.
+    const showQuantity = product.type === 'service' || maxUnits(product) > 1;
 
     return (
         <motion.div
@@ -264,11 +286,41 @@ export const ProductDetails: React.FC = () => {
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.1, duration: 0.4 }}
             >
-                <img src={product.image_url} alt={product.name} />
+                {/* Лента фотографий вместо одной картинки. Листается
+                    пальцем и прилипает к краям: отдельные стрелки на
+                    телефоне попадают мимо пальца, а прокрутка — то, что
+                    человек попробует первым.
+
+                    Одна фотография выглядит ровно как раньше: лента из
+                    одного кадра никуда не листается. */}
+                <div
+                    className="hero-track"
+                    onScroll={(e) => {
+                        const el = e.currentTarget;
+                        setShot(Math.round(el.scrollLeft / (el.clientWidth || 1)));
+                    }}
+                >
+                    {gallery.map((url, index) => (
+                        <img key={`${url}-${index}`} src={url} alt={product.name} />
+                    ))}
+                </div>
+
                 {/* Плашка на картинке — как на карточке в каталоге. Раньше
                     это был градиентный кружок с огоньком и без подписи: что
                     он означает, понять было неоткуда. */}
                 {product.is_top && <span className="product-tag-hero">Хит</span>}
+
+                {gallery.length > 1 && (
+                    <div className="hero-dots" aria-hidden="true">
+                        {gallery.map((url, index) => (
+                            <span
+                                key={`${url}-${index}`}
+                                className={index === shot ? 'is-current' : ''}
+                            />
+                        ))}
+                    </div>
+                )}
+
                 <div className="hero-gradient" />
             </motion.div>
 
@@ -351,10 +403,31 @@ export const ProductDetails: React.FC = () => {
                             )}
                         </div>
 
+                    </div>
+                )}
+
+                {/* Количество вынесено из карточки услуги: там оно и жило,
+                    а товар продавца всегда продавался ровно по одной штуке —
+                    выбирать было нечего. Теперь продавец указывает, сколько
+                    у него есть, и выбор нужен обоим. */}
+                {showQuantity && (
+                    <div className="quantity-block">
                         <div className="quantity-selector">
                             <span className="quantity-label">
                                 {language === 'ru' ? 'Количество' : 'Quantity'}
-                                {product.min_quantity && ` (min: ${product.min_quantity})`}
+                                {product.stock != null ? (
+                                    <span className="quantity-left">
+                                        {language === 'ru'
+                                            ? `осталось ${product.stock}`
+                                            : `${product.stock} left`}
+                                    </span>
+                                ) : (product.min_quantity && product.min_quantity > 1 ? (
+                                    <span className="quantity-left">
+                                        {language === 'ru'
+                                            ? `от ${product.min_quantity}`
+                                            : `min ${product.min_quantity}`}
+                                    </span>
+                                ) : null)}
                             </span>
                             <div className="quantity-controls">
                                 <button
@@ -368,7 +441,7 @@ export const ProductDetails: React.FC = () => {
                                 <button
                                     className="btn-quantity"
                                     onClick={() => handleQuantityChange(1)}
-                                    disabled={!!product.max_quantity && quantity >= product.max_quantity}
+                                    disabled={quantity >= maxUnits(product)}
                                 >
                                     <Plus size={20} />
                                 </button>

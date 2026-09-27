@@ -50,6 +50,11 @@ export const SellerBlock: React.FC<SellerBlockProps> = ({ product }) => {
     // Товар продавца идёт через эскроу и сделку, товар площадки — нет
     const escrow = product.is_p2p === true;
 
+    // Подписка деньги в эскроу не держит, но и площадкой не продаётся:
+    // доступ выдаёт бот, а канал принадлежит автору. Строка «Продаёт сама
+    // площадка» здесь была прямым враньём.
+    const subscription = product.type === 'subscription';
+
     const points = escrow
         ? [
             t('Деньги держит площадка до подтверждения получения',
@@ -59,12 +64,21 @@ export const SellerBlock: React.FC<SellerBlockProps> = ({ product }) => {
             t('Возврат средств, если товар не соответствует описанию',
               'Refund if the item does not match the description'),
         ]
+        : subscription
+        ? [
+            t('Доступ в канал откроется сразу после оплаты',
+              'Channel access opens right after payment'),
+            t('Доступ закроется, когда подписка закончится',
+              'Access closes when the subscription ends'),
+        ]
         : [
             product.type === 'service'
                 ? t('Заказ берут в работу сразу после оплаты',
                     'The order is picked up right after payment')
                 : t('Выдача сразу после оплаты', 'Delivered right after payment'),
-            t('Продаёт сама площадка', 'Sold by the marketplace itself'),
+            ...(author_kind === 'platform'
+                ? [t('Продаёт сама площадка', 'Sold by the marketplace itself')]
+                : []),
         ];
 
     return (

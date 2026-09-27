@@ -143,3 +143,30 @@ async def test_missing_listing(db, user_factory):
     result = await _moderate(db, admin.telegram_id, uuid.uuid4())
 
     assert result["reply"] == "Заявка не найдена"
+
+
+async def test_approval_carries_every_photo_and_quantity(db, user_factory, pending_listing):
+    """
+    В товар уходят все фотографии заявки и заявленное количество.
+
+    Раньше доезжала только первая картинка — остальные оставались в
+    listing_images и покупателю не показывались никогда, — а сток жёстко
+    равнялся единице: продавец с пятью одинаковыми ключами продавал один.
+    """
+    db.add(ListingImage(
+        id=uuid.uuid4(), listing_id=pending_listing.id,
+        url="/uploads/listings/b.jpg", sort_order=1,
+    ))
+    pending_listing.quantity = 5
+    await db.flush()
+
+    admin = await user_factory(username="bot_admin_gallery", is_admin=True)
+    await _moderate(db, admin.telegram_id, pending_listing.id)
+
+    product = await db.get(Product, pending_listing.product_id)
+    assert product.images == ["/uploads/listings/a.jpg", "/uploads/listings/b.jpg"]
+    # Первая фотография остаётся главной: на неё смотрят карточки каталога,
+    # корзина и снимок заказа
+    assert product.image_url == "/uploads/listings/a.jpg"
+    assert product.stock == 5
+    assert product.max_quantity == 5

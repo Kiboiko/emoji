@@ -286,7 +286,7 @@ export const p2pApi = {
     updateListing: async (listingId: string, data: {
         name?: string; name_en?: string;
         description?: string; description_en?: string;
-        price_usd?: string; category_id?: string;
+        price_usd?: string; quantity?: number; category_id?: string;
     }) => (await apiClient.patch(`/p2p/seller/listings/${listingId}`, data)).data,
 
     deleteListing: async (listingId: string) =>
@@ -304,7 +304,8 @@ export const p2pApi = {
     createListing: async (data: {
         name: string; name_en: string;
         description: string; description_en: string;
-        price_usd: string; category_id?: string; accept_terms: boolean;
+        price_usd: string; quantity?: number;
+        category_id?: string; accept_terms: boolean;
     }) => (await apiClient.post('/p2p/seller/listings', data)).data,
 
     uploadListingImage: async (listingId: string, file: File) => {

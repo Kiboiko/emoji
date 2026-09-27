@@ -77,6 +77,14 @@ class ProductLocalized(BaseModel):
     price_usdt: Decimal
     price_ton: Optional[Decimal]
     image_url: str
+    # Остальные фотографии. Карточке каталога хватает image_url, а странице
+    # товара — нет: продавец грузит до восьми фотографий, и до этого
+    # покупатель видел только первую.
+    images: list[str] = Field(default_factory=list)
+    # Сколько штук осталось. None — товар не кончается (услуга, подписка).
+    # Нужен странице товара: без него она предлагала выбрать количество
+    # больше, чем есть, и упиралась в отказ корзины.
+    stock: Optional[int] = None
     category_id: UUID
     is_top: bool
     type: str = "digital"

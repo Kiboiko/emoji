@@ -95,6 +95,7 @@ async def list_listings(
                 "price_usd": str(l.price_usd),
                 "status": l.status.value,
                 "images": [img.url for img in l.images],
+                "quantity": l.quantity,
                 "seller": {
                     "id": str(l.seller.id),
                     "display_name": l.seller.display_name,
@@ -179,7 +180,10 @@ async def moderate_listing(
 
     # --- Одобрение: заводим или обновляем товар в каталоге ---
     category_id = listing.category_id or await _default_category_id(db)
-    image_url = listing.images[0].url if listing.images else PLACEHOLDER_IMAGE
+    # Все фотографии, а не только первая. Заявка принимает до восьми, а в
+    # товар доезжала одна — остальные покупатель не видел никогда.
+    gallery = [img.url for img in listing.images]
+    image_url = gallery[0] if gallery else PLACEHOLDER_IMAGE
 
     # Заявку могли править после одобрения — тогда она вернулась на модерацию
     # вместе с уже существующим товаром. Заводить второй нельзя: на первый
@@ -192,11 +196,6 @@ async def moderate_listing(
             category_id=category_id,
             type="p2p",
             min_quantity=1,
-            max_quantity=1,
-            # Сток ровно 1: это конкретная вещь продавца. max_quantity
-            # ограничивает только количество в одной корзине, а без стока одну
-            # и ту же вещь могли бы оплатить сразу несколько покупателей.
-            stock=1,
             content_data={"listing_id": str(listing.id)},
             owner_user_id=seller.user_id,
             is_p2p=True,
@@ -212,7 +211,17 @@ async def moderate_listing(
     product.description_en = listing.description_en or listing.description
     product.price_usdt = listing.price_usd
     product.image_url = image_url
+    product.images = gallery
     product.category_id = category_id
+    # Сток — заявленное количество. Без него одну и ту же вещь могли бы
+    # оплатить сразу несколько покупателей: max_quantity ограничивает только
+    # содержимое одной корзины, а не общее число проданного.
+    #
+    # Проставляется и при повторном одобрении: заявка возвращается на
+    # модерацию после каждой правки, и количество в ней — последнее слово
+    # продавца.
+    product.stock = listing.quantity
+    product.max_quantity = listing.quantity
     product.is_active = True
     await db.flush()
 
@@ -333,8 +342,17 @@ async def change_seller_status(
     # Блокировка продавца снимает его товары с витрины: продавать он больше
     # не может, а висящие объявления вводили бы покупателей в заблуждение
     if payload.status == SellerStatus.BANNED:
+        # Только товары продавца: подписки тоже висят на нём, но их продажа
+        # зависит от состояния канала, а сток у них пустой — «не кончается».
+        # Проставить туда ноль значило бы тихо закрыть канал через чужую
+        # дверь, и обратно он сам бы не открылся.
         products = (
-            await db.execute(select(Product).where(Product.owner_user_id == seller.user_id))
+            await db.execute(
+                select(Product).where(
+                    Product.owner_user_id == seller.user_id,
+                    Product.is_p2p.is_(True),
+                )
+            )
         ).scalars().all()
         for product in products:
             product.stock = 0

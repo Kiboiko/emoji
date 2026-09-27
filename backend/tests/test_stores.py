@@ -584,3 +584,50 @@ async def test_author_rating_matches_the_storefront(
 
     assert page.author_rating == store["rating"] == 4.5
     assert page.author_reviews == store["rating_count"] == 2
+
+
+async def test_subscription_lives_in_the_author_store(db, user_factory, product_factory):
+    """
+    Подписка продаётся магазином автора, а не отдельным магазином-каналом.
+
+    Раньше товар тарифа всегда приходил от канала: у автора, который продаёт
+    что-то ещё, магазинов оказывалось два сразу — свой и «канал».
+    """
+    author = await user_factory(username="sub_store_owner")
+    seller = SellerProfile(
+        id=uuid.uuid4(), user_id=author.id,
+        display_name="Мой маркет", payout_wallet="EQSubStore0000000",
+    )
+    db.add(seller)
+
+    channel = Channel(
+        id=uuid.uuid4(), owner_user_id=author.id,
+        telegram_chat_id=-1006666666666, title="Закрытый канал",
+        status=ChannelStatus.ACTIVE, bot_is_admin=True,
+        payout_wallet="EQSubStore0000000",
+    )
+    db.add(channel)
+    await db.flush()
+
+    sub_product = await product_factory(
+        type_="subscription", name="Закрытый канал — месяц", owner=author,
+    )
+    # Владелец у подписки есть, а эскроу нет: доступ выдаёт бот, сделка не
+    # заводится. Фабрика ставит is_p2p по наличию владельца — поправляем.
+    sub_product.is_p2p = False
+    db.add(SubscriptionPlan(
+        id=uuid.uuid4(), channel_id=channel.id, product_id=sub_product.id,
+        title_ru="Месяц", title_en="Month", duration_days=30,
+        price_usd=Decimal("5.00"),
+    ))
+    await db.flush()
+
+    store = await stores.seller_store(seller.id, db=db)
+    card = next(p for p in store["products"] if p["id"] == str(sub_product.id))
+
+    assert card["author_kind"] == "seller"
+    assert card["author_name"] == "Мой маркет"
+
+    # И в строке «Магазины» автор стоит один раз, а не дважды
+    listed = await stores.store_list(limit=12, db=db)
+    assert [item["name"] for item in listed].count("Мой маркет") == 1

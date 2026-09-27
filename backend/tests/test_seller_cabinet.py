@@ -396,3 +396,59 @@ async def test_listing_keeps_english_description(db, seller_user, listing_factor
     )
 
     assert listing.description_en == "Mechanical, almost new"
+
+
+async def test_quantity_edit_keeps_listing_on_sale(db, seller_user, listing_factory):
+    """
+    Правка количества не отправляет товар на повторную модерацию.
+
+    Модератор проверяет название, описание и фотографии — остаток на складе
+    к этому отношения не имеет. Иначе продавец, которому привезли ещё
+    десять штук, терял витрину на время проверки.
+    """
+    listing = await listing_factory(status=ListingStatus.APPROVED, with_product=True)
+
+    result = await p2p.update_listing(
+        listing.id, p2p.ListingUpdate(quantity=7), user=seller_user, db=db,
+    )
+
+    assert result["remoderating"] is False
+    await db.refresh(listing)
+    assert listing.status == ListingStatus.APPROVED
+    assert listing.quantity == 7
+
+    product = await db.get(Product, listing.product_id)
+    assert product.stock == 7
+    assert product.max_quantity == 7
+    assert product.is_active is True
+
+
+async def test_republish_returns_only_unsold_units(
+    db, seller_user, listing_factory, order_factory, user_factory,
+):
+    """
+    Возврат в продажу отдаёт остаток, а не всё заявленное количество.
+
+    Проверка «была ли сделка» отвечала на этот вопрос только для товара в
+    одном экземпляре. С количеством такой ответ ничего не значит: продав
+    один ключ из трёх, продавец должен мочь вернуть на витрину два.
+    """
+    listing = await listing_factory(status=ListingStatus.APPROVED, with_product=True)
+    listing.quantity = 3
+    buyer = await user_factory(username="partial_buyer")
+    order = await order_factory(buyer, total_usdt="50.00")
+
+    db.add(Deal(
+        id=uuid.uuid4(), order_id=order.id,
+        buyer_id=buyer.id, seller_id=seller_user.id,
+        product_id=listing.product_id, product_name=listing.name,
+        amount_nano=to_minor(Decimal("10"), TON),
+        status=DealStatus.PAID_ESCROW,
+    ))
+    await db.flush()
+
+    await p2p.withdraw_listing(listing.id, user=seller_user, db=db)
+    await p2p.republish_listing(listing.id, user=seller_user, db=db)
+
+    product = await db.get(Product, listing.product_id)
+    assert product.stock == 2

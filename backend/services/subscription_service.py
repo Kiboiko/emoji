@@ -153,6 +153,10 @@ async def sync_plan_products(db: AsyncSession, channel: Channel) -> None:
             continue
         # Тариф могли отключить отдельно от канала
         product.is_active = live and plan.is_active
+        # Владелец — автор канала: по нему витрина находит его магазин.
+        # Проставляется и здесь, а не только при создании тарифа, ради
+        # товаров, заведённых до переезда подписок в магазин автора.
+        product.owner_user_id = channel.owner_user_id
         product.name_ru = f"{channel.title} — {plan.title_ru}"
         product.name_en = f"{channel.title} — {plan.title_en}"
         # Описание канала тоже подтягиваем: автор правит его в кабинете, а в

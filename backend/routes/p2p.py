@@ -71,6 +71,9 @@ class ListingCreate(BaseModel):
     name_en: str = Field(..., min_length=3, max_length=500)
     description: str = Field(..., min_length=10, max_length=5000)
     description_en: str = Field(..., min_length=10, max_length=5000)
+    # Сколько единиц товара у продавца. По умолчанию одна — так было всегда,
+    # пока количество вообще нельзя было указать.
+    quantity: int = Field(1, ge=1, le=10000)
     price_usd: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2)
     category_id: Optional[uuid.UUID] = None
     accept_terms: bool
@@ -82,6 +85,7 @@ class ListingUpdate(BaseModel):
     name_en: Optional[str] = Field(None, min_length=3, max_length=500)
     description: Optional[str] = Field(None, min_length=10, max_length=5000)
     description_en: Optional[str] = Field(None, min_length=10, max_length=5000)
+    quantity: Optional[int] = Field(None, ge=1, le=10000)
     price_usd: Optional[Decimal] = Field(None, gt=0, max_digits=10, decimal_places=2)
     category_id: Optional[uuid.UUID] = None
 
@@ -359,6 +363,7 @@ async def my_listings(
             "name_en": l.name_en,
             "description": l.description,
             "description_en": l.description_en,
+            "quantity": l.quantity,
             "price_usd": str(l.price_usd),
             "status": l.status.value,
             "moderation_comment": l.moderation_comment,
@@ -416,6 +421,7 @@ async def create_listing(
         name_en=payload.name_en.strip(),
         description=payload.description.strip(),
         description_en=payload.description_en.strip(),
+        quantity=payload.quantity,
         price_usd=payload.price_usd,
         status=ListingStatus.DRAFT,
     )
@@ -558,6 +564,18 @@ async def update_listing(
         listing.category_id = payload.category_id
         changed = True
 
+    # Количество намеренно не считается правкой. Модератор проверяет
+    # название, описание и фотографии — остаток на складе к этому отношения
+    # не имеет, а повторная проверка сняла бы товар с витрины на сутки из-за
+    # того, что продавцу привезли ещё десять штук. Меняем сток сразу.
+    if payload.quantity is not None and payload.quantity != listing.quantity:
+        listing.quantity = payload.quantity
+        if listing.product_id:
+            product = await db.get(Product, listing.product_id)
+            if product is not None:
+                product.stock = payload.quantity
+                product.max_quantity = payload.quantity
+
     # Без проверки «а изменилось ли что-нибудь» открытая и сразу закрытая
     # форма снимала бы товар с продажи на ровном месте.
     remoderating = await _apply_edit_side_effects(db, listing) if changed else False
@@ -596,7 +614,7 @@ async def delete_listing(
             detail="Сначала снимите товар с продажи, потом удаляйте",
         )
 
-    if await _product_is_taken(db, listing.product_id):
+    if await _units_taken(db, listing.product_id):
         raise HTTPException(
             status_code=400,
             detail="По товару была сделка — удалить нельзя, историю нужно сохранить",
@@ -653,25 +671,35 @@ async def delete_listing_image(
     return {"deleted": True}
 
 
-async def _product_is_taken(db: AsyncSession, product_id: uuid.UUID | None) -> bool:
+async def _units_taken(db: AsyncSession, product_id: uuid.UUID | None) -> int:
     """
-    Есть ли по товару сделка, из-за которой вещь больше нельзя продавать.
+    Сколько единиц товара уже разобрали по сделкам.
+
+    Раньше вопрос стоял иначе — «была сделка или нет», — и этого хватало,
+    пока у заявки всегда была ровно одна вещь. С количеством ответ «да»
+    перестал что-либо значить: продавец с десятью ключами продаёт один, а
+    вернуть остальные в продажу уже не может.
 
     Отменённые и возвращённые сделки не считаются: в первом случае заказ не
     оплатили, во втором вещь осталась у продавца.
     """
     if product_id is None:
-        return False
+        return 0
 
-    deal = (
+    # Внешнее соединение и единица по умолчанию: order_item_id у сделки
+    # необязательный, и на внутреннем соединении такая сделка просто
+    # выпадала бы из счёта — то есть проданная вещь считалась бы свободной.
+    return (
         await db.execute(
-            select(Deal).where(
+            select(func.coalesce(func.sum(func.coalesce(OrderItem.quantity, 1)), 0))
+            .select_from(Deal)
+            .outerjoin(OrderItem, OrderItem.id == Deal.order_item_id)
+            .where(
                 Deal.product_id == product_id,
                 Deal.status.notin_([DealStatus.CANCELLED, DealStatus.REFUNDED]),
-            ).limit(1)
+            )
         )
-    ).scalars().first()
-    return deal is not None
+    ).scalar() or 0
 
 
 @router.post("/seller/listings/{listing_id}/withdraw")
@@ -723,16 +751,21 @@ async def republish_listing(
 
     # Без этой проверки проданную вещь можно было бы выставить снова: после
     # покупки сток и так равен нулю, и «снять — вернуть» вернуло бы его в 1.
-    if await _product_is_taken(db, listing.product_id):
+    #
+    # Возвращаем ровно остаток: из заявленного количества вычитаем то, что
+    # уже разобрали. Ставить обратно полное количество нельзя — так продавец
+    # с одной вещью продавал бы её снова после каждого «снять — вернуть».
+    remaining = listing.quantity - await _units_taken(db, listing.product_id)
+    if remaining <= 0:
         raise HTTPException(
             status_code=400,
-            detail="По этому товару уже есть сделка — вернуть его в продажу нельзя",
+            detail="Весь товар по этой заявке продан — вернуть его в продажу нельзя",
         )
 
     if listing.product_id:
         product = await db.get(Product, listing.product_id)
         if product:
-            product.stock = 1
+            product.stock = remaining
 
     listing.status = ListingStatus.APPROVED
     await db.commit()

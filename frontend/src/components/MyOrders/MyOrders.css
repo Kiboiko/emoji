@@ -73,14 +73,89 @@
     border-top: 1px solid var(--border-color);
 }
 
-.order-item-name {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin-bottom: 4px;
+.order-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border-color);
 }
 
-.order-item-name:last-child {
+.order-item:last-child {
+    padding-bottom: 0;
     margin-bottom: 0;
+    border-bottom: none;
+}
+
+/* Название — главное в позиции, поэтому обычным цветом текста. Раньше оно
+   было серым и с буллитом: строка читалась как примечание к заказу, а не
+   как то, что человек купил. */
+.order-item-name {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.order-item-count {
+    flex-shrink: 0;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+/* Лента фотографий: у товара продавца их до восьми, и в заказе они нужны
+   не меньше, чем на витрине — по ним вспоминают, что именно взяли */
+.order-item-shots {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+}
+
+.order-item-shots::-webkit-scrollbar {
+    display: none;
+}
+
+.order-item-shots img {
+    flex: 0 0 auto;
+    width: 64px;
+    height: 64px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: var(--bg-tertiary);
+}
+
+.order-item-desc p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.order-item-desc.is-open p {
+    -webkit-line-clamp: unset;
+    overflow: visible;
+}
+
+.order-item-desc button {
+    margin-top: 4px;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-primary);
+    cursor: pointer;
 }
 
 .btn-show-more {

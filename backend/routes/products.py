@@ -118,6 +118,8 @@ async def get_products(
             price_usdt=p.price_usdt,
             price_ton=p.price_ton,
             image_url=p.image_url,
+            images=p.images or [],
+            stock=p.stock,
             category_id=p.category_id,
             is_top=p.is_top,
             type=p.type,
@@ -238,18 +240,13 @@ def _author_fields(product, sellers: dict, channels: dict, platform=None) -> dic
     Три источника и один набор полей: продавец, автор канала и сама площадка.
     У последней теперь тоже есть магазин: товар без владельца продаёт не
     «никто», а площадка, и покупатель должен мочь перейти на её витрину.
-    """
-    channel = channels.get(product.id)
-    if channel is not None:
-        return {
-            "author_kind": "channel",
-            "author_id": channel.id,
-            "author_name": channel.title,
-            "author_avatar": channel.avatar_url,
-            "author_verified": channel.is_verified,
-            "author_link": channel.username,
-        }
 
+    Магазин продавца проверяется ПЕРВЫМ, и это важно для подписок. Раньше
+    товар тарифа всегда приходил от канала — и у автора, который что-то ещё
+    продаёт, оказывалось два магазина сразу: свой и «канал». Теперь подписка
+    показывается магазином автора, а канал остаётся запасным вариантом для
+    тех, кто ничего, кроме подписки, не продаёт.
+    """
     seller = sellers.get(product.owner_user_id)
     if seller is not None:
         return {
@@ -260,6 +257,17 @@ def _author_fields(product, sellers: dict, channels: dict, platform=None) -> dic
             "author_verified": seller.is_verified,
             "author_rating": seller.rating,
             "author_deals": seller.deals_completed,
+        }
+
+    channel = channels.get(product.id)
+    if channel is not None:
+        return {
+            "author_kind": "channel",
+            "author_id": channel.id,
+            "author_name": channel.title,
+            "author_avatar": channel.avatar_url,
+            "author_verified": channel.is_verified,
+            "author_link": channel.username,
         }
 
     if platform is not None:
@@ -384,6 +392,8 @@ async def get_product(
         price_usdt=product.price_usdt,
         price_ton=product.price_ton,
         image_url=product.image_url,
+        images=product.images or [],
+        stock=product.stock,
         category_id=product.category_id,
         is_top=product.is_top,
         type=product.type,

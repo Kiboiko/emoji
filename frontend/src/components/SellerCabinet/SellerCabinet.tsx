@@ -41,12 +41,14 @@ interface DraftForm {
     description: string;
     description_en: string;
     price_usd: string;
+    /** Сколько единиц товара. Строка, а не число: поле ввода отдаёт строку */
+    quantity: string;
     category_id: string;
 }
 
 const EMPTY_FORM: DraftForm = {
     name: '', name_en: '', description: '', description_en: '',
-    price_usd: '', category_id: '',
+    price_usd: '', quantity: '1', category_id: '',
 };
 
 /**
@@ -696,6 +698,7 @@ const ListingManager: React.FC<{
             description: listing.description,
             description_en: listing.description_en ?? '',
             price_usd: listing.price_usd,
+            quantity: String(listing.quantity ?? 1),
             category_id: listing.category_id ?? '',
         });
         setCreating(false);
@@ -712,6 +715,7 @@ const ListingManager: React.FC<{
                 description: form.description.trim(),
                 description_en: form.description_en.trim(),
                 price_usd: form.price_usd,
+                quantity: Math.max(1, Number(form.quantity) || 1),
                 category_id: form.category_id || undefined,
             };
 
@@ -879,6 +883,22 @@ const ListingManager: React.FC<{
                             placeholder={t('Цена, $', 'Price, $')}
                             required
                         />
+                        {/* Количество. Без него сток товара всегда был равен
+                            единице: у продавца с десятью одинаковыми ключами
+                            девять лежали мёртвым грузом, а первый же покупатель
+                            уносил весь лот. */}
+                        <input
+                            className="seller-input"
+                            type="number"
+                            step="1"
+                            min="1"
+                            value={form.quantity}
+                            onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                            placeholder={t('Количество', 'Quantity')}
+                            required
+                        />
+                    </div>
+                    <div className="seller-row">
                         <select
                             className="seller-input"
                             value={form.category_id}
@@ -1007,7 +1027,16 @@ const ListingManager: React.FC<{
                                 </span>
                             </div>
 
-                            <div className="listing-price">${listing.price_usd}</div>
+                            <div className="listing-price">
+                                ${listing.price_usd}
+                                {/* Количество показываем, только когда штук больше
+                                    одной: «1 шт.» у каждого второго товара — шум */}
+                                {listing.quantity > 1 && (
+                                    <span className="listing-stock">
+                                        {listing.quantity} {t("шт.", "pcs")}
+                                    </span>
+                                )}
+                            </div>
 
                             {listing.status === 'rejected' && listing.moderation_comment && (
                                 <div className="listing-reject">

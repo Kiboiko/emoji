@@ -158,6 +158,13 @@ class ProductListing(Base):
     description_en: Mapped[str | None] = mapped_column(Text, nullable=True)
     price_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
 
+    # Сколько единиц товара у продавца. При публикации уходит в сток товара.
+    # Раньше сток жёстко ставился в единицу: продавец с десятью одинаковыми
+    # ключами мог продать ровно один, остальные лежали мёртвым грузом.
+    quantity: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=text("1"), nullable=False
+    )
+
     status: Mapped[ListingStatus] = mapped_column(
         Enum(ListingStatus, native_enum=False, length=20),
         default=ListingStatus.DRAFT, nullable=False,

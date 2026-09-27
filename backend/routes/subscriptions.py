@@ -290,6 +290,7 @@ async def connect_channel(
         terms_accepted_at=datetime.utcnow(),
     )
     db.add(channel)
+    await _ensure_store(db, user, channel)
     await db.flush()
 
     # Аватар забираем из того же ответа getChat, что уже в руках: своего поля
@@ -299,6 +300,36 @@ async def connect_channel(
     await db.commit()
 
     return _channel_dto(channel, [])
+
+
+async def _ensure_store(db: AsyncSession, user: User, channel: Channel) -> None:
+    """
+    У автора канала должен быть магазин.
+
+    Подписка продаётся от имени магазина автора, а не от имени канала. Если
+    магазина ещё нет, заводим его прямо здесь: всё нужное автор только что
+    указал — кошелёк для выплат и согласие с условиями. Название берём по
+    каналу, переименовать его можно в настройках магазина.
+
+    Без этого подписка оставалась бы в отдельном магазине-канале у всех, кто
+    ничего, кроме неё, не продаёт, — то есть почти у всех.
+    """
+    from models.p2p import SellerProfile
+
+    existing = (
+        await db.execute(select(SellerProfile).where(SellerProfile.user_id == user.id))
+    ).scalars().first()
+    if existing is not None:
+        return
+
+    db.add(SellerProfile(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        display_name=channel.title[:100],
+        payout_wallet=channel.payout_wallet or "",
+        terms_version=channel.terms_version,
+        terms_accepted_at=channel.terms_accepted_at,
+    ))
 
 
 @router.post("/author/channels/{channel_id}/verify")
@@ -451,6 +482,10 @@ async def create_plan(
         type="subscription",
         min_quantity=1,
         stock=None,  # подписка не кончается
+        # Владелец — автор канала. По этому полю витрина находит его магазин:
+        # подписка продаётся оттуда же, откуда остальные его товары, а не
+        # отдельным магазином-каналом.
+        owner_user_id=channel.owner_user_id,
         # Товар заводится вместе с тарифом, то есть ДО модерации канала.
         # Без этой привязки подписка попадала в каталог, пока канал ещё лежал
         # в черновике, — продавать её можно только у опубликованного канала.

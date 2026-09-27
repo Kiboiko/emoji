@@ -120,6 +120,31 @@ const ReviewForm: React.FC<{
 
 
 /**
+ * Описание купленного товара, свёрнутое до трёх строк.
+
+ * Целиком его в списке заказов держать нельзя: у товара с описанием на
+ * полэкрана заказ перестал бы помещаться, а рядом ещё форма отзыва.
+ */
+const OrderDescription: React.FC<{ text: string; language: string }> = ({ text, language }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const isLong = text.length > 140;
+
+    return (
+        <div className={`order-item-desc ${isExpanded ? 'is-open' : ''}`}>
+            <p>{text}</p>
+            {isLong && (
+                <button type="button" onClick={() => setIsExpanded(!isExpanded)}>
+                    {isExpanded
+                        ? (language === 'ru' ? 'Свернуть' : 'Show less')
+                        : (language === 'ru' ? 'Показать полностью' : 'Show more')}
+                </button>
+            )}
+        </div>
+    );
+};
+
+
+/**
  * Мои заказы.
  *
  * Жили внутри Profile вместе со всем остальным и были самым длинным его
@@ -173,16 +198,51 @@ export const MyOrders: React.FC = () => {
                                         <div className="order-items">
                                             {order.items?.map((item) => {
                                                 const itemKey = `${order.id}-${item.product_id}`;
-                                                const pName = language === 'ru' ? item.product_snapshot?.name_ru : item.product_snapshot?.name_en;
+                                                const snapshot = item.product_snapshot;
+                                                const pName = language === 'ru' ? snapshot?.name_ru : snapshot?.name_en;
+                                                const pDesc = language === 'ru'
+                                                    ? snapshot?.description_ru
+                                                    : snapshot?.description_en;
+
+                                                // Снимок сделан в момент покупки: продавец мог потом
+                                                // сменить фотографии или вовсе снять товар с продажи,
+                                                // а покупатель должен видеть то, за что заплатил.
+                                                const shots = snapshot?.images?.length
+                                                    ? snapshot.images
+                                                    : (snapshot?.image_url ? [snapshot.image_url] : []);
 
                                                 const isReviewed = item.is_reviewed || reviewedItems.has(itemKey);
 
                                                 return (
-                                                    <div key={item.id} className="flex flex-col gap-1 mb-4 last:mb-0">
+                                                    <div key={item.id} className="order-item">
                                                         <div className="order-item-name">
-                                                            • {pName}
-                                                            {item.quantity > 1 && ` x${item.quantity}`}
+                                                            {pName}
+                                                            {item.quantity > 1 && (
+                                                                <span className="order-item-count">
+                                                                    × {item.quantity}
+                                                                </span>
+                                                            )}
                                                         </div>
+
+                                                        {/* Фотографии и описание. Раньше в заказе стояло
+                                                            одно название строкой — вспомнить по нему,
+                                                            что именно купили, было нечем. */}
+                                                        {shots.length > 0 && (
+                                                            <div className="order-item-shots">
+                                                                {shots.map((url, index) => (
+                                                                    <img
+                                                                        key={`${url}-${index}`}
+                                                                        src={url}
+                                                                        alt=""
+                                                                        loading="lazy"
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        )}
+
+                                                        {pDesc && (
+                                                            <OrderDescription text={pDesc} language={language} />
+                                                        )}
 
                                                         {/* Review Section - Only for COMPLETED orders */}
                                                         {order.status === 'completed' && (

@@ -60,10 +60,60 @@
     overflow: hidden;
 }
 
+/* Лента фотографий. Прокрутка с прилипанием, без стрелок: на телефоне
+   палец листает сам, а стрелки поверх фотографии только мешают.
+
+   overscroll-behavior-x не даёт горизонтальному движению уехать в историю
+   браузера, а вертикальный свайп по-прежнему достаётся странице. */
+.hero-track {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+}
+
+.hero-track::-webkit-scrollbar {
+    display: none;
+}
+
 .product-hero img {
+    flex: 0 0 100%;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    scroll-snap-align: center;
+}
+
+/* Точки поверх фотографии: без них по одной картинке не понять, что рядом
+   есть другие. Текущая — полоска, а не кружок: так она читается и краем
+   глаза. Цвета жёсткие — подложка здесь фотография, а не фон темы. */
+.hero-dots {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 52px;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    pointer-events: none;
+}
+
+.hero-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.45);
+    transition: width 0.2s ease, background 0.2s ease;
+}
+
+.hero-dots .is-current {
+    width: 18px;
+    background: #ffffff;
 }
 
 .hero-gradient {
@@ -379,6 +429,29 @@
 }
 
 /* Quantity Selector */
+/* Количество своей карточкой. Раньше блок существовал только внутри
+   карточки услуги и держал верхнюю границу как разделитель — отдельно
+   стоящему она не нужна. */
+.quantity-block {
+    margin: 24px 0;
+    padding: 16px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.quantity-block .quantity-selector {
+    padding-top: 0;
+    border-top: none;
+}
+
+/* Остаток — уточнение к слову «Количество», а не второй заголовок */
+.quantity-left {
+    margin-left: 6px;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
 .quantity-selector {
     display: flex;
     justify-content: space-between;

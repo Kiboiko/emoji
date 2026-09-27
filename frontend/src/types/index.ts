@@ -23,6 +23,10 @@ export interface Product {
     price_usdt: number;
     price_ton?: number;
     image_url: string;
+    /** Остальные фотографии товара. Первая совпадает с image_url */
+    images?: string[];
+    /** Сколько штук осталось. null — товар не кончается (услуга, подписка) */
+    stock?: number | null;
     category_id: string;
     is_top: boolean;
     type?: 'digital' | 'service' | 'instruction' | 'subscription' | 'p2p';
@@ -144,6 +148,9 @@ export interface OrderItem {
         description_en: string;
         content_data: any;
         image_url?: string;
+        /** Фотографии на момент покупки: продавец мог их потом сменить */
+        images?: string[];
+        type?: string;
     };
     is_reviewed: boolean;
 }
@@ -314,6 +321,8 @@ export interface Listing {
     /** Описание для английского интерфейса */
     description_en: string | null;
     price_usd: string;
+    /** Сколько единиц товара у продавца. При публикации уходит в сток */
+    quantity: number;
     status: ListingStatus;
     moderation_comment: string | null;
     product_id: string | null;

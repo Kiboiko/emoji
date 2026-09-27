@@ -150,8 +150,16 @@ const ListingsTab: React.FC = () => {
                         <div className="flex items-start justify-between gap-4 mb-3 flex-wrap">
                             <div>
                                 <h3 className="text-white font-semibold">{listing.name}</h3>
+                                {/* Английское название проверяет тот же модератор:
+                                    оно обязательное и уходит в каталог наравне с
+                                    русским, а увидеть его было негде */}
+                                {listing.name_en && (
+                                    <div className="text-sm text-gray-500">{listing.name_en}</div>
+                                )}
                                 <div className="text-sm text-gray-400 mt-0.5">
-                                    ${listing.price_usd} · {listing.seller?.display_name ?? 'продавец'}
+                                    ${listing.price_usd}
+                                    {listing.quantity > 1 && ` · ${listing.quantity} шт.`}
+                                    {' · '}{listing.seller?.display_name ?? 'продавец'}
                                     {listing.seller?.username && ` (@${listing.seller.username})`}
                                 </div>
                             </div>
@@ -161,6 +169,12 @@ const ListingsTab: React.FC = () => {
                         <p className="text-sm text-gray-300 whitespace-pre-wrap mb-3">
                             {listing.description}
                         </p>
+
+                        {listing.description_en && (
+                            <p className="text-sm text-gray-500 whitespace-pre-wrap mb-3">
+                                {listing.description_en}
+                            </p>
+                        )}
 
                         {listing.images?.length > 0 ? (
                             <div className="flex gap-2 flex-wrap mb-4">
