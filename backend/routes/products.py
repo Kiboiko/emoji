@@ -12,7 +12,7 @@ from database import get_db
 from models.product import Product
 from models.category import Category
 from models.digital_item import DigitalItem
-from schemas.product import ProductCreate, ProductUpdate, ProductResponse, ProductLocalized
+from schemas.product import ProductCreate, ProductUpdate, ProductResponse, ProductLocalized, ProductBroadcast
 from utils.auth import require_admin
 from config import settings
 from utils.websockets import manager
@@ -479,7 +479,7 @@ async def create_product(
     # Broadcast
     await manager.broadcast({
         "type": "product_created",
-        "data": jsonable_encoder(ProductResponse.model_validate(new_product))
+        "data": jsonable_encoder(ProductBroadcast.model_validate(new_product))
     })
     
     return ProductResponse.model_validate(new_product)
@@ -562,7 +562,7 @@ async def update_product(
 
     await manager.broadcast({
         "type": "product_updated",
-        "data": jsonable_encoder(ProductResponse.model_validate(product))
+        "data": jsonable_encoder(ProductBroadcast.model_validate(product))
     })
     
     return ProductResponse.model_validate(product)

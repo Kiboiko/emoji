@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
@@ -24,6 +24,23 @@ class OrderItemResponse(BaseModel):
     product_snapshot: dict
     user_data: Optional[dict] = None
     is_reviewed: bool = False
+
+    @field_validator("product_snapshot")
+    @classmethod
+    def _hide_content_data(cls, snapshot: dict) -> dict:
+        """
+        Снапшот уходит наружу без content_data.
+
+        У инструкции там лежит сам проданный текст, а снапшот пишется при
+        оформлении заказа — до оплаты. Любой мог оформить заказ, не платить
+        и прочитать инструкцию в ответе GET /api/orders/{id}.
+
+        Покупатель получает инструкцию сообщением в Telegram после оплаты
+        (complete_order читает её из снапшота в базе, а не отсюда). Витрине
+        и админке это поле не нужно. Словарь собирается заново: исходный —
+        это данные строки заказа, и менять их нельзя.
+        """
+        return {key: value for key, value in snapshot.items() if key != "content_data"}
 
 
 class OrderCreate(BaseModel):

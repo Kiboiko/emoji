@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 from utils.websockets import manager
-from schemas.product import ProductResponse
+from schemas.product import ProductBroadcast
 from fastapi.encoders import jsonable_encoder
 
 async def cleanup_reservations():
@@ -98,7 +98,7 @@ async def cleanup_reservations():
                         # Broadcast update
                         await manager.broadcast({
                             "type": "product_updated",
-                            "data": jsonable_encoder(ProductResponse.model_validate(product))
+                            "data": jsonable_encoder(ProductBroadcast.model_validate(product))
                         })
                         
             await db.commit()

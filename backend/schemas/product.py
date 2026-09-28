@@ -67,6 +67,21 @@ class ProductResponse(ProductBase):
     is_active: bool = True
 
 
+class ProductBroadcast(ProductResponse):
+    """
+    Товар в рассылке по WebSocket.
+
+    Рассылка уходит всем подключённым, а не только админам: витрина держит
+    сокет открытым у каждого покупателя. Поэтому content_data в ней нет — у
+    инструкции там лежит сам проданный текст, и любая правка такого товара
+    в админке раздавала его бесплатно всем, у кого открыта витрина.
+
+    Остальные поля те же, что у ProductResponse: по ним витрина обновляет
+    карточку на месте.
+    """
+    content_data: dict = Field(default_factory=dict, exclude=True)
+
+
 class ProductLocalized(BaseModel):
     """Schema for localized product (single language)"""
     model_config = ConfigDict(from_attributes=True)

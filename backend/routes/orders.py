@@ -23,7 +23,7 @@ from services.telegram_service import telegram_service
 from services.referral_service import process_referral_commission
 from utils.websockets import manager
 from fastapi.encoders import jsonable_encoder
-from schemas.product import ProductResponse
+from schemas.product import ProductBroadcast
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +307,7 @@ async def create_order(
     for product in updated_products:
         await manager.broadcast({
             "type": "product_updated",
-            "data": jsonable_encoder(ProductResponse.model_validate(product)),
+            "data": jsonable_encoder(ProductBroadcast.model_validate(product)),
         })
     for name in out_of_stock_products:
         try:
