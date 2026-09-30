@@ -128,16 +128,19 @@ class RelayIn(BaseModel):
 @router.post("/relay", dependencies=[Depends(require_internal_token)])
 async def relay_incoming(payload: RelayIn, db: AsyncSession = Depends(get_db)):
     """
-    Сообщение пользователя боту -> контрагенту по сделке.
+    Сообщение пользователя боту.
 
-    Вся логика здесь, а не в боте: маршрутизация требует доступа к БД, а
-    держать в боте второе подключение к базе значит дублировать модели и
-    ловить рассинхрон при миграциях.
+    Бот больше не пересылает переписку по сделкам: при двух открытых сделках
+    он переспрашивал, кому адресовано сообщение, и приходилось отвечать
+    реплаем. Переписка теперь в приложении, а здесь — кнопки, открывающие
+    чат каждой открытой сделки. Само сообщение никуда не отправляется, и
+    человеку об этом говорится прямо.
 
-    Ответ говорит боту, что сказать отправителю: пустой reply — всё хорошо,
-    молчим.
+    Ответ отправляет бэкенд, а не бот: кнопки открывают мини-апп, и адрес
+    приложения знает бэкенд. Пустой reply говорит боту промолчать.
     """
-    from services import relay_service
+    from services import deal_chat_service as chat
+    from services.telegram_service import telegram_service
 
     user = (
         await db.execute(select(User).where(User.telegram_id == payload.telegram_user_id))
@@ -145,40 +148,56 @@ async def relay_incoming(payload: RelayIn, db: AsyncSession = Depends(get_db)):
     if user is None:
         return {"reply": "Вы ещё не пользовались магазином. Откройте его кнопкой ниже."}
 
-    reply_to = (payload.message.get("reply_to_message") or {}).get("message_id")
+    deals = await chat.open_deals_for(db, user)
+    if not deals:
+        return {"reply": "У вас нет активных сделок."}
 
-    deal, error = await relay_service.resolve_deal(db, user, reply_to_message_id=reply_to)
-    if deal is None:
-        return {"reply": error}
+    rows = []
+    for deal in deals[:8]:
+        keyboard = chat.open_chat_keyboard(deal, f"№{deal.number} · {deal.product_name[:40]}")
+        if keyboard is None:
+            break
+        rows.append(keyboard["inline_keyboard"][0])
+
+    text = (
+        "Переписка по сделкам теперь в приложении: там видно, по какой сделке "
+        "вы пишете, и можно отправить фото. Это сообщение никому не отправлено."
+    )
+    if not rows:
+        return {"reply": text + "\nОткройте магазин и зайдите в «Мои сделки»."}
 
     try:
-        await relay_service.relay_message(
-            db, deal=deal, sender=user, message=payload.message
+        await telegram_service.send_message(
+            user.telegram_id,
+            text + ("\nВыберите сделку:" if len(rows) > 1 else ""),
+            parse_mode=None,
+            reply_markup={"inline_keyboard": rows},
         )
-    except relay_service.CounterpartUnavailable as e:
-        await db.commit()   # сообщение сохранено с ошибкой доставки
-        return {"reply": str(e)}
-    except relay_service.RelayError as e:
-        await db.rollback()
-        return {"reply": str(e)}
-
-    await db.commit()
-    return {"reply": None, "deal_number": deal.number}
+    except Exception as e:
+        logger.warning("[INTERNAL] Не удалось отправить кнопки чатов: %s", e)
+        return {"reply": text}
+    return {"reply": None}
 
 
 class DealActionIn(BaseModel):
     telegram_user_id: int
     deal_number: int
-    # delivered | confirm | dispute | activate
+    # delivered | confirm | dispute
     action: str
     reason: str | None = None
 
 
 @router.post("/deal-action", dependencies=[Depends(require_internal_token)])
 async def deal_action(payload: DealActionIn, db: AsyncSession = Depends(get_db)):
-    """Кнопки под сообщением о сделке: «отправил», «подтверждаю», «спор»."""
+    """
+    Кнопки под старыми сообщениями бота: «отправил», «подтверждаю», «спор».
+
+    Новые уведомления таких кнопок не несут — действия теперь в карточке
+    сделки над перепиской. Эти работают для сообщений, уже лежащих в чатах.
+    """
     from models.p2p import Deal
-    from services import deal_service, relay_service
+    from services import deal_chat_service as chat
+    from services import deal_service
 
     user = (
         await db.execute(select(User).where(User.telegram_id == payload.telegram_user_id))
@@ -189,48 +208,40 @@ async def deal_action(payload: DealActionIn, db: AsyncSession = Depends(get_db))
     deal = (
         await db.execute(select(Deal).where(Deal.number == payload.deal_number))
     ).scalars().first()
-    if deal is None or user.id not in (deal.buyer_id, deal.seller_id):
+    if deal is None or chat.role_of(deal, user) is None:
         return {"reply": "Сделка не найдена"}
 
     try:
         if payload.action == "delivered":
             await deal_service.mark_delivered(db, deal, user)
-            await relay_service.post_system_message(
-                db, deal,
-                "Продавец отметил отправку. Покупателю нужно подтвердить получение.",
-            )
+            message = await chat.post_system(db, deal, "ship", chat.ship_text(deal), actor=user)
             reply = "Отмечено. Ждём подтверждения покупателя."
 
         elif payload.action == "confirm":
             await deal_service.confirm_receipt(db, deal, user)
-            await relay_service.post_system_message(
-                db, deal, "Покупатель подтвердил получение. Сделка завершена.",
-            )
-            await relay_service.close_chat(db, deal)
+            message = await chat.post_system(db, deal, "done", chat.DONE_TEXT, actor=user)
+            chat.close_chat(deal)
             reply = "Спасибо! Деньги перечислены продавцу."
 
         elif payload.action == "dispute":
-            await deal_service.open_dispute(
-                db, deal, user, payload.reason or "не указана",
+            reason = payload.reason or "не указана"
+            await deal_service.open_dispute(db, deal, user, reason)
+            message = await chat.post_system(
+                db, deal, "dispute", chat.dispute_text(chat.role_of(deal, user), reason),
+                actor=user,
             )
-            await relay_service.post_system_message(
-                db, deal,
-                "Открыт спор. Деньги остаются у платформы до решения администрации.",
-            )
-            reply = "Спор открыт, администрация уведомлена."
-
-        elif payload.action == "activate":
-            await relay_service.set_active_deal(db, user, deal)
-            reply = f"Теперь сообщения уходят по сделке №{deal.number}."
+            reply = "Спор открыт, модератор подключится к переписке в приложении."
 
         else:
             return {"reply": "Неизвестное действие"}
 
-    except (deal_service.DealError, relay_service.RelayError) as e:
+    except deal_service.DealError as e:
         await db.rollback()
         return {"reply": str(e)}
 
     await db.commit()
+    await chat.push_message(deal, message)
+    await chat.push_deal(db, deal)
     return {"reply": reply}
 
 

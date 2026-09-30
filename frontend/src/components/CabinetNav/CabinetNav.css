@@ -81,6 +81,20 @@
     text-align: center;
 }
 
+/* Непрочитанное — цветом акцента: его надо заметить, а обычный счётчик
+   серый и спокойный */
+.cabnav-badge {
+    flex-shrink: 0;
+    min-width: 24px;
+    padding: 2px var(--space-2);
+    border-radius: 999px;
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+}
+
 .cabnav-arrow {
     flex-shrink: 0;
     color: var(--text-tertiary);

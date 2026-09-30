@@ -39,6 +39,7 @@ pnpm-debug.log*
 backend/uploads/*
 !backend/uploads/.gitkeep
 !backend/uploads/products/.gitkeep
+backend/deal_media/
 
 # === IDE ===
 .vscode/*

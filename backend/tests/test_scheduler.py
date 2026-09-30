@@ -106,7 +106,7 @@ class TestJobRegistration:
 
     async def test_all_jobs_are_registered(self):
         """
-        Все пять задач попадают в планировщик.
+        Все шесть задач попадают в планировщик.
 
         Написать функцию и забыть `add_job` — ошибка без единого симптома:
         приложение стартует, логи чистые, задача просто никогда не выполняется.
@@ -119,6 +119,7 @@ class TestJobRegistration:
             assert registered == {
                 "cleanup_reservations",
                 "poll_ton_payments",
+                "notify_deal_messages",
                 "auto_confirm_deals",
                 "process_subscriptions",
                 "reconcile_finances",
@@ -142,6 +143,8 @@ class TestJobRegistration:
             }
 
             assert intervals["poll_ton_payments"] <= 60
+            # Уведомление о сообщении в сделке не должно ждать минутами
+            assert intervals["notify_deal_messages"] <= 60
             assert intervals["cleanup_reservations"] >= 60
             assert intervals["auto_confirm_deals"] >= 3600
             assert intervals["process_subscriptions"] >= 3600
@@ -155,7 +158,7 @@ class TestJobRegistration:
             sched.start_scheduler()
             sched.start_scheduler()
 
-            assert len(sched.scheduler.get_jobs()) == 5
+            assert len(sched.scheduler.get_jobs()) == 6
         finally:
             sched.shutdown_scheduler()
 

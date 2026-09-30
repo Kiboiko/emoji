@@ -20,7 +20,7 @@ from models.payment import Payment, PaymentStatus
 from models.subscription import Channel, SubscriptionPlan
 from schemas.order import OrderCreate, OrderResponse
 from utils.auth import get_current_user, require_admin
-from services import deal_service, payment_service, relay_service, settings_service, stock_service, subscription_service, terms_service
+from services import deal_chat_service, deal_service, payment_service, settings_service, stock_service, subscription_service, terms_service
 from services.money import to_minor
 from services.telegram_service import telegram_service
 from services.referral_service import process_referral_commission
@@ -635,24 +635,21 @@ async def complete_order(order: Order, db: AsyncSession, received_nano: int = 0)
 
     await db.commit()
     
-    # Приветствие в релей-чат: стороны должны понимать, куда писать.
-    # Активная сделка ставится покупателю сразу — обычно она у него одна.
+    # Первое сообщение переписки — об оплате. Продавец узнаёт о продаже из
+    # уведомления бота об этом сообщении (services/deal_chat_service), а
+    # покупателю оно показывает, что чат сделки уже открыт.
+    opened = []
     for deal in deals:
         try:
-            await relay_service.post_system_message(
-                db, deal,
-                "Оплата получена, деньги удерживаются платформой до подтверждения "
-                "получения.\n\n"
-                "Пишите сюда — сообщения передаются второй стороне через бота, "
-                "контакты не раскрываются.",
-            )
-            buyer = await db.get(User, deal.buyer_id)
-            if buyer and buyer.active_deal_id is None:
-                buyer.active_deal_id = deal.id
+            opened.append((deal, await deal_chat_service.post_system(
+                db, deal, "pay", deal_chat_service.pay_text(deal),
+            )))
         except Exception as e:
             logger.error("[ORDER] Не удалось открыть чат по сделке #%s: %s", deal.number, e)
-    if deals:
+    if opened:
         await db.commit()
+        for deal, message in opened:
+            await deal_chat_service.push_message(deal, message)
 
     # Ссылки на закрытые каналы отправляем отдельно: ссылка одноразовая и с
     # ограниченным сроком, поэтому она не должна потеряться среди прочих

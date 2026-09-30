@@ -18,7 +18,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # Create non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# deal_media создаётся заранее: именованный том при первом подключении берёт
+# владельца каталога из образа. Без этого том достался бы root, и фото из
+# переписки по сделкам не сохранялись бы
+RUN mkdir -p /app/deal_media && useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Run application (without --reload for production)

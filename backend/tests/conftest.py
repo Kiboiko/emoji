@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -45,7 +46,11 @@ TEST_DATABASE_URL = _test_database_url()
 async def engine():
     eng = create_async_engine(TEST_DATABASE_URL, echo=False, future=True)
     async with eng.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        # Схема пересоздаётся целиком, а не drop_all по текущим моделям:
+        # drop_all знает только о том, что есть в моделях сейчас, и спотыкается
+        # о таблицы и ключи, которые код уже удалил, а тестовая база — ещё нет
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
         await conn.run_sync(Base.metadata.create_all)
     yield eng
     await eng.dispose()

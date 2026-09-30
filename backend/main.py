@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
+import json
 import logging
 
 from config import settings
@@ -15,7 +16,7 @@ from utils.placeholder import ensure_placeholder
 from models import *
 
 # Import routers
-from routes import auth, products, categories, cart, orders, payments, reviews, users, admin_auth, admin_stats, admin_orders, admin_finance, admin_subscriptions, admin_p2p, admin_referrals, admin_users, internal, p2p, settings as settings_routes, stores, subscriptions, terms, withdrawals
+from routes import auth, products, categories, cart, orders, payments, reviews, users, admin_auth, admin_stats, admin_orders, admin_finance, admin_subscriptions, admin_p2p, admin_referrals, admin_users, deals, internal, p2p, settings as settings_routes, stores, subscriptions, terms, withdrawals
 
 
 from services.scheduler import start_scheduler, shutdown_scheduler
@@ -146,8 +147,24 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
     await manager.connect(websocket, user_id)
     try:
         while True:
-            await websocket.receive_text()
+            raw = await websocket.receive_text()
+            # Единственное, что клиент шлёт сам, — «печатает» в чате сделки.
+            # Мусор и чужие типы молча пропускаем: соединение ради них не рвём
+            try:
+                event = json.loads(raw)
+            except ValueError:
+                continue
+            if isinstance(event, dict) and event.get("type") == "typing":
+                from services.deal_chat_service import relay_typing
+                try:
+                    await relay_typing(user_id, str(event.get("deal_id") or ""))
+                except Exception as e:
+                    logger.warning("[WS] typing не передан: %s", e)
     except WebSocketDisconnect:
+        pass
+    finally:
+        # В finally, а не только в except: при любой другой ошибке соединение
+        # оставалось бы в менеджере, и рассылка стучалась бы в мёртвый сокет
         manager.disconnect(websocket, user_id)
 
 # Include routers
@@ -170,6 +187,7 @@ app.include_router(reviews.router)
 app.include_router(users.router)
 app.include_router(internal.router)
 app.include_router(p2p.router)
+app.include_router(deals.router)
 app.include_router(settings_routes.router)
 app.include_router(stores.router)
 app.include_router(subscriptions.router)

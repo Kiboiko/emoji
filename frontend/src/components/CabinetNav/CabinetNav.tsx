@@ -11,6 +11,8 @@ export interface CabinetLink {
     count?: number | null;
     /** Строка есть всегда, даже когда пусто: иначе раздел некуда завести */
     hint?: string;
+    /** Непрочитанное — яркий значок, в отличие от спокойного счётчика */
+    badge?: number;
 }
 
 /**
@@ -41,7 +43,9 @@ export const CabinetNav: React.FC<{ links: CabinetLink[] }> = ({ links }) => {
 
                     {/* Ноль показываем тоже: «заказов 0» — это ответ, а
                         пропавший счётчик читается как «ещё не загрузилось» */}
-                    {link.count != null && (
+                    {link.badge ? (
+                        <span className="cabnav-badge">{link.badge}</span>
+                    ) : link.count != null && (
                         <span className="cabnav-count">{link.count}</span>
                     )}
 

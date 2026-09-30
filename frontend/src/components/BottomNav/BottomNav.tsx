@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { Home, ShoppingCart, User } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
+import { useDealsStore, selectUnreadTotal } from '@/store/dealsStore';
 import './BottomNav.css';
 
 export const BottomNav: React.FC = () => {
@@ -19,6 +20,8 @@ export const BottomNav: React.FC = () => {
         }, 0);
     });
     const { language } = useAuthStore();
+    // Непрочитанное в переписке по сделкам: сама переписка — в профиле
+    const unreadDeals = useDealsStore(selectUnreadTotal);
 
     const navItems = [
         {
@@ -36,6 +39,7 @@ export const BottomNav: React.FC = () => {
             to: '/profile',
             icon: User,
             label: language === 'ru' ? 'Профиль' : 'Profile',
+            badge: unreadDeals,
         },
     ];
 

@@ -134,6 +134,24 @@ async def auto_confirm_deals():
             await db.rollback()
 
 
+async def notify_deal_messages():
+    """
+    Уведомления ботом о непрочитанном в переписке по сделкам.
+
+    Раз в 20 секунд: сообщение должно дойти быстро, но не мгновенно — если
+    чат открыт, приложение успеет отметить сообщение прочитанным, и бот
+    промолчит. Подробности — в deal_chat_service.notify_unread.
+    """
+    from services import deal_chat_service
+
+    async with AsyncSessionLocal() as db:
+        try:
+            await deal_chat_service.notify_unread(db)
+        except Exception as e:
+            logger.exception("[SCHEDULER] Уведомления по сделкам упали: %s", e)
+            await db.rollback()
+
+
 async def poll_ton_payments():
     """
     Опрос блокчейна по ожидающим платежам.
@@ -182,6 +200,12 @@ def start_scheduler():
             poll_ton_payments,
             trigger=IntervalTrigger(seconds=15),
             id="poll_ton_payments",
+            replace_existing=True
+        )
+        scheduler.add_job(
+            notify_deal_messages,
+            trigger=IntervalTrigger(seconds=20),
+            id="notify_deal_messages",
             replace_existing=True
         )
         scheduler.add_job(

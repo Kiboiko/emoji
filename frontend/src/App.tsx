@@ -6,6 +6,7 @@ import { useTheme } from './hooks/useTheme';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAuthStore } from './store/authStore';
 import { useCartStore } from './store/cartStore';
+import { startDeals } from './store/dealsStore';
 import { authApi } from './api/client';
 import { BottomNav } from './components/BottomNav/BottomNav';
 import { ToastHost } from './components/Toast/Toast';
@@ -16,6 +17,7 @@ import { ProductDetails } from './pages/ProductDetails/ProductDetails';
 import { Profile } from './pages/Profile/Profile';
 import { Store } from './pages/Store/Store';
 import { TermsPage } from './pages/Terms/TermsPage';
+import { DealChat } from './pages/DealChat/DealChat';
 import {
     MyListingsPage, MyChannelsPage, MyOrdersPage, MyDealsPage, MySubscriptionsPage,
 } from './pages/Cabinet/CabinetRoutes';
@@ -36,11 +38,17 @@ export const App: React.FC = () => {
     // переработки остался только в настройках профиля — и приложение
     // открывалось светлым везде, куда заходили в обход профиля.
     useTheme();
-    const { setUser, setAccessToken, isAuthenticated } = useAuthStore();
+    const { setUser, setAccessToken, isAuthenticated, accessToken } = useAuthStore();
     const [isAuthenticating, setIsAuthenticating] = React.useState(true);
 
     // Initialize WebSocket
     useWebSocket();
+
+    // Непрочитанное по сделкам нужно с первого экрана: значок на «Профиле»
+    // в нижнем меню, а не только внутри списка сделок
+    useEffect(() => {
+        if (accessToken) startDeals();
+    }, [accessToken]);
 
     useEffect(() => {
         if (isReady && !isAuthenticated) {
@@ -295,6 +303,13 @@ const AppContent: React.FC = () => {
                         <MyDealsPage />
                     </PageTransition>
                 } />
+                {/* Переписка по сделке — во весь экран, без нижнего меню.
+                    Сюда же ведёт кнопка «Открыть чат» из уведомления бота */}
+                <Route path="/my/deals/:dealId" element={
+                    <PageTransition>
+                        <DealChat />
+                    </PageTransition>
+                } />
                 <Route path="/my/subscriptions" element={
                     <PageTransition>
                         <MySubscriptionsPage />
@@ -383,8 +398,10 @@ const HomeWithProductOverlay: React.FC = () => {
 const NavigationWrapper: React.FC = () => {
     const location = useLocation();
     const isProductPage = location.pathname.startsWith('/product/');
+    // В чате сделки снизу поле ввода — меню там только мешало бы
+    const isDealChat = location.pathname.startsWith('/my/deals/');
 
-    if (isProductPage) return null;
+    if (isProductPage || isDealChat) return null;
 
     return <BottomNav />;
 };

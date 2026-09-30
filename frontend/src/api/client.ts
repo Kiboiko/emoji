@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/authStore';
-import type { AuthorChannel, ChannelStatus, ProfileSummary, Store, StoreCard, PublicSettings } from '@/types';
+import type { AuthorChannel, ChannelStatus, Deal, DealMessage, ProfileSummary, Store, StoreCard, PublicSettings } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -324,13 +324,31 @@ export const p2pApi = {
     submitListing: async (listingId: string) =>
         (await apiClient.post(`/p2p/seller/listings/${listingId}/submit`)).data,
 
-    getMyDeals: async () => (await apiClient.get('/p2p/deals')).data,
-    markDelivered: async (id: string) => (await apiClient.post(`/p2p/deals/${id}/delivered`)).data,
-    confirmReceipt: async (id: string) => (await apiClient.post(`/p2p/deals/${id}/confirm`)).data,
-    openDispute: async (id: string, reason: string) =>
+    getMyDeals: async (): Promise<Deal[]> => (await apiClient.get('/p2p/deals')).data,
+    getDeal: async (id: string): Promise<Deal> => (await apiClient.get(`/p2p/deals/${id}`)).data,
+    getUnread: async (): Promise<{ total: number; deals: Record<string, number> }> =>
+        (await apiClient.get('/p2p/deals/unread')).data,
+    markDelivered: async (id: string): Promise<Deal> =>
+        (await apiClient.post(`/p2p/deals/${id}/delivered`)).data,
+    confirmReceipt: async (id: string): Promise<Deal> =>
+        (await apiClient.post(`/p2p/deals/${id}/confirm`)).data,
+    openDispute: async (id: string, reason: string): Promise<Deal> =>
         (await apiClient.post(`/p2p/deals/${id}/dispute`, { reason })).data,
-    setActiveDeal: async (id: string) => (await apiClient.post(`/p2p/deals/${id}/activate`)).data,
-    getMessages: async (id: string) => (await apiClient.get(`/p2p/deals/${id}/messages`)).data,
+    getMessages: async (id: string): Promise<{ messages: DealMessage[]; counterpart_read_at: string | null }> =>
+        (await apiClient.get(`/p2p/deals/${id}/messages`)).data,
+    sendMessage: async (id: string, text: string): Promise<DealMessage> =>
+        (await apiClient.post(`/p2p/deals/${id}/messages`, { text })).data,
+    sendPhoto: async (id: string, file: File, caption?: string): Promise<DealMessage> => {
+        const form = new FormData();
+        form.append('image', file);
+        if (caption) form.append('caption', caption);
+        // Content-Type снимаем по той же причине, что у uploadListingImage
+        return (await apiClient.post(`/p2p/deals/${id}/photos`, form, {
+            headers: { 'Content-Type': undefined },
+        })).data;
+    },
+    markRead: async (id: string): Promise<{ read_at: string }> =>
+        (await apiClient.post(`/p2p/deals/${id}/read`)).data,
 };
 
 // Subscriptions API

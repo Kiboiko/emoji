@@ -267,22 +267,60 @@ export type DealStatus =
     | 'created' | 'paid_escrow' | 'chat_opened' | 'delivered_claimed'
     | 'confirmed' | 'released' | 'disputed' | 'refunded' | 'cancelled';
 
+/** Кто написал: я, собеседник, площадка или модератор */
+export type DealMessageFrom = 'me' | 'them' | 'system' | 'moderator';
+
+export interface DealMessage {
+    id: string;
+    from: DealMessageFrom;
+    /** Вид системного сообщения: pay / ship / done / dispute / resolved */
+    kind: string | null;
+    text: string | null;
+    /** Подписанная ссылка на фото — действует несколько часов */
+    photo_url: string | null;
+    /** Вложение, пришедшее когда-то через бота: самого файла у нас нет */
+    legacy_media: string | null;
+    created_at: string;
+    /** Только у своих: отправлено / прочитано собеседником */
+    state: 'sent' | 'read' | null;
+}
+
 export interface Deal {
     id: string;
     number: number;
     product_name: string;
+    product_image: string | null;
     /** Нужны форме отзыва: эндпоинт опознаёт покупку по заказу и товару */
     order_id: string;
-    product_id: string;
+    product_id: string | null;
     /** Покупатель уже оценил продавца по этой сделке */
     reviewed: boolean;
     role: 'buyer' | 'seller';
     status: DealStatus;
     amount_ton: string;
     seller_amount_ton: string;
+    commission_ton: string;
+    paid_at: string;
+    delivered_at: string | null;
     confirm_deadline_at: string | null;
+    confirmed_at: string | null;
+    released_at: string | null;
+    refunded_at: string | null;
     chat_closed: boolean;
+    /** Писать в переписку ещё можно */
+    chat_open: boolean;
     dispute_reason: string | null;
+    /** Магазин продавца — только у покупателя; продавец покупателя не видит */
+    store: { name: string; verified: boolean; avatar_url: string | null } | null;
+    unread: number;
+    last_message: {
+        from: DealMessageFrom;
+        text: string | null;
+        photo: boolean;
+        created_at: string;
+    } | null;
+    last_activity_at: string;
+    counterpart_read_at: string | null;
     created_at: string;
 }
 

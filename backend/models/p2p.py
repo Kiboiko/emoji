@@ -51,6 +51,8 @@ class MessageDirection(str, PyEnum):
     BUYER_TO_SELLER = "buyer_to_seller"
     SELLER_TO_BUYER = "seller_to_buyer"
     SYSTEM = "system"
+    # Модератор площадки пишет в переписку сделки при разборе спора
+    MODERATOR = "moderator"
 
 
 class SellerProfile(Base):
@@ -288,6 +290,18 @@ class Deal(Base):
         Boolean, default=False, server_default=text("false"), nullable=False
     )
 
+    # Последнее сообщение в переписке: порядок списка сделок и выборка для
+    # уведомлений
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # До какого момента сторона прочитала переписку — счётчики
+    # непрочитанного и двойные галочки у собеседника
+    buyer_read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    seller_read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Когда бот последний раз напомнил стороне о непрочитанном: несколько
+    # сообщений подряд дают одно уведомление, а не по штуке на каждое
+    buyer_notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    seller_notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     buyer: Mapped["User"] = relationship("User", foreign_keys=[buyer_id])
@@ -309,15 +323,15 @@ class Deal(Base):
 
 class DealMessage(Base):
     """
-    Сообщение в релей-чате сделки.
+    Сообщение в переписке по сделке.
 
-    Бот пересылает сообщения между личками сторон через copyMessage — копия
-    приходит без пометки «переслано от», поэтому стороны не видят профили друг
-    друга. Здесь хранится всё, что прошло через релей: это единственное
-    доказательство при разборе спора.
+    Переписка идёт в приложении, а стороны видят друг друга только как
+    «Покупатель» и название магазина — договориться мимо escrow не получится.
+    Всё хранится здесь: это единственное доказательство при разборе спора.
 
-    Медиа храним как file_id Telegram, а не файлами: Telegram хостит их сам,
-    а file_id остаётся валидным и позволяет админу переслать вложение себе.
+    Фото из приложения лежит в media_path — вне публичной папки, отдаётся по
+    подписанной ссылке. У старых сообщений, прошедших через бота, вместо него
+    media_file_id Telegram.
     """
     __tablename__ = "deal_messages"
 
@@ -334,8 +348,13 @@ class DealMessage(Base):
     )
 
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Вид системного сообщения: pay / ship / done / dispute / resolved —
+    # по нему чат рисует значок
+    kind: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # photo / document / voice / video / ...
     media_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Имя файла фото в закрытом хранилище (services/deal_media.py)
+    media_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     media_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # id исходного сообщения у отправителя и копии у получателя.

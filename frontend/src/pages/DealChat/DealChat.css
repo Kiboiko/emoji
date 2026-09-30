@@ -1,0 +1,963 @@
+/* --- Переписка по сделке ---------------------------------------------------
+   Экран во весь рост: шапка, карточка сделки, лента, поле ввода. Высота —
+   --tg-viewport-height от Telegram, а не 100vh: при открытой клавиатуре
+   Telegram уменьшает её, и поле ввода остаётся над клавиатурой, а не под ней. */
+
+.dchat {
+    --chat-bg: #f4f3f8;
+    --bubble-in: #ffffff;
+    --bubble-line: rgba(0, 0, 0, 0.07);
+    --code-in: rgba(0, 0, 0, 0.06);
+    --code-out: rgba(255, 255, 255, 0.2);
+    --ink: 26, 26, 26;
+
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: var(--z-overlay);
+    height: var(--tg-viewport-height, 100dvh);
+    display: flex;
+    flex-direction: column;
+    padding-top: var(--tg-chrome-top);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+[data-theme="dark"] .dchat {
+    --chat-bg: #0f0f0f;
+    --bubble-in: #1c1c1f;
+    --bubble-line: rgba(255, 255, 255, 0.06);
+    --code-in: rgba(255, 255, 255, 0.09);
+    --code-out: rgba(26, 11, 51, 0.14);
+    --ink: 245, 245, 245;
+}
+
+.dchat-empty {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+    gap: var(--space-4);
+}
+
+.dchat-empty p {
+    color: var(--text-secondary);
+}
+
+/* :where — нулевая специфичность: цвет по умолчанию для кнопок внутри
+   чата, который перебивает любой класс конкретной кнопки */
+:where(.dchat) button {
+    color: inherit;
+    font-family: inherit;
+}
+
+.dchat-icon-btn {
+    flex: none;
+    position: relative;
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.dchat-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.dchat-icon-btn.muted {
+    color: var(--text-secondary);
+}
+
+/* --- Шапка ---------------------------------------------------------------- */
+
+.dchat-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 2px var(--space-3) var(--space-2) var(--space-1);
+}
+
+.dchat-back-count {
+    position: absolute;
+    top: 2px;
+    right: -2px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 9px;
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+    font-size: 10.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dchat-ava {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--accent-rgb), 0.15);
+    color: var(--accent-primary);
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.dchat-ava img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dchat-ava.anon {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.dchat-head-text {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+}
+
+.dchat-head-name {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.dchat-head-name > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dchat-head-name svg {
+    flex: none;
+    color: var(--accent-primary);
+}
+
+.dchat-head-sub {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+}
+
+.dchat-head-sub.typing {
+    color: var(--accent-primary);
+}
+
+/* --- Карточка сделки -------------------------------------------------------- */
+
+.dchat-deal-wrap {
+    flex: none;
+    padding: 0 10px 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.dchat-deal {
+    display: grid;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.dchat-deal-skeleton {
+    height: 64px;
+}
+
+.dchat-deal-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+.dchat-thumb {
+    flex: none;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.dchat-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dchat-deal-info {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 1px;
+}
+
+.dchat-deal-name,
+.dchat-deal-sub {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dchat-deal-name {
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.dchat-deal-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.dchat-deal-side {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-tertiary);
+}
+
+.dchat-chev {
+    transition: transform 0.2s ease;
+}
+
+.dchat-deal.expanded .dchat-chev {
+    transform: rotate(180deg);
+}
+
+.dchat-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.dchat-chip.open {
+    background: rgba(var(--accent-rgb), 0.15);
+    color: var(--accent-primary);
+}
+
+.dchat-chip.done {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-success);
+}
+
+.dchat-chip.dispute {
+    background: rgba(245, 158, 11, 0.16);
+    color: var(--accent-warning);
+}
+
+.dchat-chip.muted {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.dchat-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.dchat-step {
+    display: grid;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+}
+
+.dchat-step i {
+    display: block;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--bg-tertiary);
+}
+
+.dchat-step.done {
+    color: var(--text-secondary);
+}
+
+.dchat-step.done i {
+    background: var(--accent-primary);
+}
+
+.dchat-step.current {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.dchat-step.current i {
+    background: rgba(var(--accent-rgb), 0.4);
+}
+
+.dchat-step small {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-tertiary);
+}
+
+.dchat-note {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--bg-primary);
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.dchat-note svg {
+    flex: none;
+    margin-top: 1px;
+    color: var(--accent-primary);
+}
+
+.dchat-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.dchat-btn {
+    height: 36px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 12px;
+    font-size: 13.5px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.dchat-btn:active {
+    transform: scale(0.98);
+}
+
+.dchat-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+    transform: none;
+}
+
+.dchat-btn.grow {
+    flex: 1;
+    min-width: 0;
+}
+
+.dchat .dchat-btn.primary {
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+}
+
+.dchat .dchat-btn.ghost {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.dchat .dchat-btn.danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--accent-error);
+}
+
+.dchat-wait {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+}
+
+.dchat-wait svg {
+    flex: none;
+}
+
+.dchat-wait.warn {
+    color: var(--accent-warning);
+}
+
+/* --- Лента ------------------------------------------------------------------ */
+
+.dchat-msgs {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--chat-bg);
+    padding: 10px 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dchat-day {
+    align-self: center;
+    margin: 2px 0 6px;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: rgba(var(--ink), 0.06);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.dchat-sys {
+    align-self: center;
+    max-width: 90%;
+    margin: 8px 0;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(var(--ink), 0.05);
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
+.dchat-sys > span {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.dchat-sys svg {
+    flex: none;
+    margin-top: 1px;
+    color: var(--accent-primary);
+}
+
+.dchat-sys.done svg,
+.dchat-sys.resolved svg {
+    color: var(--accent-success);
+}
+
+.dchat-sys.dispute svg {
+    color: var(--accent-warning);
+}
+
+.dchat-sys-time {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.dchat-msg {
+    max-width: 80%;
+    display: flex;
+    flex-direction: column;
+}
+
+.dchat-msg.first {
+    margin-top: 8px;
+}
+
+.dchat-msg.out {
+    align-self: flex-end;
+    align-items: flex-end;
+}
+
+.dchat-msg.in,
+.dchat-msg.mod {
+    align-self: flex-start;
+}
+
+.dchat-bubble {
+    position: relative;
+    padding: 7px 11px;
+    border-radius: 17px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.out .dchat-bubble {
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+}
+
+.in .dchat-bubble {
+    background: var(--bubble-in);
+    box-shadow: 0 0 0 1px var(--bubble-line);
+}
+
+.mod .dchat-bubble {
+    background: rgba(var(--accent-rgb), 0.1);
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.28);
+}
+
+.out.tail .dchat-bubble {
+    border-bottom-right-radius: 6px;
+}
+
+.in.tail .dchat-bubble,
+.mod.tail .dchat-bubble {
+    border-bottom-left-radius: 6px;
+}
+
+.dchat-from {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.dchat-legacy {
+    display: block;
+    font-size: 12.5px;
+    font-style: italic;
+    opacity: 0.75;
+}
+
+.dchat-txt {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* Место под время в последней строке, чтобы текст на него не наезжал */
+.dchat-txt::after {
+    content: '';
+    display: inline-block;
+    width: 38px;
+}
+
+.out .dchat-txt::after {
+    width: 56px;
+}
+
+.dchat-meta {
+    position: absolute;
+    right: 10px;
+    bottom: 5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--text-tertiary);
+}
+
+.out .dchat-meta {
+    color: var(--accent-contrast);
+    opacity: 0.75;
+}
+
+.dchat-failed-icon {
+    color: var(--accent-error);
+}
+
+.out .dchat-meta .dchat-failed-icon {
+    color: #ffb4b4;
+}
+
+.dchat-code {
+    font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
+    padding: 1px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--code-in);
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.out .dchat-code {
+    background: var(--code-out);
+}
+
+.dchat-bubble.media {
+    padding: 3px;
+}
+
+.dchat-shot {
+    display: block;
+    width: 230px;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(var(--ink), 0.06);
+    cursor: zoom-in;
+}
+
+.dchat-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 60px;
+}
+
+.dchat-caption {
+    display: block;
+    padding: 5px 8px 4px;
+}
+
+.media .dchat-meta {
+    right: 9px;
+    bottom: 9px;
+    padding: 3px 6px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #ffffff;
+    opacity: 1;
+}
+
+.media:has(.dchat-caption) .dchat-meta {
+    background: none;
+    color: inherit;
+    bottom: 5px;
+    opacity: 0.75;
+}
+
+.dchat-retry {
+    margin-top: 3px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 11.5px;
+    color: var(--accent-error);
+    cursor: pointer;
+}
+
+/* --- Поле ввода --------------------------------------------------------------- */
+
+.dchat-compose {
+    flex: none;
+    display: grid;
+    gap: 8px;
+    padding: 8px 8px calc(8px + var(--safe-area-bottom));
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-primary);
+}
+
+.dchat-warn {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(245, 158, 11, 0.14);
+    font-size: 12.5px;
+    line-height: 1.4;
+}
+
+.dchat-warn svg {
+    flex: none;
+    margin-top: 1px;
+    color: var(--accent-warning);
+}
+
+.dchat-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.dchat-field {
+    flex: 1;
+    min-width: 0;
+    height: 38px;
+    max-height: 120px;
+    resize: none;
+    overflow-y: auto;
+    padding: 9px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 19px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font: inherit;
+    /* 16px, а не 14: iOS приближает страницу при фокусе на поле мельче 16px */
+    font-size: 16px;
+    line-height: 1.25;
+    outline: none;
+}
+
+.dchat-field:focus {
+    border-color: var(--accent-primary);
+}
+
+.dchat-field::placeholder {
+    color: var(--text-tertiary);
+}
+
+.dchat-send {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+    cursor: pointer;
+}
+
+.dchat-send:disabled {
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+    cursor: default;
+}
+
+.dchat-closed {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 4px 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.dchat-closed svg {
+    flex: none;
+}
+
+/* --- Отзыв о продавце ---------------------------------------------------------- */
+
+.dchat-review {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.dchat-review-title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.dchat-stars {
+    display: flex;
+    gap: 4px;
+}
+
+.dchat-star {
+    padding: 2px;
+    border: 0;
+    background: none;
+    line-height: 0;
+    color: var(--text-tertiary);
+    cursor: pointer;
+}
+
+.dchat-star.on {
+    color: #f59e0b;
+}
+
+.dchat-review-text {
+    width: 100%;
+    resize: none;
+    padding: 9px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 16px;
+    outline: none;
+}
+
+.dchat-review-done {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--accent-success);
+}
+
+/* --- Шторки -------------------------------------------------------------------- */
+
+.dchat-sheet-host {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: flex-end;
+    background: rgba(10, 8, 16, 0.45);
+    animation: dchat-fade 0.18s ease-out;
+}
+
+.dchat-sheet {
+    width: 100%;
+    display: grid;
+    gap: 12px;
+    padding: 8px 16px calc(20px + var(--safe-area-bottom));
+    border-radius: 22px 22px 0 0;
+    background: var(--bg-primary);
+    animation: dchat-rise 0.22s ease-out;
+}
+
+.dchat-grab {
+    justify-self: center;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--bg-tertiary);
+}
+
+.dchat-sheet h3 {
+    margin: 4px 0 0;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.dchat-sheet p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.dchat-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.dchat-reason {
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: none;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.dchat-reason[aria-pressed="true"] {
+    border-color: var(--accent-primary);
+    background: rgba(var(--accent-rgb), 0.12);
+    color: var(--accent-primary);
+    font-weight: 600;
+}
+
+.dchat-sheet textarea {
+    width: 100%;
+    min-height: 64px;
+    resize: none;
+    padding: 9px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 16px;
+    outline: none;
+}
+
+.dchat-sheet textarea:focus {
+    border-color: var(--accent-primary);
+}
+
+.dchat-sheet-actions {
+    display: grid;
+    gap: 8px;
+}
+
+.dchat-sheet .dchat-btn {
+    width: 100%;
+    height: 44px;
+}
+
+/* --- Просмотр фото ------------------------------------------------------------- */
+
+.dchat-viewer {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--tg-chrome-top) 12px 12px;
+    background: rgba(0, 0, 0, 0.92);
+    animation: dchat-fade 0.18s ease-out;
+}
+
+.dchat-viewer img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.dchat-viewer-close {
+    position: absolute;
+    top: calc(var(--tg-chrome-top) + 8px);
+    right: 12px;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@keyframes dchat-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes dchat-rise {
+    from { transform: translateY(40px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dchat *,
+    .dchat *::before,
+    .dchat *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}

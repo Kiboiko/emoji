@@ -21,7 +21,7 @@ from models.p2p import (
 )
 from models.product import Product
 from models.user import User
-from services import deal_service, relay_service, settings_service, stock_service
+from services import deal_chat_service, deal_service, settings_service, stock_service
 from services.money import from_minor
 from utils.auth import require_admin
 
@@ -530,22 +530,56 @@ async def deal_conversation(
         )
     ).scalars().all()
 
+    store = (
+        await db.execute(select(SellerProfile).where(SellerProfile.user_id == deal.seller_id))
+    ).scalars().first()
+
     return {
-        "deal": {"number": deal.number, "status": deal.status.value,
-                 "product_name": deal.product_name},
-        "messages": [
-            {
-                "direction": m.direction.value,
-                "text": m.text,
-                "media_type": m.media_type,
-                # file_id позволяет админу переслать вложение себе командой бота
-                "media_file_id": m.media_file_id,
-                "delivery_error": m.delivery_error,
-                "created_at": m.created_at.isoformat(),
-            }
-            for m in rows
-        ],
+        "deal": {
+            "number": deal.number,
+            "status": deal.status.value,
+            "product_name": deal.product_name,
+            "store": store.display_name if store else None,
+            "amount_ton": str(from_minor(deal.amount_nano, "TON")),
+            "dispute_reason": deal.dispute_reason,
+            # Модератор пишет в переписку, пока сделка не завершена
+            "can_write": deal.status not in deal_service.FINAL,
+        },
+        "messages": [deal_chat_service.admin_message_dto(m) for m in rows],
     }
+
+
+class ModeratorMessage(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
+
+
+@router.post("/deals/{deal_id}/messages")
+async def moderator_message(
+    deal_id: uuid.UUID,
+    payload: ModeratorMessage,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Модератор пишет в переписку сделки.
+
+    Стороны видят это сообщение у себя в чате с пометкой «Модератор
+    площадки» и получают уведомление бота, как о любом другом сообщении.
+    """
+    deal = await db.get(Deal, deal_id)
+    if deal is None:
+        raise HTTPException(status_code=404, detail="Сделка не найдена")
+    if deal.status in deal_service.FINAL:
+        raise HTTPException(status_code=400, detail="Сделка завершена, переписка закрыта")
+
+    try:
+        message = await deal_chat_service.post_moderator(db, deal, admin, payload.text)
+    except deal_chat_service.ChatError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    await db.commit()
+    await deal_chat_service.push_message(deal, message)
+    return deal_chat_service.admin_message_dto(message)
 
 
 @router.post("/deals/{deal_id}/resolve")
@@ -578,10 +612,12 @@ async def resolve_dispute(
         if payload.release
         else "Спор решён в пользу покупателя, средства возвращены на его баланс."
     )
-    await relay_service.post_system_message(
-        db, deal, f"{verdict}\n{payload.comment or ''}".strip(),
+    message = await deal_chat_service.post_system(
+        db, deal, "resolved", f"{verdict}\n{payload.comment or ''}".strip(),
     )
-    await relay_service.close_chat(db, deal)
+    deal_chat_service.close_chat(deal)
     await db.commit()
+    await deal_chat_service.push_message(deal, message)
+    await deal_chat_service.push_deal(db, deal)
 
     return {"status": deal.status.value}

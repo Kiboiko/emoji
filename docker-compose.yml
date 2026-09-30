@@ -31,6 +31,9 @@ services:
       - .env
     volumes:
       - uploads:/app/uploads
+      # Фото из переписки по сделкам. Только бэкенду: nginx раздаёт uploads
+      # целиком, а эти файлы уходят лишь по подписанной ссылке
+      - deal_media:/app/deal_media
     restart: unless-stopped
     networks:
       - marketplace-network
@@ -113,6 +116,7 @@ services:
 volumes:
   postgres_data:
   uploads:
+  deal_media:
   frontend-dist:
   admin-dist:
 

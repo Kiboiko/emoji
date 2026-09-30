@@ -34,22 +34,6 @@ class User(Base):
     )
     referral_code: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
     referral_earnings: Mapped[float] = mapped_column(default=0.0, nullable=False)
-    
-    # Активная сделка для релей-чата: обычные сообщения боту уходят её
-    # контрагенту. Нужна, потому что у человека может быть несколько открытых
-    # сделок, и по тексту сообщения не понять, кому оно адресовано.
-    # use_alter обязателен: users -> deals -> users образуют цикл внешних
-    # ключей, и без него SQLAlchemy не может отсортировать таблицы при
-    # create_all/drop_all. С ним ограничение создаётся отдельным ALTER после
-    # обеих таблиц — ровно так же, как это делает миграция.
-    active_deal_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey(
-            "deals.id", ondelete="SET NULL",
-            use_alter=True, name="users_active_deal_id_fkey",
-        ),
-        nullable=True,
-    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

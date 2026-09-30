@@ -92,7 +92,13 @@ class Settings(BaseSettings):
     # File uploads
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE: int = 5 * 1024 * 1024  # 5MB
-    
+
+    # Фото из переписки по сделкам. Отдельно от UPLOAD_DIR: тот целиком
+    # раздаётся наружу через nginx, а здесь скриншоты аккаунтов и ключей —
+    # они уходят только по подписанной ссылке (services/deal_media.py)
+    DEAL_MEDIA_DIR: str = "deal_media"
+    DEAL_MEDIA_MAX_SIZE: int = 8 * 1024 * 1024
+
     # Реферальные проценты переехали в настройки БД (referral_l1_bp) —
     # заказчик меняет их в админке без передеплоя. См. services/settings_service.py
     # CORS Origins

@@ -385,8 +385,11 @@ async def auto_confirm_due_deals(db: AsyncSession) -> int:
     Без него деньги продавца зависали бы навсегда, если покупатель получил
     товар и просто не нажал кнопку. Спор блокирует автоподтверждение:
     confirm_deadline_at обнуляется при открытии спора.
+
+    Стороны узнают об этом из переписки: системное сообщение попадает в чат
+    сделки, а бот уведомляет о нём, как о любом другом.
     """
-    from services.telegram_service import telegram_service
+    from services import deal_chat_service as chat
 
     now = datetime.utcnow()
     due = (
@@ -402,26 +405,20 @@ async def auto_confirm_due_deals(db: AsyncSession) -> int:
     if not due:
         return 0
 
+    closed = []
     for deal in due:
         try:
             await confirm_receipt(db, deal, auto=True)
         except DealError as e:
             logger.error("[DEAL] Автоподтверждение #%s не удалось: %s", deal.number, e)
             continue
-
-        for user_id, text in (
-            (deal.buyer_id, f"Сделка #{deal.number} закрыта автоматически: "
-                            f"срок подтверждения истёк."),
-            (deal.seller_id, f"Сделка #{deal.number} завершена, деньги начислены "
-                             f"на ваш баланс."),
-        ):
-            user = await db.get(User, user_id)
-            if user:
-                try:
-                    await telegram_service.send_message(user.telegram_id, text, parse_mode=None)
-                except Exception as e:
-                    logger.warning("[DEAL] Не удалось уведомить %s: %s", user_id, e)
+        closed.append((deal, await chat.post_system(db, deal, "done", chat.AUTO_DONE_TEXT)))
+        chat.close_chat(deal)
 
     await db.commit()
-    logger.info("[DEAL] Автоподтверждено сделок: %d", len(due))
-    return len(due)
+    for deal, message in closed:
+        await chat.push_message(deal, message)
+        await chat.push_deal(db, deal)
+
+    logger.info("[DEAL] Автоподтверждено сделок: %d", len(closed))
+    return len(closed)

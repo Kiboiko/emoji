@@ -143,12 +143,31 @@ const DealDrawer: React.FC<{
     const [data, setData] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [reply, setReply] = useState('');
+    const [sending, setSending] = useState(false);
 
     const load = useCallback(() => {
         p2pApi.dealMessages(dealId).then(setData).catch((e) => setError(errorText(e)));
     }, [dealId]);
 
     useEffect(load, [load]);
+
+    // Модератор пишет прямо в переписку: стороны видят сообщение у себя в чате
+    // с пометкой «Модератор площадки» и получают уведомление бота
+    const send = async () => {
+        const text = reply.trim();
+        if (!text) return;
+        setSending(true);
+        try {
+            await p2pApi.postDealMessage(dealId, text);
+            setReply('');
+            load();
+        } catch (e) {
+            toast.fromError(e);
+        } finally {
+            setSending(false);
+        }
+    };
 
     const resolve = async (release: boolean) => {
         const who = release ? 'продавцу' : 'покупателю';
@@ -189,9 +208,17 @@ const DealDrawer: React.FC<{
 
                     {data && (
                         <>
-                            <div className="mb-4">
+                            <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-gray-400">
                                 <StatusBadge status={deal.status} />
+                                <span>{deal.amount_ton} TON</span>
+                                {deal.store && <span>· магазин «{deal.store}»</span>}
                             </div>
+
+                            {deal.dispute_reason && (
+                                <div className="mb-4 rounded-lg bg-amber-900/30 text-amber-200 text-sm p-3">
+                                    Причина спора: {deal.dispute_reason}
+                                </div>
+                            )}
 
                             <div className="space-y-2 max-h-[45vh] overflow-y-auto mb-5">
                                 {data.messages.length === 0 && (
@@ -200,28 +227,37 @@ const DealDrawer: React.FC<{
                                     </div>
                                 )}
 
-                                {data.messages.map((m: any, index: number) => (
+                                {data.messages.map((m: any) => (
                                     <div
-                                        key={index}
+                                        key={m.id}
                                         className={`rounded-lg p-3 text-sm ${
-                                            m.direction === 'system'
+                                            m.from === 'system'
                                                 ? 'bg-gray-900/70 text-gray-400 text-center'
-                                                : m.direction === 'buyer_to_seller'
-                                                    ? 'bg-blue-900/30 text-blue-100 mr-8'
-                                                    : 'bg-green-900/30 text-green-100 ml-8'
+                                                : m.from === 'moderator'
+                                                    ? 'bg-purple-900/40 text-purple-100 mx-4 border border-purple-700/50'
+                                                    : m.from === 'buyer'
+                                                        ? 'bg-blue-900/30 text-blue-100 mr-8'
+                                                        : 'bg-green-900/30 text-green-100 ml-8'
                                         }`}
                                     >
-                                        {m.direction !== 'system' && (
-                                            <div className="text-xs opacity-60 mb-1">
-                                                {m.direction === 'buyer_to_seller' ? 'покупатель' : 'продавец'}
-                                                {' · '}
-                                                {new Date(m.created_at).toLocaleString('ru-RU')}
-                                            </div>
+                                        <div className="text-xs opacity-60 mb-1">
+                                            {{ buyer: 'покупатель', seller: 'продавец', moderator: 'модератор', system: 'площадка' }[m.from as string]}
+                                            {' · '}
+                                            {new Date(m.created_at).toLocaleString('ru-RU')}
+                                        </div>
+                                        {m.photo_url && (
+                                            <a href={m.photo_url} target="_blank" rel="noreferrer">
+                                                <img
+                                                    src={m.photo_url}
+                                                    alt="Фото из переписки"
+                                                    className="rounded-md max-h-64 mb-1"
+                                                />
+                                            </a>
                                         )}
                                         {m.text && <div className="whitespace-pre-wrap break-words">{m.text}</div>}
-                                        {m.media_type && (
+                                        {m.media_type && !m.photo_url && (
                                             <div className="text-xs opacity-70 mt-1">
-                                                вложение: {m.media_type}
+                                                вложение через бота: {m.media_type}
                                                 {m.media_file_id && (
                                                     <span className="font-mono ml-1 break-all">
                                                         {m.media_file_id}
@@ -237,6 +273,26 @@ const DealDrawer: React.FC<{
                                     </div>
                                 ))}
                             </div>
+
+                            {deal.can_write && (
+                                <div className="mb-5 flex gap-2 items-end">
+                                    <textarea
+                                        value={reply}
+                                        onChange={(e) => setReply(e.target.value)}
+                                        placeholder="Сообщение сторонам от модератора"
+                                        maxLength={2000}
+                                        rows={2}
+                                        className="flex-1 rounded-lg bg-gray-900 border border-gray-700 text-gray-100 text-sm p-2 resize-none focus:outline-none focus:border-blue-500"
+                                    />
+                                    <button
+                                        onClick={send}
+                                        disabled={sending || !reply.trim()}
+                                        className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 disabled:opacity-50"
+                                    >
+                                        {sending ? 'Отправляем…' : 'Написать в чат'}
+                                    </button>
+                                </div>
+                            )}
 
                             {deal.status === 'disputed' && (
                                 <div className="border-t border-gray-700 pt-4">

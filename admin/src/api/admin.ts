@@ -134,6 +134,9 @@ export const p2pApi = {
         api.get<any>('/api/admin/p2p/deals', { params }).then((r) => r.data),
     dealMessages: (id: string) =>
         api.get<any>(`/api/admin/p2p/deals/${id}/messages`).then((r) => r.data),
+    // Сообщение модератора в переписку сделки — стороны видят его у себя в чате
+    postDealMessage: (id: string, text: string) =>
+        api.post<any>(`/api/admin/p2p/deals/${id}/messages`, { text }).then((r) => r.data),
     resolveDispute: (id: string, release: boolean, comment?: string) =>
         api.post(`/api/admin/p2p/deals/${id}/resolve`, { release, comment }).then((r) => r.data),
 };
