@@ -327,6 +327,14 @@ export interface Listing {
     price_usd: string;
     /** Сколько единиц товара у продавца. При публикации уходит в сток */
     quantity: number;
+    /** Сколько можно купить прямо сейчас. null — товара в каталоге ещё нет */
+    stock: number | null;
+    /** Продано по сделкам */
+    sold: number;
+    /** Оформлено покупателями, но ещё не оплачено */
+    reserved: number;
+    /** Когда истечёт самая ранняя бронь (UTC, ISO) */
+    reserved_until: string | null;
     status: ListingStatus;
     moderation_comment: string | null;
     product_id: string | null;

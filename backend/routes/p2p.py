@@ -9,7 +9,7 @@ from __future__ import annotations
 import io
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Optional
@@ -34,7 +34,7 @@ from models.p2p import (
 )
 from models.product import Product
 from models.user import User
-from services import deal_service, relay_service, settings_service, terms_service
+from services import deal_service, relay_service, settings_service, stock_service, terms_service
 from services.money import from_minor
 from utils.auth import get_current_user
 
@@ -418,6 +418,32 @@ async def my_listings(
     if repaired:
         await db.commit()
 
+    ttl = await settings_service.get_int(db, "order_payment_ttl_min")
+
+    async def sale_state(l: ProductListing) -> dict:
+        """
+        Что на самом деле происходит с товаром.
+
+        Статус заявки говорит только о модерации: «одобрено» остаётся и
+        когда вещь уже купили, и когда её оформил покупатель и вот-вот
+        оплатит. Продавец видел «В продаже», а в каталоге товара не было.
+        """
+        if l.product_id is None:
+            return {"stock": None, "sold": 0, "reserved": 0, "reserved_until": None}
+
+        product = await db.get(Product, l.product_id)
+        oldest = await stock_service.oldest_reservation(db, l.product_id)
+        return {
+            "stock": product.stock if product is not None else None,
+            "sold": await stock_service.units_sold(db, l.product_id),
+            "reserved": await stock_service.units_reserved(db, l.product_id),
+            # В UTC с явной «Z»: без неё браузер прочёл бы время как местное
+            "reserved_until": (
+                (oldest + timedelta(minutes=ttl)).replace(microsecond=0).isoformat() + "Z"
+                if oldest is not None else None
+            ),
+        }
+
     return [
         {
             "id": str(l.id),
@@ -434,6 +460,7 @@ async def my_listings(
             # Не только url: чтобы удалить фото, фронту нужен его id
             "images": [{"id": str(img.id), "url": img.url} for img in l.images],
             "created_at": l.created_at.isoformat(),
+            **(await sale_state(l)),
         }
         for l in listings
     ]
@@ -630,13 +657,27 @@ async def update_listing(
     # название, описание и фотографии — остаток на складе к этому отношения
     # не имеет, а повторная проверка сняла бы товар с витрины на сутки из-за
     # того, что продавцу привезли ещё десять штук. Меняем сток сразу.
+    #
+    # Сток — не новое количество целиком: из него вычитается проданное и
+    # то, что сейчас ждёт оплаты. Раньше ставилось всё количество, и после
+    # одной продажи в продаже снова оказывались все десять штук.
     if payload.quantity is not None and payload.quantity != listing.quantity:
+        taken = await stock_service.units_sold(db, listing.product_id)
+        held = await stock_service.units_reserved(db, listing.product_id)
+        if payload.quantity < taken + held:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Уже продано {taken} шт." + (f", ещё {held} ждут оплаты" if held else "")
+                    + f" — меньше {taken + held} указать нельзя"
+                ),
+            )
         listing.quantity = payload.quantity
         if listing.product_id:
             product = await db.get(Product, listing.product_id)
             if product is not None:
-                product.stock = payload.quantity
                 product.max_quantity = payload.quantity
+                await stock_service.refresh_p2p_stock(db, product.id)
 
     # Без проверки «а изменилось ли что-нибудь» открытая и сразу закрытая
     # форма снимала бы товар с продажи на ровном месте.
@@ -676,7 +717,7 @@ async def delete_listing(
             detail="Сначала снимите товар с продажи, потом удаляйте",
         )
 
-    if await _units_taken(db, listing.product_id):
+    if await stock_service.units_sold(db, listing.product_id):
         raise HTTPException(
             status_code=400,
             detail="По товару была сделка — удалить нельзя, историю нужно сохранить",
@@ -733,37 +774,6 @@ async def delete_listing_image(
     return {"deleted": True}
 
 
-async def _units_taken(db: AsyncSession, product_id: uuid.UUID | None) -> int:
-    """
-    Сколько единиц товара уже разобрали по сделкам.
-
-    Раньше вопрос стоял иначе — «была сделка или нет», — и этого хватало,
-    пока у заявки всегда была ровно одна вещь. С количеством ответ «да»
-    перестал что-либо значить: продавец с десятью ключами продаёт один, а
-    вернуть остальные в продажу уже не может.
-
-    Отменённые и возвращённые сделки не считаются: в первом случае заказ не
-    оплатили, во втором вещь осталась у продавца.
-    """
-    if product_id is None:
-        return 0
-
-    # Внешнее соединение и единица по умолчанию: order_item_id у сделки
-    # необязательный, и на внутреннем соединении такая сделка просто
-    # выпадала бы из счёта — то есть проданная вещь считалась бы свободной.
-    return (
-        await db.execute(
-            select(func.coalesce(func.sum(func.coalesce(OrderItem.quantity, 1)), 0))
-            .select_from(Deal)
-            .outerjoin(OrderItem, OrderItem.id == Deal.order_item_id)
-            .where(
-                Deal.product_id == product_id,
-                Deal.status.notin_([DealStatus.CANCELLED, DealStatus.REFUNDED]),
-            )
-        )
-    ).scalar() or 0
-
-
 @router.post("/seller/listings/{listing_id}/withdraw")
 async def withdraw_listing(
     listing_id: uuid.UUID,
@@ -817,19 +827,19 @@ async def republish_listing(
     # Возвращаем ровно остаток: из заявленного количества вычитаем то, что
     # уже разобрали. Ставить обратно полное количество нельзя — так продавец
     # с одной вещью продавал бы её снова после каждого «снять — вернуть».
-    remaining = listing.quantity - await _units_taken(db, listing.product_id)
+    remaining = listing.quantity - await stock_service.units_sold(db, listing.product_id)
     if remaining <= 0:
         raise HTTPException(
             status_code=400,
             detail="Весь товар по этой заявке продан — вернуть его в продажу нельзя",
         )
 
-    if listing.product_id:
-        product = await db.get(Product, listing.product_id)
-        if product:
-            product.stock = remaining
-
     listing.status = ListingStatus.APPROVED
+    # Остаток пересчитывается уже при одобренной заявке: из него вычитается
+    # и то, что покупатели оформили до снятия и ещё могут оплатить
+    if listing.product_id:
+        await stock_service.refresh_p2p_stock(db, listing.product_id)
+
     await db.commit()
     return {"status": listing.status.value}
 

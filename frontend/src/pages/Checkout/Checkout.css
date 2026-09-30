@@ -315,3 +315,19 @@ html[data-platform="android"] .checkout-page {
     opacity: 0.5;
     cursor: default;
 }
+
+/* Ссылка, а не вторая крупная кнопка: главное действие здесь — подтвердить
+   в кошельке, а это запасной выход на случай, если кошелёк открылся криво */
+.btn-reopen-wallet {
+    display: block;
+    width: 100%;
+    margin-top: var(--space-3);
+    padding: var(--space-2);
+    background: transparent;
+    border: none;
+    color: var(--accent-primary);
+    font-family: inherit;
+    font-size: var(--font-sm, 14px);
+    text-align: center;
+    cursor: pointer;
+}

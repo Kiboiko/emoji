@@ -9,7 +9,6 @@ import logging
 from config import settings
 from database import AsyncSessionLocal
 from models.order import Order, OrderStatus
-from models.digital_item import DigitalItem
 from models.product import Product
 
 logging.basicConfig(level=logging.INFO)
@@ -52,57 +51,30 @@ async def cleanup_reservations():
                 return
 
             logger.info(f"[SCHEDULER] Found {len(expired_orders)} expired orders")
-            
+
+            from services import stock_service
+
+            changed: set = set()
             for order in expired_orders:
                 logger.info(f"[SCHEDULER] Cancelling order {order.id}")
-                
-                # 2. Update Order Status
-                order.status = OrderStatus.CANCELLED
-                
-                # 3. Release Digital Items linked to this order
-                stmt_items = select(DigitalItem).where(DigitalItem.order_id == order.id)
-                result_items = await db.execute(stmt_items)
-                reserved_items = result_items.scalars().all()
-                
-                # Group by product to restore stock efficiently
-                product_counts = {}
-                
-                for item in reserved_items:
-                    item.order_id = None
-                    item.reserved_until = None
-                    db.add(item)
-                    
-                    # Count for stock restoration
-                    product_counts[item.product_id] = product_counts.get(item.product_id, 0) + 1
-                    
-                # Товары пользователей резервируются стоком, а не DigitalItem:
-                # неоплаченный заказ должен вернуть вещь на витрину
-                from models.order import OrderItem
-                p2p_items = (
-                    await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))
-                ).scalars().all()
-                for oi in p2p_items:
-                    if oi.product_snapshot.get("is_p2p") and oi.product_id:
-                        product_counts[oi.product_id] = (
-                            product_counts.get(oi.product_id, 0) + oi.quantity
-                        )
+                # Счета не гасим: их срок уже вышел, и поллер сам пометит их
+                # просроченными, продолжая ловить опоздавший перевод
+                changed.update(
+                    await stock_service.release_order(db, order, expire_payments=False)
+                )
 
-                # 4. Restore Product Stock
-                for product_id, count in product_counts.items():
-                    product = await db.get(Product, product_id)
-                    if product and product.stock is not None:
-                        product.stock += count
-                        db.add(product)
-                        logger.info(f"[SCHEDULER] Restored {count} stock for product {product.id}")
-                        
-                        # Broadcast update
-                        await manager.broadcast({
-                            "type": "product_updated",
-                            "data": jsonable_encoder(ProductBroadcast.model_validate(product))
-                        })
-                        
             await db.commit()
-            
+
+            for product_id in changed:
+                product = await db.get(Product, product_id)
+                if product is None:
+                    continue
+                logger.info(f"[SCHEDULER] Stock for product {product.id} is now {product.stock}")
+                await manager.broadcast({
+                    "type": "product_updated",
+                    "data": jsonable_encoder(ProductBroadcast.model_validate(product))
+                })
+
         except Exception as e:
             logger.error(f"[SCHEDULER] Error in cleanup_reservations: {e}")
             await db.rollback()

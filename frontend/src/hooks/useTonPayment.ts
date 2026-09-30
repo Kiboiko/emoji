@@ -45,6 +45,10 @@ export function useTonPayment() {
     const [error, setError] = useState<string | null>(null);
     const [request, setRequest] = useState<TonPaymentRequest | null>(null);
     const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+    // TonConnect отдаёт функцию, которая открывает кошелёк заново на тот же
+    // запрос. Нужна, когда кошелёк открылся не до конца или его закрыли:
+    // повторная отправка создала бы второй запрос на подпись.
+    const reopenRef = useRef<(() => void) | null>(null);
 
     const stopPolling = useCallback(() => {
         if (pollTimer.current) {
@@ -106,8 +110,11 @@ export function useTonPayment() {
         async (currency: 'USDT' | 'TON', acceptTerms: boolean, onPaid: () => void) => {
             setError(null);
             setPhase('creating');
+            let signing = false;
 
             try {
+                // Повторное нажатие не плодит заказы: сервер вернёт тот же
+                // неоплаченный заказ с тем же переводом, если корзина не менялась
                 const created = await ordersApi.createOrder(currency, acceptTerms);
                 const orderId: string = created.order_id;
                 const payment: TonPaymentRequest = created.payment;
@@ -118,16 +125,24 @@ export function useTonPayment() {
                 setOrderId(orderId);
 
                 setPhase('awaiting_sign');
-                await tonConnectUI.sendTransaction({
-                    validUntil: payment.valid_until,
-                    messages: [
-                        {
-                            address: payment.address,
-                            amount: payment.amount_nano,
-                            payload: buildCommentPayload(payment.comment),
+                signing = true;
+                await tonConnectUI.sendTransaction(
+                    {
+                        validUntil: payment.valid_until,
+                        messages: [
+                            {
+                                address: payment.address,
+                                amount: payment.amount_nano,
+                                payload: buildCommentPayload(payment.comment),
+                            },
+                        ],
+                    },
+                    {
+                        onRequestSent: (redirectToWallet) => {
+                            reopenRef.current = redirectToWallet;
                         },
-                    ],
-                });
+                    },
+                );
 
                 // Кошелёк вернул подписанный BOC — это значит лишь, что
                 // пользователь подписал. Дошла ли транзакция и на ту ли сумму,
@@ -135,26 +150,48 @@ export function useTonPayment() {
                 setPhase('confirming');
                 pollUntilPaid(orderId, onPaid);
             } catch (e: any) {
-                const rejected =
-                    e?.name === 'UserRejectsError' ||
-                    /reject|cancel|decline/i.test(e?.message ?? '');
-
-                setPhase(rejected ? 'idle' : 'failed');
-                if (!rejected) {
+                if (!signing) {
                     // Бэкенд отдаёт detail объектом для машиночитаемых ошибок
                     // (например terms_required) — показывать [object Object]
                     // пользователю нельзя
                     const detail = e?.response?.data?.detail;
+                    setPhase('failed');
                     setError(
                         (typeof detail === 'string' ? detail : detail?.message) ??
-                            e?.message ??
-                            'Не удалось создать платёж',
+                            'Не удалось создать платёж. Проверьте связь и попробуйте ещё раз.',
+                    );
+                    return;
+                }
+
+                // Закрытое окно TonConnect приходит не отказом, а ошибкой
+                // «Transaction was not sent» — по-английски и красным. Для
+                // человека это одно и то же: он передумал или закрыл кошелёк.
+                const rejected =
+                    e?.name === 'UserRejectsError' ||
+                    /reject|cancel|decline|not sent/i.test(e?.message ?? '');
+
+                setPhase(rejected ? 'idle' : 'failed');
+                if (!rejected) {
+                    setError(
+                        'Кошелёк не ответил. Нажмите «Оплатить» ещё раз — откроется тот же заказ, дважды платить не придётся.',
                     );
                 }
+            } finally {
+                reopenRef.current = null;
             }
         },
         [tonConnectUI, pollUntilPaid],
     );
+
+    /**
+     * Открывает кошелёк заново на тот же запрос подписи.
+     *
+     * Кошелёк Telegram иногда открывается не до конца. Без этой кнопки
+     * оставалось закрыть окно TonConnect и начинать оплату заново.
+     */
+    const reopenWallet = useCallback(() => {
+        reopenRef.current?.();
+    }, []);
 
     /**
      * Снимает созданный, но не оплаченный заказ и освобождает товар.
@@ -188,6 +225,7 @@ export function useTonPayment() {
     return {
         pay,
         cancel,
+        reopenWallet,
         phase,
         error,
         request,

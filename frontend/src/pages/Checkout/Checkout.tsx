@@ -25,7 +25,7 @@ export const Checkout: React.FC = () => {
     const wallet = useTonWallet();
     // Человекочитаемый вид UQ…, а не сырой 0:abc… из wallet.account
     const friendlyAddress = useTonAddress();
-    const { pay, cancel, phase, error, request, orderId, stopPolling } = useTonPayment();
+    const { pay, cancel, reopenWallet, phase, error, request, orderId, stopPolling } = useTonPayment();
     const [termsAccepted, setTermsAccepted] = React.useState(false);
     const [cancelling, setCancelling] = React.useState(false);
     const showToast = useToastStore((s) => s.show);
@@ -193,6 +193,17 @@ export const Checkout: React.FC = () => {
                             t('Оплатить', 'Pay Now')
                         )}
                     </motion.button>
+
+                    {/* Кошелёк Telegram иногда открывается не до конца —
+                        открываем его снова на тот же запрос, без второго заказа */}
+                    {phase === 'awaiting_sign' && (
+                        <button className="btn-reopen-wallet" onClick={reopenWallet}>
+                            {t(
+                                'Кошелёк не открылся или открылся не до конца? Открыть снова',
+                                'Wallet did not open properly? Open it again',
+                            )}
+                        </button>
+                    )}
 
                     {phase === 'confirming' && (
                         <p className="confirm-hint">

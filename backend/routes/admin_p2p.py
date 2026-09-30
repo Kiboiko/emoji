@@ -21,7 +21,7 @@ from models.p2p import (
 )
 from models.product import Product
 from models.user import User
-from services import deal_service, relay_service, settings_service
+from services import deal_service, relay_service, settings_service, stock_service
 from services.money import from_minor
 from utils.auth import require_admin
 
@@ -213,14 +213,6 @@ async def moderate_listing(
     product.image_url = image_url
     product.images = gallery
     product.category_id = category_id
-    # Сток — заявленное количество. Без него одну и ту же вещь могли бы
-    # оплатить сразу несколько покупателей: max_quantity ограничивает только
-    # содержимое одной корзины, а не общее число проданного.
-    #
-    # Проставляется и при повторном одобрении: заявка возвращается на
-    # модерацию после каждой правки, и количество в ней — последнее слово
-    # продавца.
-    product.stock = listing.quantity
     product.max_quantity = listing.quantity
     product.is_active = True
     await db.flush()
@@ -228,6 +220,15 @@ async def moderate_listing(
     listing.product_id = product.id
     listing.status = ListingStatus.APPROVED
     seller.rejected_streak = 0    # серия отказов прервана
+
+    # Сток — заявленное количество за вычетом проданного и того, что ждёт
+    # оплаты. Без стока одну и ту же вещь могли бы оплатить сразу несколько
+    # покупателей: max_quantity ограничивает только одну корзину.
+    #
+    # Считается уже для одобренной заявки: после правки она возвращается
+    # на модерацию вместе с товаром, который уже покупали, и полное
+    # количество продало бы проданное повторно.
+    await stock_service.refresh_p2p_stock(db, product.id)
     await db.commit()
 
     await _notify_seller(db, seller, f"Заявка «{listing.name}» одобрена, товар опубликован.")

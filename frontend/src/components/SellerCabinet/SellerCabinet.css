@@ -416,6 +416,30 @@
     color: var(--accent-error);
 }
 
+/* Одобрено, но купить сейчас нельзя: вещь оплачивает покупатель */
+.badge-reserved {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--accent-warning);
+}
+
+/* Одобрено и всё раскуплено — спокойный серый, это не ошибка */
+.badge-sold {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.listing-note {
+    margin: var(--space-1-5) 0 0;
+    font-size: var(--font-xs);
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.listing-note a {
+    color: var(--accent-primary);
+    text-decoration: none;
+}
+
 .listing-price {
     display: flex;
     align-items: baseline;

@@ -1053,12 +1053,31 @@ const ListingManager: React.FC<{
                     const deletable = DELETABLE.includes(listing.status);
                     const working = busyId === listing.id;
 
+                    // Статус заявки говорит только о модерации: «одобрено»
+                    // оставалось и на вещи, которую уже купили, и на той, что
+                    // покупатель оформил и вот-вот оплатит. Продавец видел
+                    // «В продаже», а в каталоге товара не было.
+                    const sale = listing.status === 'approved' && listing.stock === 0
+                        ? (listing.reserved > 0 ? 'reserved' : 'sold')
+                        : null;
+                    const listed = listing.status === 'approved' && listing.stock !== null;
+                    const returnsAt = listing.reserved_until
+                        ? new Date(listing.reserved_until).toLocaleTimeString(
+                            language === 'ru' ? 'ru-RU' : 'en-US',
+                            { hour: '2-digit', minute: '2-digit' },
+                        )
+                        : null;
+
                     return (
                         <div key={listing.id} className={`listing-item listing-${listing.status}`}>
                             <div className="listing-head">
                                 <span className="listing-name">{listing.name}</span>
-                                <span className={`listing-badge badge-${listing.status}`}>
-                                    {statusLabel[listing.status] ?? listing.status}
+                                <span className={`listing-badge badge-${sale ?? listing.status}`}>
+                                    {sale === 'reserved'
+                                        ? t('Ждёт оплаты', 'Awaiting payment')
+                                        : sale === 'sold'
+                                            ? t('Продано', 'Sold')
+                                            : statusLabel[listing.status] ?? listing.status}
                                 </span>
                             </div>
 
@@ -1068,10 +1087,36 @@ const ListingManager: React.FC<{
                                     одной: «1 шт.» у каждого второго товара — шум */}
                                 {listing.quantity > 1 && (
                                     <span className="listing-stock">
-                                        {listing.quantity} {t("шт.", "pcs")}
+                                        {listed
+                                            ? t(
+                                                `осталось ${listing.stock} из ${listing.quantity} шт.`,
+                                                `${listing.stock} of ${listing.quantity} left`,
+                                            )
+                                            : `${listing.quantity} ${t('шт.', 'pcs')}`}
+                                        {listed && listing.stock! > 0 && listing.reserved > 0 &&
+                                            t(`, ${listing.reserved} ждут оплаты`, `, ${listing.reserved} awaiting payment`)}
                                     </span>
                                 )}
                             </div>
+
+                            {sale === 'reserved' && (
+                                <p className="listing-note">
+                                    {t('Покупатель оформил заказ и оплачивает его.', 'A buyer placed an order and is paying.')}
+                                    {returnsAt && ' ' + t(
+                                        `Если не оплатит до ${returnsAt}, товар сам вернётся в продажу.`,
+                                        `If unpaid by ${returnsAt}, it returns to sale automatically.`,
+                                    )}
+                                </p>
+                            )}
+
+                            {sale === 'sold' && (
+                                <p className="listing-note">
+                                    {t('Товар купили.', 'This item was bought.')}{' '}
+                                    <Link to="/my/deals">
+                                        {t('Сделка — в «Мои сделки»', 'See the deal in «My deals»')}
+                                    </Link>
+                                </p>
+                            )}
 
                             {listing.status === 'rejected' && listing.moderation_comment && (
                                 <div className="listing-reject">
@@ -1147,7 +1192,8 @@ const ListingManager: React.FC<{
                                     </button>
                                 )}
 
-                                {listing.status === 'approved' && (
+                                {/* Проданное снимать не с чего: в продаже его уже нет */}
+                                {listing.status === 'approved' && sale !== 'sold' && (
                                     <button
                                         className="seller-btn seller-btn-sm seller-btn-ghost"
                                         disabled={working}

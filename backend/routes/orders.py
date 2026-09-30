@@ -2,8 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
+import json
 import logging
+import math
 import uuid
+from collections import Counter
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -17,7 +20,7 @@ from models.payment import Payment, PaymentStatus
 from models.subscription import Channel, SubscriptionPlan
 from schemas.order import OrderCreate, OrderResponse
 from utils.auth import get_current_user, require_admin
-from services import deal_service, payment_service, relay_service, settings_service, subscription_service, terms_service
+from services import deal_service, payment_service, relay_service, settings_service, stock_service, subscription_service, terms_service
 from services.money import to_minor
 from services.telegram_service import telegram_service
 from services.referral_service import process_referral_commission
@@ -136,36 +139,160 @@ async def cancel_order(
             detail="Платёж уже подтверждён, заказ отменить нельзя",
         )
 
-    order.status = OrderStatus.CANCELLED
-    for payment in payments:
-        if payment.status in (PaymentStatus.PENDING, PaymentStatus.SEEN):
-            payment.status = PaymentStatus.EXPIRED
-
-    # Возврат резервов — та же логика, что у планировщика (cleanup_reservations)
-    released: dict[uuid.UUID, int] = {}
-
-    reserved_items = (
-        await db.execute(select(DigitalItem).where(DigitalItem.order_id == order.id))
-    ).scalars().all()
-    for digital in reserved_items:
-        digital.order_id = None
-        digital.reserved_until = None
-        released[digital.product_id] = released.get(digital.product_id, 0) + 1
-
-    for position in order.items:
-        if position.product_snapshot.get("is_p2p") and position.product_id:
-            released[position.product_id] = released.get(position.product_id, 0) + position.quantity
-
-    for product_id, count in released.items():
-        product = await db.get(Product, product_id)
-        if product and product.stock is not None:
-            product.stock += count
+    released = await stock_service.release_order(db, order, expire_payments=True)
 
     await db.commit()
     logger.info("[ORDER] Заказ %s отменён покупателем, освобождено позиций: %s",
                 order.id, len(released))
+    await _broadcast_products(db, released)
 
     return {"message": "Order cancelled", "status": order.status.value}
+
+
+async def _broadcast_products(db: AsyncSession, product_ids: list[uuid.UUID]) -> None:
+    """Рассылает витринам новый остаток — вернувшийся товар появляется сразу."""
+    for product_id in product_ids:
+        product = await db.get(Product, product_id)
+        if product is not None:
+            await manager.broadcast({
+                "type": "product_updated",
+                "data": jsonable_encoder(ProductBroadcast.model_validate(product)),
+            })
+
+
+# Меньше этого времени на счёте — переиспользовать заказ бессмысленно:
+# покупатель не успеет подтвердить перевод, и счёт истечёт на полпути
+REUSE_MIN_LEFT = timedelta(minutes=2)
+
+
+def _contents(pairs) -> Counter:
+    """Состав заказа или корзины: товар, количество, цена, данные покупателя."""
+    return Counter(
+        (
+            str(product_id),
+            int(quantity),
+            str(Decimal(str(price)).quantize(Decimal("0.01"))),
+            json.dumps(user_data or None, sort_keys=True, ensure_ascii=False),
+        )
+        for product_id, quantity, price, user_data in pairs
+    )
+
+
+async def _take_over_previous_orders(
+    db: AsyncSession, user: User, cart_items: list[CartItem]
+) -> tuple[Order, Payment] | None:
+    """
+    Разбирается с неоплаченными заказами покупателя перед новым.
+
+    Каждое нажатие «Оплатить» раньше создавало новый заказ, а прошлый
+    оставался висеть и держать товар полчаса. Кошелёк не открылся или его
+    закрыли, человек жмёт «Оплатить» ещё раз — и упирается в собственную
+    бронь: «Товар уже продан», хотя его никто не покупал. В каталоге вещь
+    при этом пропадала, а у продавца значилась «В продаже».
+
+    Теперь:
+      * заказ с тем же составом и живым счётом отдаём снова — кошелёк
+        откроется на тот же перевод с тем же комментарием, второй брони нет;
+      * остальные неоплаченные заказы покупателя снимаем, освобождая товар;
+      * если перевод по прошлому заказу уже виден в сети, новый не создаём:
+        иначе покупатель заплатил бы дважды.
+
+    Возвращает заказ и счёт, если их можно отдать повторно.
+    """
+    previous_orders = (
+        await db.execute(
+            select(Order)
+            .options(selectinload(Order.items))
+            .where(Order.user_id == user.id, Order.status == OrderStatus.PENDING)
+            .order_by(Order.created_at.desc())
+        )
+    ).scalars().all()
+    if not previous_orders:
+        return None
+
+    prices = {
+        p.id: p.price_usdt
+        for p in (
+            await db.execute(
+                select(Product).where(Product.id.in_([c.product_id for c in cart_items]))
+            )
+        ).scalars().all()
+    }
+    wanted = _contents(
+        (c.product_id, c.quantity, prices.get(c.product_id, 0), c.user_data)
+        for c in cart_items
+    )
+
+    now = datetime.utcnow()
+    reusable: tuple[Order, Payment] | None = None
+    released: list[uuid.UUID] = []
+
+    for previous in previous_orders:
+        payments = (
+            await db.execute(select(Payment).where(Payment.order_id == previous.id))
+        ).scalars().all()
+
+        if any(p.status in (PaymentStatus.SEEN, PaymentStatus.CONFIRMED) for p in payments):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Оплата предыдущего заказа уже пришла и сейчас подтверждается. "
+                    "Подождите минуту — заказ появится в «Мои заказы»."
+                ),
+            )
+
+        live = next(
+            (
+                p for p in payments
+                if p.status == PaymentStatus.PENDING
+                and p.expires_at is not None
+                and p.expires_at > now + REUSE_MIN_LEFT
+            ),
+            None,
+        )
+        same = _contents(
+            (i.product_id, i.quantity, i.price_usdt, i.user_data) for i in previous.items
+        ) == wanted
+
+        if reusable is None and live is not None and same:
+            reusable = (previous, live)
+            continue
+
+        released += await stock_service.release_order(db, previous, expire_payments=True)
+        logger.info("[ORDER] Неоплаченный заказ %s снят: покупатель оформляет новый", previous.id)
+
+    if released:
+        # Коммит здесь, а не вместе с новым заказом: при повторном
+        # использовании нового заказа не будет, а бронь снять всё равно надо
+        await db.commit()
+        await _broadcast_products(db, released)
+
+    return reusable
+
+
+async def _shortage_reason(db: AsyncSession, product: Product, quantity: int) -> str:
+    """
+    Почему товар продавца нельзя купить — честно, а не всегда «уже продан».
+
+    Свои неоплаченные заказы покупателя к этому моменту уже сняты, так что
+    бронь здесь — чужая.
+    """
+    name = product.name_ru
+
+    if product.stock and product.stock > 0:
+        return f"«{name}»: в наличии только {product.stock} шт."
+
+    oldest = await stock_service.oldest_reservation(db, product.id)
+    if oldest is not None:
+        ttl = await settings_service.get_int(db, "order_payment_ttl_min")
+        left = (oldest + timedelta(minutes=ttl) - datetime.utcnow()).total_seconds()
+        minutes = max(1, math.ceil(left / 60))
+        return (
+            f"«{name}» сейчас оформляет другой покупатель. Если он не оплатит, "
+            f"товар вернётся в продажу примерно через {minutes} мин."
+        )
+
+    return f"Товар «{name}» уже продан"
 
 
 @router.post("", response_model=dict)
@@ -202,6 +329,16 @@ async def create_order(
             status_code=409,
             detail={"code": "terms_required", "version": e.version, "message": str(e)},
         )
+
+    reusable = await _take_over_previous_orders(db, user, cart_items)
+    if reusable is not None:
+        previous, payment = reusable
+        logger.info("[ORDER] Повторная оплата: отдаём заказ %s заново", previous.id)
+        return {
+            "order_id": str(previous.id),
+            "total_usdt": str(previous.total_usdt),
+            "payment": payment_service.build_transaction_request(payment).as_dict(),
+        }
 
     # Резерв держим ровно столько же, сколько живёт счёт: раньше товар
     # резервировался на 3 минуты, а заказ отменялся через 120 — между этими
@@ -245,7 +382,7 @@ async def create_order(
             if product.stock is None or product.stock < quantity:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Товар «{product.name_ru}» уже продан",
+                    detail=await _shortage_reason(db, product, quantity),
                 )
             product.stock -= quantity
             db.add(product)
