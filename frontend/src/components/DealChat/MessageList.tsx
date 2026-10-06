@@ -133,7 +133,7 @@ export const MessageList: React.FC<{
                             </span>
                         )}
                         {message.legacy_media && (
-                            <span className="dchat-legacy">
+                            <span className={`dchat-legacy${message.text ? '' : ' solo'}`}>
                                 {t('Вложение из переписки через бота', 'Attachment sent via the bot')}
                             </span>
                         )}

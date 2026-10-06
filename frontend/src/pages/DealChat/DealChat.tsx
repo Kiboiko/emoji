@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { p2pApi } from '@/api/client';
 import { realtime } from '@/lib/realtime';
+import { isAppActive, onAppActiveChange } from '@/lib/appActive';
 import { useAuthStore } from '@/store/authStore';
 import { useDealsStore, selectIsTyping } from '@/store/dealsStore';
 import { useToastStore, errorText } from '@/store/toastStore';
@@ -14,7 +15,7 @@ import { DealCard } from '@/components/DealChat/DealCard';
 import { DealReview } from '@/components/DealChat/DealReview';
 import { DealSheet, type SheetKind } from '@/components/DealChat/DealSheet';
 import { MessageList, type ChatMessage } from '@/components/DealChat/MessageList';
-import { CONTACT, counterpartName } from '@/components/DealChat/dealFormat';
+import { CONTACT, counterpartName, lastSeen } from '@/components/DealChat/dealFormat';
 import './DealChat.css';
 
 const MAX_PHOTO = 8 * 1024 * 1024;
@@ -102,7 +103,7 @@ export const DealChat: React.FC = () => {
     // растёт, а бот пришлёт уведомление.
 
     const markRead = useCallback(() => {
-        if (document.visibilityState !== 'visible') return;
+        if (!isAppActive()) return;
         if (readTimer.current) clearTimeout(readTimer.current);
         readTimer.current = setTimeout(() => {
             // Без токена запрос получил бы 401, а он разлогинивает приложение
@@ -122,19 +123,27 @@ export const DealChat: React.FC = () => {
 
     useEffect(() => {
         const store = useDealsStore.getState();
-        const update = () => {
-            const visible = document.visibilityState === 'visible';
-            store.setViewing(visible ? dealId : null);
-            if (visible) markRead();
+        const update = (active: boolean) => {
+            store.setViewing(active ? dealId : null);
+            if (active) markRead();
+            else if (readTimer.current) clearTimeout(readTimer.current);
         };
-        update();
-        document.addEventListener('visibilitychange', update);
+        update(isAppActive());
+        const off = onAppActiveChange(update);
         return () => {
-            document.removeEventListener('visibilitychange', update);
+            off();
             store.setViewing(null);
             if (readTimer.current) clearTimeout(readTimer.current);
         };
     }, [dealId, markRead]);
+
+    // «Был(а) в сети 5 минут назад» стареет само по себе — перерисовываем
+    const [, setClock] = useState(0);
+    useEffect(() => {
+        if (!deal || deal.counterpart_online !== false) return;
+        const timer = setInterval(() => setClock((n) => n + 1), 30_000);
+        return () => clearInterval(timer);
+    }, [deal]);
 
     // --- Живые события -------------------------------------------------------
 
@@ -175,6 +184,12 @@ export const DealChat: React.FC = () => {
                         ? { ...m, state: 'read' } : m));
             } else if (event.type === 'deal_updated') {
                 setDeal(event.deal);
+            } else if (event.type === 'deal_presence') {
+                setDeal((prev) => prev && {
+                    ...prev,
+                    counterpart_online: event.online,
+                    counterpart_last_seen_at: event.last_seen_at ?? prev.counterpart_last_seen_at,
+                });
             }
         });
         const offReconnect = realtime.onReconnect(() => { load(); });
@@ -354,27 +369,36 @@ export const DealChat: React.FC = () => {
                 </button>
 
                 {deal && (
-                    buyer ? (
-                        <span className="dchat-ava">
-                            {deal.store?.avatar_url
-                                ? <img src={deal.store.avatar_url} alt="" />
-                                : name.trim().charAt(0).toUpperCase()}
-                        </span>
-                    ) : (
-                        <span className="dchat-ava anon"><UserIcon size={18} /></span>
-                    )
+                    <span className="dchat-ava-wrap">
+                        {buyer ? (
+                            <span className="dchat-ava">
+                                {deal.store?.avatar_url
+                                    ? <img src={deal.store.avatar_url} alt="" />
+                                    : name.trim().charAt(0).toUpperCase()}
+                            </span>
+                        ) : (
+                            <span className="dchat-ava anon"><UserIcon size={20} /></span>
+                        )}
+                        {deal.counterpart_online && <span className="dchat-online-dot" />}
+                    </span>
                 )}
 
                 <span className="dchat-head-text">
                     <span className="dchat-head-name">
                         <span>{name}</span>
-                        {buyer && deal?.store?.verified && <BadgeCheck size={15} />}
+                        {buyer && deal?.store?.verified && <BadgeCheck size={16} />}
                     </span>
                     {typing ? (
                         <span className="dchat-head-sub typing">{t('печатает…', 'typing…')}</span>
+                    ) : deal?.counterpart_online ? (
+                        <span className="dchat-head-sub online">{t('в сети', 'online')}</span>
                     ) : (
                         <span className="dchat-head-sub">
-                            {deal ? t(`Сделка №${deal.number}`, `Deal #${deal.number}`) : ' '}
+                            {deal
+                                ? (deal.counterpart_online === false
+                                    ? lastSeen(deal.counterpart_last_seen_at, language, t)
+                                    : t(`Сделка №${deal.number}`, `Deal #${deal.number}`))
+                                : ' '}
                         </span>
                     )}
                 </span>

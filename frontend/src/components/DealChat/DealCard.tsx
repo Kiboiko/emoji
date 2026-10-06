@@ -120,7 +120,7 @@ export const DealCard: React.FC<{
                 <>
                     <button type="button" className="dchat-btn primary grow" onClick={onShip} disabled={busy}>
                         <Package size={16} />
-                        {t('Я отправил товар', 'I have sent the item')}
+                        <span>{t('Я отправил товар', 'I have sent the item')}</span>
                     </button>
                     {problem}
                 </>
@@ -136,7 +136,7 @@ export const DealCard: React.FC<{
                         disabled={busy}
                     >
                         {shipped && <Check size={16} />}
-                        {t('Подтвердить получение', 'Confirm receipt')}
+                        <span>{t('Подтвердить получение', 'Confirm receipt')}</span>
                     </button>
                     {problem}
                 </>
@@ -170,6 +170,11 @@ export const DealCard: React.FC<{
 
             {expanded && (
                 <>
+                    {/* Номер — в подробностях: на него ссылаются уведомления
+                        бота и поддержка, а место в шапке занято «в сети» */}
+                    <div className="dchat-deal-num">
+                        {t(`Сделка №${deal.number}`, `Deal #${deal.number}`)}
+                    </div>
                     <div className="dchat-steps">
                         {steps.map(([title, when, done], index) => (
                             <span

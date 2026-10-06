@@ -19,7 +19,11 @@
     height: var(--tg-viewport-height, 100dvh);
     display: flex;
     flex-direction: column;
-    padding-top: var(--tg-chrome-top);
+    /* Точная высота кнопок Telegram («Закрыть», «⌄ ⋮») вместе со строкой
+       состояния — её сообщает сам Telegram (App.tsx). Оценка --tg-chrome-top
+       на части телефонов оказывалась меньше, и «Закрыть» ложилась поверх
+       стрелки назад и аватарки магазина */
+    padding-top: var(--tg-content-top, var(--tg-chrome-top));
     background: var(--bg-primary);
     color: var(--text-primary);
     font-size: 14px;
@@ -81,8 +85,8 @@
     flex: none;
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding: 2px var(--space-3) var(--space-2) var(--space-1);
+    gap: 10px;
+    padding: 6px var(--space-3) 10px var(--space-1);
 }
 
 .dchat-back-count {
@@ -102,10 +106,14 @@
     justify-content: center;
 }
 
-.dchat-ava {
+.dchat-ava-wrap {
     flex: none;
-    width: 38px;
-    height: 38px;
+    position: relative;
+}
+
+.dchat-ava {
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
     overflow: hidden;
     display: flex;
@@ -128,6 +136,17 @@
     color: var(--text-secondary);
 }
 
+.dchat-online-dot {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent-success);
+    box-shadow: 0 0 0 2px var(--bg-primary);
+}
+
 .dchat-head-text {
     flex: 1;
     min-width: 0;
@@ -138,7 +157,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -155,12 +174,19 @@
 }
 
 .dchat-head-sub {
-    font-size: 12.5px;
+    font-size: 13px;
     color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .dchat-head-sub.typing {
     color: var(--accent-primary);
+}
+
+.dchat-head-sub.online {
+    color: var(--accent-success);
 }
 
 /* --- Карточка сделки -------------------------------------------------------- */
@@ -173,6 +199,11 @@
 
 .dchat-deal {
     display: grid;
+    /* Колонка не шире карточки. Без этого неразрывная надпись на кнопке
+       («Подтвердить получение») раздвигала колонку, и раскрытые этапы,
+       пояснение и «Проблема» уезжали за правый край — на iPhone, где шрифт
+       чуть шире */
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
     padding: 10px 12px;
     border-radius: 14px;
@@ -285,6 +316,12 @@
     color: var(--text-secondary);
 }
 
+.dchat-deal-num {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
 .dchat-steps {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -377,9 +414,19 @@
     transform: none;
 }
 
+.dchat-btn > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .dchat-btn.grow {
     flex: 1;
     min-width: 0;
+}
+
+.dchat-actions .dchat-btn.danger {
+    flex: none;
 }
 
 .dchat .dchat-btn.primary {
@@ -547,6 +594,13 @@
     font-size: 12.5px;
     font-style: italic;
     opacity: 0.75;
+}
+
+/* Пометка без текста — последняя строка пузыря: место под время, как у текста */
+.dchat-legacy.solo::after {
+    content: '';
+    display: inline-block;
+    width: 38px;
 }
 
 .dchat-txt {
@@ -916,7 +970,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--tg-chrome-top) 12px 12px;
+    padding: var(--tg-content-top, var(--tg-chrome-top)) 12px 12px;
     background: rgba(0, 0, 0, 0.92);
     animation: dchat-fade 0.18s ease-out;
 }
@@ -930,7 +984,7 @@
 
 .dchat-viewer-close {
     position: absolute;
-    top: calc(var(--tg-chrome-top) + 8px);
+    top: calc(var(--tg-content-top, var(--tg-chrome-top)) + 8px);
     right: 12px;
     width: 40px;
     height: 40px;

@@ -39,6 +39,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 twaReturnUrl: BOT_USERNAME
                     ? `https://t.me/${BOT_USERNAME}`
                     : undefined,
+                // Свои всплывашки TonConnect («Transaction sent» и т.п.)
+                // ложились поверх нижнего меню и чужим стилем. Что с оплатой,
+                // и так показывает экран оформления заказа
+                notifications: [],
             }}
         >
             <App />

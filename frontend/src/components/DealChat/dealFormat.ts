@@ -36,6 +36,24 @@ export function listTime(iso: string, language: string, t: T): string {
     return date.toLocaleDateString(locale(language), { day: 'numeric', month: 'short' }).replace('.', '');
 }
 
+/** «был(а) в сети 5 мин назад» — как у Telegram, без угадывания пола */
+export function lastSeen(iso: string | null | undefined, language: string, t: T): string {
+    if (!iso) return t('не в сети', 'offline');
+    const date = new Date(iso);
+    const minutes = Math.floor((Date.now() - date.getTime()) / 60_000);
+    if (minutes < 1) return t('был(а) в сети только что', 'last seen just now');
+    if (minutes < 60) return t(`был(а) в сети ${minutes} мин назад`, `last seen ${minutes} min ago`);
+    const time = fmtTime(iso, language);
+    if (dayKey(date) === dayKey(new Date())) {
+        return t(`был(а) в сети сегодня в ${time}`, `last seen today at ${time}`);
+    }
+    if (dayKey(date) === dayKey(new Date(Date.now() - 86_400_000))) {
+        return t(`был(а) в сети вчера в ${time}`, `last seen yesterday at ${time}`);
+    }
+    const day = fmtDate(iso, language);
+    return t(`был(а) в сети ${day}`, `last seen ${day}`);
+}
+
 export function statusLabel(status: Deal['status'], t: T): string {
     const labels: Record<string, string> = {
         paid_escrow: t('Оплачено', 'Paid'),

@@ -144,28 +144,47 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
 
     print(f"[WS] Accepting connection for user: {user_id}")
 
+    from services.deal_chat_service import presence_changed, relay_typing
+
+    async def announce(was_online: bool) -> None:
+        # «В сети» — украшение чата: сбой базы здесь не должен рвать соединение
+        try:
+            await presence_changed(user_id, was_online)
+        except Exception as e:
+            logger.warning("[WS] «в сети» не обновлено: %s", e)
+
+    was_online = manager.is_online(user_id)
     await manager.connect(websocket, user_id)
+    await announce(was_online)
     try:
         while True:
             raw = await websocket.receive_text()
-            # Единственное, что клиент шлёт сам, — «печатает» в чате сделки.
-            # Мусор и чужие типы молча пропускаем: соединение ради них не рвём
+            # Клиент шлёт сам только «печатает» в чате сделки и «приложение
+            # открыто/свёрнуто». Мусор и чужие типы молча пропускаем:
+            # соединение ради них не рвём
             try:
                 event = json.loads(raw)
             except ValueError:
                 continue
-            if isinstance(event, dict) and event.get("type") == "typing":
-                from services.deal_chat_service import relay_typing
+            if not isinstance(event, dict):
+                continue
+            if event.get("type") == "typing":
                 try:
                     await relay_typing(user_id, str(event.get("deal_id") or ""))
                 except Exception as e:
                     logger.warning("[WS] typing не передан: %s", e)
+            elif event.get("type") == "presence":
+                was_online = manager.is_online(user_id)
+                manager.set_active(websocket, bool(event.get("active")))
+                await announce(was_online)
     except WebSocketDisconnect:
         pass
     finally:
         # В finally, а не только в except: при любой другой ошибке соединение
         # оставалось бы в менеджере, и рассылка стучалась бы в мёртвый сокет
+        was_online = manager.is_online(user_id)
         manager.disconnect(websocket, user_id)
+        await announce(was_online)
 
 # Include routers
 # Include routers

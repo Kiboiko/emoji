@@ -321,6 +321,9 @@ export interface Deal {
     } | null;
     last_activity_at: string;
     counterpart_read_at: string | null;
+    /** null — сделка закрыта, «в сети» не показывается */
+    counterpart_online: boolean | null;
+    counterpart_last_seen_at: string | null;
     created_at: string;
 }
 

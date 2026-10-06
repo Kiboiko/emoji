@@ -201,6 +201,84 @@ class TestDealCard:
         assert "Покупатель открыл спор" in last.text
 
 
+class TestPresence:
+    """«В сети» и «был(а) в сети» в шапке чата."""
+
+    @pytest.fixture
+    def online(self):
+        """Подключает пользователю «сокет» — менеджеру важен только сам факт."""
+        from utils.websockets import manager
+
+        opened: list[tuple[object, str]] = []
+
+        def connect(user):
+            socket = object()
+            manager.active_connections.setdefault(str(user.id), []).append(socket)
+            opened.append((socket, str(user.id)))
+            return socket
+
+        yield connect
+        for socket, user_id in opened:
+            manager.disconnect(socket, user_id)
+
+    async def test_card_shows_counterpart_online(self, db, deal, buyer, seller, online):
+        online(seller)
+
+        card = await deal_routes.deal_card(deal.id, user=buyer, db=db)
+
+        assert card["counterpart_online"] is True
+        assert card["counterpart_last_seen_at"] is None
+
+    async def test_offline_counterpart_shows_last_seen(self, db, deal, buyer, seller):
+        seller.last_seen_at = datetime(2026, 10, 7, 9, 30)
+        await db.flush()
+
+        rows = await deal_routes.my_deals(user=buyer, db=db)
+
+        assert rows[0]["counterpart_online"] is False
+        assert rows[0]["counterpart_last_seen_at"] == "2026-10-07T09:30:00.000Z"
+
+    async def test_closed_deal_hides_presence(self, db, deal, buyer, seller, online):
+        """Писать в закрытую сделку нельзя — и следить за собеседником незачем."""
+        online(seller)
+        deal.status = DealStatus.RELEASED
+        deal.chat_closed = True
+        await db.flush()
+
+        card = await deal_routes.deal_card(deal.id, user=buyer, db=db)
+
+        assert card["counterpart_online"] is None
+        assert card["counterpart_last_seen_at"] is None
+
+    async def test_minimized_app_goes_offline_for_counterpart(
+        self, db, deal, buyer, seller, online, quiet_sockets
+    ):
+        """Свёрнутый мини-апп держит соединение, но человек на экран не смотрит."""
+        from utils.websockets import manager
+
+        socket = online(seller)
+        manager.set_active(socket, False)
+        await chat.presence_changed(str(seller.id), True, db=db)
+
+        assert manager.is_online(str(seller.id)) is False
+        assert seller.last_seen_at is not None
+        event, target = quiet_sockets.await_args.args
+        assert target == str(buyer.id)
+        assert event["type"] == "deal_presence"
+        assert event["deal_id"] == str(deal.id)
+        assert event["online"] is False
+        assert event["last_seen_at"] is not None
+
+    async def test_second_device_does_not_repeat_announcement(
+        self, db, deal, seller, online, quiet_sockets
+    ):
+        online(seller)
+        online(seller)
+        await chat.presence_changed(str(seller.id), True, db=db)
+
+        quiet_sockets.assert_not_called()
+
+
 class TestNotifications:
 
     async def _run(self, db):

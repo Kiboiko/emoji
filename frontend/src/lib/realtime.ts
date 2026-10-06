@@ -13,6 +13,8 @@
  * в оборванный сокет, не повторяет.
  */
 
+import { isAppActive, onAppActiveChange } from './appActive';
+
 type Listener = (message: any) => void;
 
 const WS_URL = import.meta.env.VITE_WS_URL
@@ -41,6 +43,9 @@ function open() {
     ws.onopen = () => {
         const recovered = attempts > 0;
         attempts = 0;
+        // Сервер по умолчанию считает новое соединение «в сети» — а оно
+        // могло подняться и в свёрнутом приложении
+        sendPresence(isAppActive());
         if (recovered) reconnectListeners.forEach((fn) => fn());
     };
 
@@ -75,10 +80,18 @@ function scheduleRetry() {
     retryTimer = setTimeout(open, delay);
 }
 
-// Вернулись в приложение — переподключаемся сразу, не дожидаясь паузы:
-// в фоне телефон рвёт соединения, а ждать до полуминуты незачем
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible' || !token) return;
+function sendPresence(active: boolean) {
+    if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'presence', active }));
+    }
+}
+
+onAppActiveChange((active) => {
+    // Собеседник в чате сделки видит «в сети» или «был(а) в сети»
+    sendPresence(active);
+    // Вернулись в приложение — переподключаемся сразу, не дожидаясь паузы:
+    // в фоне телефон рвёт соединения, а ждать до полуминуты незачем
+    if (!active || !token) return;
     if (!socket || socket.readyState === WebSocket.CLOSED) {
         attempts = Math.max(attempts, 1);
         open();

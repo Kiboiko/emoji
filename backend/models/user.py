@@ -37,7 +37,11 @@ class User(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
+    # Когда человек последний раз открыл или свернул приложение — «был(а) в
+    # сети» в чате сделки. «В сети» сейчас знает менеджер сокетов, а не база
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     # Relationships
     referrer: Mapped["User | None"] = relationship(
         "User",

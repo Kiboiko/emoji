@@ -407,6 +407,20 @@ def _last_dto(message: DealMessage | None, role: str) -> dict | None:
     }
 
 
+def _presence(deal: Deal, counterpart: User | None) -> tuple[bool | None, str | None]:
+    """
+    В сети ли собеседник, а если нет — когда был.
+
+    Только пока переписка открыта: писать в закрытую сделку нельзя, и
+    следить, когда бывший покупатель заходит в приложение, продавцу незачем.
+    """
+    if counterpart is None or not is_open(deal):
+        return None, None
+    if manager.is_online(str(counterpart.id)):
+        return True, None
+    return False, iso(counterpart.last_seen_at)
+
+
 def deal_dto(
     deal: Deal,
     role: str,
@@ -416,7 +430,9 @@ def deal_dto(
     unread: int = 0,
     last: DealMessage | None = None,
     reviewed: bool = False,
+    counterpart: User | None = None,
 ) -> dict:
+    online, last_seen = _presence(deal, counterpart)
     return {
         "id": str(deal.id),
         "number": deal.number,
@@ -454,8 +470,14 @@ def deal_dto(
         "last_message": _last_dto(last, role),
         "last_activity_at": iso(deal.last_message_at or deal.created_at),
         "counterpart_read_at": iso(read_at(deal, other(role))),
+        "counterpart_online": online,
+        "counterpart_last_seen_at": last_seen,
         "created_at": iso(deal.created_at),
     }
+
+
+def _counterpart_id(deal: Deal, user: User) -> uuid.UUID:
+    return deal.seller_id if user.id == deal.buyer_id else deal.buyer_id
 
 
 async def deal_dtos(
@@ -464,6 +486,11 @@ async def deal_dtos(
     stores, images = await _context(db, deals)
     unread = await unread_counts(db, user)
     latest = await _latest_messages(db, [d.id for d in deals])
+    other_ids = {_counterpart_id(d, user) for d in deals if is_open(d)}
+    others = {
+        u.id: u
+        for u in (await db.execute(select(User).where(User.id.in_(other_ids)))).scalars().all()
+    } if other_ids else {}
     return [
         deal_dto(
             d, role_of(d, user),
@@ -472,6 +499,7 @@ async def deal_dtos(
             unread=unread.get(d.id, 0),
             last=latest.get(d.id),
             reviewed=d.id in reviewed,
+            counterpart=others.get(_counterpart_id(d, user)),
         )
         for d in deals
     ]
@@ -488,6 +516,7 @@ async def _dto_for_role(db: AsyncSession, deal: Deal, role: str) -> dict:
         image=images.get(deal.order_item_id),
         unread=unread,
         last=latest.get(deal.id),
+        counterpart=await db.get(User, party_id(deal, other(role))),
     )
 
 
@@ -568,6 +597,55 @@ async def relay_typing(user_id: str, deal_id: str) -> None:
     await manager.send_personal_message(
         {"type": "deal_typing", "deal_id": deal_id}, str(target),
     )
+
+
+async def presence_changed(user_id: str, was_online: bool, db: AsyncSession | None = None) -> None:
+    """
+    Человек открыл или свернул приложение — собеседникам по открытым сделкам.
+
+    Вызывается после каждого изменения соединений пользователя; если «в сети»
+    от этого не поменялось (второе устройство, повторный сигнал), молчит.
+    Время пишется и при входе, и при выходе: если сервер перезапустится, не
+    успев записать выход, «был(а) в сети» покажет хотя бы время входа.
+    """
+    online = manager.is_online(user_id)
+    if online == was_online:
+        return
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except (ValueError, TypeError):
+        return
+
+    now = utcnow()
+    if db is None:
+        from database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as session:
+            deals = await _touch_last_seen(session, user_uuid, now)
+    else:
+        deals = await _touch_last_seen(db, user_uuid, now)
+
+    for deal in deals:
+        target = deal.seller_id if deal.buyer_id == user_uuid else deal.buyer_id
+        await manager.send_personal_message(
+            {
+                "type": "deal_presence",
+                "deal_id": str(deal.id),
+                "online": online,
+                "last_seen_at": None if online else iso(now),
+            },
+            str(target),
+        )
+
+
+async def _touch_last_seen(db: AsyncSession, user_id: uuid.UUID, now: datetime) -> list[Deal]:
+    user = await db.get(User, user_id)
+    if user is None:
+        return []
+    user.last_seen_at = now
+    deals = await open_deals_for(db, user)
+    await db.commit()
+    return list(deals)
 
 
 # ---------------------------------------------------------------------------
