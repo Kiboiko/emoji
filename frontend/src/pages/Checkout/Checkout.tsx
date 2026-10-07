@@ -9,6 +9,7 @@ import { useToastStore } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { useTonPayment } from '@/hooks/useTonPayment';
 import { formatTon } from '@/lib/ton';
+import { GramIcon } from '@/components/Gram/Gram';
 import { TermsGate } from '@/components/TermsGate/TermsGate';
 import './Checkout.css';
 
@@ -148,7 +149,7 @@ export const Checkout: React.FC = () => {
                     {request && (
                         <div className="rate-note">
                             {t('Курс зафиксирован: ', 'Rate locked: ')}
-                            1 TON = ${request.rate_usd_per_ton}
+                            1 <GramIcon title="TON" /> = ${request.rate_usd_per_ton}
                         </div>
                     )}
                 </div>
@@ -163,8 +164,8 @@ export const Checkout: React.FC = () => {
 
                     {request && (
                         <div className="total-row total-row-secondary">
-                            <span>{t('В TON', 'In TON')}</span>
-                            <span>{formatTon(request.amount_ton)} TON</span>
+                            <span>{t('К оплате кошельком', 'Wallet payment')}</span>
+                            <span>{formatTon(request.amount_ton)} <GramIcon title="TON" /></span>
                         </div>
                     )}
 

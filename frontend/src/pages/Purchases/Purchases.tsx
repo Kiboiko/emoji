@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useDealsStore } from '@/store/dealsStore';
 import { errorText } from '@/store/toastStore';
 import { formatTon } from '@/lib/ton';
+import { GramIcon } from '@/components/Gram/Gram';
 import { fmtDate, isFinished, statusLabel, statusTone } from '@/components/DealChat/dealFormat';
 import type { Deal, Order } from '@/types';
 import './Purchases.css';
@@ -24,7 +25,8 @@ interface Row {
     chip: { label: string; tone: string };
     hint: { text: string; warn?: boolean } | null;
     date: string;
-    amount: string;
+    /** TON — со знаком валюты, покупки у площадки — в долларах */
+    amount: React.ReactNode;
     struck?: boolean;
     group: Group;
 }
@@ -70,7 +72,7 @@ function dealRow(deal: Deal, language: string, t: T): Row {
         chip: { label: statusLabel(deal.status, t), tone: statusTone(deal.status) },
         hint,
         date: deal.last_activity_at || deal.created_at,
-        amount: `${formatTon(amount)} TON`,
+        amount: <>{formatTon(amount)} <GramIcon title="TON" /></>,
         struck: deal.status === 'refunded' || deal.status === 'cancelled',
         group,
     };

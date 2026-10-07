@@ -9,6 +9,7 @@ import {
     author, listTime, statusLabel, statusTone,
 } from '@/components/DealChat/dealFormat';
 import { systemText } from '@/components/DealChat/MessageList';
+import { withGram } from '@/components/Gram/Gram';
 import './MyDeals.css';
 
 /**
@@ -88,7 +89,7 @@ export const MyDeals: React.FC<{
                 {last.from !== 'system' && (
                     <span className="mydeals-who">{author(deal, last.from, t)}: </span>
                 )}
-                {text}
+                {withGram(text)}
             </span>
         );
     };

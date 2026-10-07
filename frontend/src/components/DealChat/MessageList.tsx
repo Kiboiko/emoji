@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import type { DealMessage } from '@/types';
 import { dayLabel, fmtTime, sameDay, splitCode } from './dealFormat';
+import { withGram } from '@/components/Gram/Gram';
 
 /** Сообщение в ленте: с сервера или своё, ещё не дошедшее до него */
 export interface ChatMessage extends DealMessage {
@@ -85,7 +86,7 @@ export const MessageList: React.FC<{
                 <div key={key} className={`dchat-sys ${message.kind ?? ''}`}>
                     {SYSTEM_ICON[message.kind ?? ''] ?? <ShieldCheck size={15} />}
                     <span>
-                        {systemText(message, language)} <span className="dchat-sys-time">{time}</span>
+                        {withGram(systemText(message, language))} <span className="dchat-sys-time">{time}</span>
                     </span>
                 </div>,
             );

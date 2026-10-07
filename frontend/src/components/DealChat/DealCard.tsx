@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, Clock, Package, RotateCcw, ShieldCheck } from 'lucide-react';
 import type { Deal } from '@/types';
 import { dealSteps, fmtDate, isFinished, statusLabel, statusTone, ton } from './dealFormat';
+import { withGram } from '@/components/Gram/Gram';
 
 type T = (ru: string, en: string) => string;
 
@@ -145,7 +146,7 @@ export const DealCard: React.FC<{
                 </span>
                 <span className="dchat-deal-info">
                     <span className="dchat-deal-name">{deal.product_name}</span>
-                    <span className="dchat-deal-sub">{sub}</span>
+                    <span className="dchat-deal-sub">{withGram(sub)}</span>
                 </span>
                 <span className="dchat-deal-side">
                     <span className={`dchat-chip ${statusTone(deal.status)}`}>{statusLabel(deal.status, t)}</span>
@@ -174,7 +175,7 @@ export const DealCard: React.FC<{
                     </div>
                     <div className="dchat-note">
                         {deal.status === 'disputed' ? <AlertTriangle size={15} /> : <ShieldCheck size={15} />}
-                        <span>{note}</span>
+                        <span>{withGram(note)}</span>
                     </div>
                 </>
             )}

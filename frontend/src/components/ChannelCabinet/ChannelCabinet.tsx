@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatTon } from '@/lib/ton';
+import { GramIcon } from '@/components/Gram/Gram';
 import {
     Radio, Plus, Send, ShieldCheck, ShieldAlert, RefreshCw, Image as ImageIcon,
     ChevronDown, ChevronUp, Check, Wallet, Pencil, Trash2, EyeOff, BadgeCheck, X,
@@ -148,14 +149,14 @@ const AuthorPayout: React.FC<{ language: string }> = ({ language }) => {
     return (
         <div className="channel-payout">
             <div className="channel-payout-row">
-                <span className="channel-payout-label">{t('Баланс, TON', 'Balance, TON')}</span>
-                <span className="channel-payout-value">{formatTon(available)}</span>
+                <span className="channel-payout-label">{t('Баланс', 'Balance')}</span>
+                <span className="channel-payout-value">{formatTon(available)} <GramIcon title="TON" /></span>
             </div>
 
             {hold > 0 && (
                 <span className="channel-note">
                     {t('Выводится: ', 'Being withdrawn: ')}
-                    {formatTon(hold / 1e9)} TON
+                    {formatTon(hold / 1e9)} <GramIcon title="TON" />
                 </span>
             )}
 

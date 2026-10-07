@@ -9,6 +9,7 @@ import { useDealsStore } from '@/store/dealsStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { formatTon } from '@/lib/ton';
+import { GramIcon, withGram } from '@/components/Gram/Gram';
 import type { Deal } from '@/types';
 import { DealReview } from '@/components/DealChat/DealReview';
 import { DealSheet, type SheetKind } from '@/components/DealChat/DealSheet';
@@ -185,7 +186,7 @@ export const DealPage: React.FC = () => {
                     </div>
                     <h1>{name}</h1>
                     <div className={`dpage-price${deal.status === 'refunded' ? ' struck' : ''}`}>
-                        {formatTon(amount)} TON
+                        {formatTon(amount)} <GramIcon title="TON" />
                         {details && details.quantity > 1 && <span> · {details.quantity} {t('шт.', 'pcs')}</span>}
                     </div>
                 </div>
@@ -230,7 +231,7 @@ export const DealPage: React.FC = () => {
                     </div>
                     <div className="dpage-note">
                         {deal.status === 'disputed' ? <AlertTriangle size={16} /> : <ShieldCheck size={16} />}
-                        <span>{note}</span>
+                        <span>{withGram(note)}</span>
                     </div>
                 </div>
 
@@ -248,7 +249,7 @@ export const DealPage: React.FC = () => {
                     </div>
                     <div>
                         <span>{buyer ? t('Вы заплатили', 'You paid') : t('Вы получите', 'You get')}</span>
-                        <strong>{formatTon(amount)} TON</strong>
+                        <strong>{formatTon(amount)} <GramIcon title="TON" /></strong>
                     </div>
                 </div>
 

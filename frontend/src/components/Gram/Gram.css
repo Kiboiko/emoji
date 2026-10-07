@@ -1,0 +1,6 @@
+/* Знак валюты в строке текста: по высоте букв, чуть ниже средней линии */
+.gram-icon {
+    display: inline-block;
+    flex: none;
+    vertical-align: -0.12em;
+}

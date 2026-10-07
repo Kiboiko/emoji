@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { formatTon } from '@/lib/ton';
+import { GramIcon } from '@/components/Gram/Gram';
 import type { Listing, SellerProfile } from '@/types';
 import { ListingsList } from './ListingsList';
 import './SellerCabinet.css';
@@ -351,8 +352,10 @@ const SellerSummary: React.FC<{
                     <span className="seller-stat-label">{t('Сделок', 'Deals')}</span>
                 </div>
                 <div className="seller-stat">
-                    <span className="seller-stat-value">{formatTon(profile.balance_ton ?? '0')}</span>
-                    <span className="seller-stat-label">{t('TON заработано', 'TON earned')}</span>
+                    <span className="seller-stat-value">
+                        {formatTon(profile.balance_ton ?? '0')} <GramIcon title="TON" />
+                    </span>
+                    <span className="seller-stat-label">{t('Заработано', 'Earned')}</span>
                 </div>
             </div>
 

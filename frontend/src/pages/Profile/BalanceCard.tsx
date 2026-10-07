@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { ton } from '@/components/DealChat/dealFormat';
+import { GramIcon, withGram } from '@/components/Gram/Gram';
 import type { MyWithdrawal } from '@/types';
 
 /**
@@ -74,7 +75,8 @@ export const BalanceCard: React.FC = () => {
             return;
         }
         if (value < Number(minimum)) {
-            showToast(t(`Минимальная сумма вывода — ${minimum} TON`, `Minimum withdrawal is ${minimum} TON`), 'error');
+            // Во всплывашке значок не нарисовать — сумму там не называем
+            showToast(t('Сумма меньше минимальной для вывода', 'The amount is below the withdrawal minimum'), 'error');
             return;
         }
         if (!address) return;
@@ -141,23 +143,22 @@ export const BalanceCard: React.FC = () => {
             ) : available === null ? (
                 <div className="skeleton refwallet-skeleton" />
             ) : (
+                // Валюту показывает знак перед суммой — слово «TON» после
+                // неё заказчик попросил убрать
                 <div className="refwallet-amount balance-amount">
-                    <span className="balance-ton-mark" aria-hidden="true">
-                        <svg width="22" height="22" viewBox="0 0 56 56" fill="currentColor">
-                            <path d="M37.58 15.4H18.42c-3.52 0-5.75 3.8-3.98 6.87l11.82 20.49c.77 1.34 2.7 1.34 3.47 0l11.83-20.49c1.76-3.06-.47-6.87-3.98-6.87zM26.25 36.62l-2.57-4.98-6.21-11.1c-.41-.71.1-1.62.95-1.62h7.82v17.7zm12.28-16.09l-6.2 11.1-2.58 4.98V18.91h7.83c.85 0 1.36.91.95 1.62z" />
-                        </svg>
+                    <span className="balance-ton-mark">
+                        <GramIcon size={24} title="TON" />
                     </span>
                     {ton(available)}
-                    <span className="refwallet-currency">TON</span>
                 </div>
             )}
 
             {holdNano > 0 && (
                 <div className="refwallet-note">
-                    {t(
+                    {withGram(t(
                         `${ton(String(holdNano / 1e9))} TON выводится`,
                         `${ton(String(holdNano / 1e9))} TON being withdrawn`,
-                    )}
+                    ))}
                 </div>
             )}
 
@@ -166,7 +167,7 @@ export const BalanceCard: React.FC = () => {
                 {t('Вывести', 'Withdraw')}
             </button>
             <div className="refwallet-note balance-min">
-                {t(`Минимальная сумма — ${minimum} TON`, `Minimum — ${minimum} TON`)}
+                {withGram(t(`Минимальная сумма — ${minimum} TON`, `Minimum — ${minimum} TON`))}
             </div>
 
             {history.length > 0 && (
@@ -174,7 +175,7 @@ export const BalanceCard: React.FC = () => {
                     {history.map((w) => (
                         <li key={w.id}>
                             <span className="balance-history-main">
-                                <span className="balance-history-amount">{ton(String(w.amount))} TON</span>
+                                <span className="balance-history-amount">{ton(String(w.amount))} <GramIcon /></span>
                                 <span className="balance-history-date">
                                     {new Date(w.created_at).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
                                         day: 'numeric', month: 'short',
@@ -219,11 +220,11 @@ export const BalanceCard: React.FC = () => {
                                             className="withdraw-input"
                                             required
                                         />
-                                        <span className="withdraw-currency">TON</span>
+                                        <span className="withdraw-currency"><GramIcon size={18} title="TON" /></span>
                                     </div>
                                     <div className="available-balance-hint">
                                         {t('Доступно:', 'Available:')}
-                                        <span>{ton(available ?? '0')} TON</span>
+                                        <span>{ton(available ?? '0')} <GramIcon /></span>
                                     </div>
                                 </div>
 
@@ -247,10 +248,10 @@ export const BalanceCard: React.FC = () => {
                                 </div>
 
                                 <p className="balance-terms">
-                                    {t(
+                                    {withGram(t(
                                         `Комиссию сети платит площадка: придёт ровно указанная сумма. Выплату проводит администратор, минимум — ${minimum} TON.`,
                                         `The marketplace pays the network fee: you receive exactly this amount. Payouts are processed by an administrator, minimum ${minimum} TON.`,
-                                    )}
+                                    ))}
                                 </p>
 
                                 <button type="submit" className="btn-submit-withdraw" disabled={sending || !address}>

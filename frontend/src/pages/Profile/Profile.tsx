@@ -8,6 +8,7 @@ import { PaymentWallet } from '@/components/PaymentWallet/PaymentWallet';
 import { CabinetNav, type CabinetLink } from '@/components/CabinetNav/CabinetNav';
 import { AppSettings } from '@/components/AppSettings/AppSettings';
 import { ton } from '@/components/DealChat/dealFormat';
+import { withGram } from '@/components/Gram/Gram';
 import type { ReferralStats, ProfileSummary } from '@/types';
 import { BalanceCard } from './BalanceCard';
 import './Profile.css';
@@ -141,7 +142,7 @@ export const Profile: React.FC = () => {
                             {/* Заработанное на рефералах лежит на общем балансе
                                 выше; здесь — сколько всего принесла ссылка */}
                             {earned && earned !== '0'
-                                ? t(`заработано ${earned} TON`, `earned ${earned} TON`)
+                                ? withGram(t(`заработано ${earned} TON`, `earned ${earned} TON`))
                                 : t('копируйте и делитесь', 'copy and share')}
                         </span>
                     </div>

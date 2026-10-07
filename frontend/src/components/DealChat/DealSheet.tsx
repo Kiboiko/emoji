@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Deal } from '@/types';
 import { ton } from './dealFormat';
+import { withGram } from '@/components/Gram/Gram';
 
 type T = (ru: string, en: string) => string;
 
@@ -51,10 +52,10 @@ export const DealSheet: React.FC<{
                     <span className="dchat-grab" />
                     <h3>{t('Вернуть деньги покупателю?', 'Refund the buyer?')}</h3>
                     <p>
-                        {t(
+                        {withGram(t(
                             `Все ${ton(deal.amount_ton)} TON сразу вернутся на баланс покупателя, сделка закроется. Отменить возврат будет нельзя.`,
                             `All ${ton(deal.amount_ton)} TON go straight back to the buyer's balance and the deal closes. The refund cannot be undone.`,
-                        )}
+                        ))}
                     </p>
                     <p>
                         {t(
@@ -76,10 +77,10 @@ export const DealSheet: React.FC<{
                     <span className="dchat-grab" />
                     <h3>{t('Подтвердить получение?', 'Confirm receipt?')}</h3>
                     <p>
-                        {t(
+                        {withGram(t(
                             `${ton(deal.amount_ton)} TON уйдут продавцу «${store}». После этого вернуть деньги или открыть спор будет нельзя.`,
                             `${ton(deal.amount_ton)} TON will go to “${store}”. After that you cannot get a refund or open a dispute.`,
-                        )}
+                        ))}
                     </p>
                     <div className="dchat-sheet-actions">
                         <button type="button" className="dchat-btn primary" onClick={onConfirm} disabled={busy}>
