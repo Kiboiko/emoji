@@ -206,7 +206,7 @@ async def test_minimum_withdrawal_comes_from_settings(db, funded):
 
     with pytest.raises(HTTPException) as exc:
         await _request(db, seller, "1.5", currency="TON")
-    assert "Минимальная сумма вывода — 2 TON" in exc.value.detail
+    assert "Минимальная сумма вывода — 2 Gram" in exc.value.detail
 
     await _request(db, seller, "2", currency="TON")
 
@@ -257,7 +257,7 @@ async def test_payout_found_on_chain_closes_request(db, funded, admin):
     account = await fin.user_account(db, seller.id, "TON")
     assert account.balance_minor == 2 * 10**9      # 5 − 3 выплачено
     assert account.hold_minor == 0
-    assert "Средства выведены: 3 TON" in told.await_args.args[1]
+    assert "Средства выведены: 3 Gram" in told.await_args.args[1]
 
 
 async def test_payout_waits_until_transfer_appears(db, funded, admin):

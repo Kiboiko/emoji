@@ -147,7 +147,7 @@ export const BalanceCard: React.FC = () => {
                 // неё заказчик попросил убрать
                 <div className="refwallet-amount balance-amount">
                     <span className="balance-ton-mark">
-                        <GramIcon size={24} title="TON" />
+                        <GramIcon size={24} title="Gram" />
                     </span>
                     {ton(available)}
                 </div>
@@ -156,8 +156,8 @@ export const BalanceCard: React.FC = () => {
             {holdNano > 0 && (
                 <div className="refwallet-note">
                     {withGram(t(
-                        `${ton(String(holdNano / 1e9))} TON выводится`,
-                        `${ton(String(holdNano / 1e9))} TON being withdrawn`,
+                        `${ton(String(holdNano / 1e9))} Gram выводится`,
+                        `${ton(String(holdNano / 1e9))} Gram being withdrawn`,
                     ))}
                 </div>
             )}
@@ -167,7 +167,7 @@ export const BalanceCard: React.FC = () => {
                 {t('Вывести', 'Withdraw')}
             </button>
             <div className="refwallet-note balance-min">
-                {withGram(t(`Минимальная сумма — ${minimum} TON`, `Minimum — ${minimum} TON`))}
+                {withGram(t(`Минимальная сумма — ${minimum} Gram`, `Minimum — ${minimum} Gram`))}
             </div>
 
             {history.length > 0 && (
@@ -220,7 +220,7 @@ export const BalanceCard: React.FC = () => {
                                             className="withdraw-input"
                                             required
                                         />
-                                        <span className="withdraw-currency"><GramIcon size={18} title="TON" /></span>
+                                        <span className="withdraw-currency"><GramIcon size={18} title="Gram" /></span>
                                     </div>
                                     <div className="available-balance-hint">
                                         {t('Доступно:', 'Available:')}
@@ -249,8 +249,8 @@ export const BalanceCard: React.FC = () => {
 
                                 <p className="balance-terms">
                                     {withGram(t(
-                                        `Комиссию сети платит площадка: придёт ровно указанная сумма. Выплату проводит администратор, минимум — ${minimum} TON.`,
-                                        `The marketplace pays the network fee: you receive exactly this amount. Payouts are processed by an administrator, minimum ${minimum} TON.`,
+                                        `Комиссию сети платит площадка: придёт ровно указанная сумма. Выплату проводит администратор, минимум — ${minimum} Gram.`,
+                                        `The marketplace pays the network fee: you receive exactly this amount. Payouts are processed by an administrator, minimum ${minimum} Gram.`,
                                     ))}
                                 </p>
 

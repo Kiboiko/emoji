@@ -5,6 +5,7 @@ import { DataTable, type Column } from '../components/ui/DataTable';
 import { Pagination } from '../components/ui/Pagination';
 import { Badge, StatusBadge } from '../components/ui/Badge';
 import { useToast, errorText } from '../components/ui/Toast';
+import { currencyLabel } from '../lib/currency';
 
 const LIMIT = 25;
 
@@ -247,7 +248,7 @@ const UserCard: React.FC<{ userId: string; onClose: () => void }> = ({ userId, o
                                     {data.accounts.map((a: any) => (
                                         <Field
                                             key={a.currency}
-                                            label={a.currency}
+                                            label={currencyLabel(a.currency)}
                                             value={`${a.balance}${Number(a.hold) ? ` (заморожено ${a.hold})` : ''}`}
                                         />
                                     ))}

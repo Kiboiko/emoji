@@ -150,13 +150,13 @@ const AuthorPayout: React.FC<{ language: string }> = ({ language }) => {
         <div className="channel-payout">
             <div className="channel-payout-row">
                 <span className="channel-payout-label">{t('Баланс', 'Balance')}</span>
-                <span className="channel-payout-value">{formatTon(available)} <GramIcon title="TON" /></span>
+                <span className="channel-payout-value">{formatTon(available)} <GramIcon title="Gram" /></span>
             </div>
 
             {hold > 0 && (
                 <span className="channel-note">
                     {t('Выводится: ', 'Being withdrawn: ')}
-                    {formatTon(hold / 1e9)} <GramIcon title="TON" />
+                    {formatTon(hold / 1e9)} <GramIcon title="Gram" />
                 </span>
             )}
 

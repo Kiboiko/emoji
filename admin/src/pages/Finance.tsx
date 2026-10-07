@@ -5,6 +5,7 @@ import { DataTable, type Column } from '../components/ui/DataTable';
 import { Pagination } from '../components/ui/Pagination';
 import { Badge } from '../components/ui/Badge';
 import { useToast, errorText } from '../components/ui/Toast';
+import { currencyLabel } from '../lib/currency';
 
 const LIMIT = 50;
 
@@ -131,7 +132,7 @@ const AccountsTab: React.FC<{ onOpenLedger: (id: string) => void }> = ({ onOpenL
                 </div>
             ),
         },
-        { key: 'currency', title: 'Валюта' },
+        { key: 'currency', title: 'Валюта', render: (a) => currencyLabel(a.currency) },
         {
             key: 'balance',
             title: 'Баланс',
@@ -174,7 +175,7 @@ const AccountsTab: React.FC<{ onOpenLedger: (id: string) => void }> = ({ onOpenL
                     className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm"
                 >
                     <option value="">Все валюты</option>
-                    <option value="TON">TON</option>
+                    <option value="TON">Gram</option>
                     <option value="USD">USD</option>
                 </select>
 
@@ -281,7 +282,7 @@ const LedgerTab: React.FC<{
                 <span className={`font-medium whitespace-nowrap ${
                     e.amount_minor < 0 ? 'text-red-400' : 'text-green-400'
                 }`}>
-                    {e.amount_minor > 0 ? '+' : ''}{e.amount} {e.currency}
+                    {e.amount_minor > 0 ? '+' : ''}{e.amount} {currencyLabel(e.currency)}
                 </span>
             ),
         },

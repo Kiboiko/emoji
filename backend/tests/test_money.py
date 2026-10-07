@@ -102,9 +102,9 @@ class TestPercentHelpers:
 
     def test_short_ton_for_people(self):
         """В сообщениях людям — без хвоста из девяти знаков."""
-        assert format_ton_short(6_535_948) == "0.0065 TON"
-        assert format_ton_short(61_783_440) == "0.0618 TON"
-        assert format_ton_short(14_553_000_000) == "14.55 TON"
-        assert format_ton_short(100_000_000_000) == "100 TON"
-        assert format_ton_short(12_300) == "0.000012 TON"     # мелочь не в ноль
-        assert format_ton_short(0) == "0 TON"
+        assert format_ton_short(6_535_948) == "0.0065 Gram"
+        assert format_ton_short(61_783_440) == "0.0618 Gram"
+        assert format_ton_short(14_553_000_000) == "14.55 Gram"
+        assert format_ton_short(100_000_000_000) == "100 Gram"
+        assert format_ton_short(12_300) == "0.000012 Gram"     # мелочь не в ноль
+        assert format_ton_short(0) == "0 Gram"

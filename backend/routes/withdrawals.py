@@ -29,7 +29,7 @@ from models.user import User
 from models.withdrawal import Withdrawal, WithdrawalStatus
 from schemas.withdrawal import WithdrawalCreate, WithdrawalResponse, WithdrawalUpdate
 from services import finance_service, settings_service, ton_address, withdrawal_service
-from services.money import from_minor, to_minor
+from services.money import TON_LABEL, from_minor, to_minor
 from services.telegram_service import telegram_service
 from utils.auth import get_current_user, require_admin
 
@@ -110,12 +110,12 @@ async def request_withdrawal(
     if currency == "TON":
         # Ошибка в адресе — деньги, ушедшие в никуда: проверяем до заморозки
         if not ton_address.is_valid(wallet):
-            raise HTTPException(status_code=400, detail="Адрес кошелька TON записан неверно")
+            raise HTTPException(status_code=400, detail="Адрес кошелька записан неверно")
         min_nano = await settings_service.get_int(db, "payout_min_ton_nano")
         if amount_minor < min_nano:
             raise HTTPException(
                 status_code=400,
-                detail=f"Минимальная сумма вывода — {from_minor(min_nano, 'TON')} TON",
+                detail=f"Минимальная сумма вывода — {from_minor(min_nano, 'TON')} {TON_LABEL}",
             )
 
     account = await finance_service.user_account(db, user.id, currency)
@@ -124,7 +124,8 @@ async def request_withdrawal(
             status_code=400,
             detail=(
                 f"Недостаточно средств: доступно "
-                f"{from_minor(account.available_minor, currency)} {currency}"
+                f"{from_minor(account.available_minor, currency)} "
+                f"{TON_LABEL if currency == 'TON' else currency}"
             ),
         )
 
@@ -261,7 +262,7 @@ async def prepare_payout(
     """
     w = await _get(db, withdrawal_id)
     if (w.currency or WITHDRAWAL_CURRENCY) != "TON":
-        raise HTTPException(status_code=400, detail="Через кошелёк выплачиваются только заявки в TON")
+        raise HTTPException(status_code=400, detail=f"Через кошелёк выплачиваются только заявки в {TON_LABEL}")
     if w.status != WithdrawalStatus.PENDING:
         raise HTTPException(status_code=400, detail="Заявка уже выплачивается или закрыта")
 

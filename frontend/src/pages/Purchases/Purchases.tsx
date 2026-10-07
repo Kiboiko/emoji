@@ -72,7 +72,7 @@ function dealRow(deal: Deal, language: string, t: T): Row {
         chip: { label: statusLabel(deal.status, t), tone: statusTone(deal.status) },
         hint,
         date: deal.last_activity_at || deal.created_at,
-        amount: <>{formatTon(amount)} <GramIcon title="TON" /></>,
+        amount: <>{formatTon(amount)} <GramIcon title="Gram" /></>,
         struck: deal.status === 'refunded' || deal.status === 'cancelled',
         group,
     };

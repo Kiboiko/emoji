@@ -121,7 +121,7 @@ export const DealPage: React.FC = () => {
             : finished
                 ? (buyer
                     ? t('Сделка завершена, деньги переведены продавцу.', 'The deal is complete, the seller has been paid.')
-                    : t(`${formatTon(deal.seller_amount_ton)} TON начислены на ваш баланс.`, `${formatTon(deal.seller_amount_ton)} TON added to your balance.`))
+                    : t(`${formatTon(deal.seller_amount_ton)} Gram начислены на ваш баланс.`, `${formatTon(deal.seller_amount_ton)} Gram added to your balance.`))
                 : (buyer
                     ? t('Деньги у площадки. Продавец получит их, когда вы подтвердите получение.', 'The platform holds the money until you confirm receipt.')
                     : t('Деньги у площадки. Вы получите их, когда покупатель подтвердит получение.', 'The platform holds the money until the buyer confirms receipt.'));
@@ -186,7 +186,7 @@ export const DealPage: React.FC = () => {
                     </div>
                     <h1>{name}</h1>
                     <div className={`dpage-price${deal.status === 'refunded' ? ' struck' : ''}`}>
-                        {formatTon(amount)} <GramIcon title="TON" />
+                        {formatTon(amount)} <GramIcon title="Gram" />
                         {details && details.quantity > 1 && <span> · {details.quantity} {t('шт.', 'pcs')}</span>}
                     </div>
                 </div>
@@ -249,7 +249,7 @@ export const DealPage: React.FC = () => {
                     </div>
                     <div>
                         <span>{buyer ? t('Вы заплатили', 'You paid') : t('Вы получите', 'You get')}</span>
-                        <strong>{formatTon(amount)} <GramIcon title="TON" /></strong>
+                        <strong>{formatTon(amount)} <GramIcon title="Gram" /></strong>
                     </div>
                 </div>
 

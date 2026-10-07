@@ -142,7 +142,7 @@ export const Profile: React.FC = () => {
                             {/* Заработанное на рефералах лежит на общем балансе
                                 выше; здесь — сколько всего принесла ссылка */}
                             {earned && earned !== '0'
-                                ? withGram(t(`заработано ${earned} TON`, `earned ${earned} TON`))
+                                ? withGram(t(`заработано ${earned} Gram`, `earned ${earned} Gram`))
                                 : t('копируйте и делитесь', 'copy and share')}
                         </span>
                     </div>

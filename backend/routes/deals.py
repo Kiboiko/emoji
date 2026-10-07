@@ -26,7 +26,7 @@ from models.p2p import Deal, DealMessage
 from models.user import User
 from services import deal_chat_service as chat
 from services import deal_media, deal_service, stock_service
-from services.money import from_minor
+from services.money import format_ton_short
 from utils.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -412,7 +412,7 @@ async def open_dispute(
                 chat_id,
                 f"Открыт спор по сделке #{deal.number}\n"
                 f"Товар: {deal.product_name}\n"
-                f"Сумма: {from_minor(deal.amount_nano, 'TON')} TON\n"
+                f"Сумма: {format_ton_short(deal.amount_nano)}\n"
                 f"Причина: {reason[:300]}",
                 parse_mode=None,
                 reply_markup=keyboard,

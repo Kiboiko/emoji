@@ -149,7 +149,7 @@ export const Checkout: React.FC = () => {
                     {request && (
                         <div className="rate-note">
                             {t('Курс зафиксирован: ', 'Rate locked: ')}
-                            1 <GramIcon title="TON" /> = ${request.rate_usd_per_ton}
+                            1 <GramIcon title="Gram" /> = ${request.rate_usd_per_ton}
                         </div>
                     )}
                 </div>
@@ -165,7 +165,7 @@ export const Checkout: React.FC = () => {
                     {request && (
                         <div className="total-row total-row-secondary">
                             <span>{t('К оплате кошельком', 'Wallet payment')}</span>
-                            <span>{formatTon(request.amount_ton)} <GramIcon title="TON" /></span>
+                            <span>{formatTon(request.amount_ton)} <GramIcon title="Gram" /></span>
                         </div>
                     )}
 

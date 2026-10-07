@@ -80,7 +80,7 @@ type Unit = { label: string; factor: number; step: string };
 const unitOf = (def: SettingDef): Unit | null => {
     if (def.type !== 'int') return null;
     if (def.key.endsWith('_bp')) return { label: '%', factor: 100, step: '0.01' };
-    if (def.key.endsWith('_nano')) return { label: 'TON', factor: 1e9, step: '0.000000001' };
+    if (def.key.endsWith('_nano')) return { label: 'Gram', factor: 1e9, step: '0.000000001' };
     return null;
 };
 

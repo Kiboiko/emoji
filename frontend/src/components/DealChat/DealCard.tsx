@@ -31,18 +31,18 @@ export const DealCard: React.FC<{
     let sub: string;
     if (deal.status === 'released') {
         sub = buyer
-            ? t(`${amount} TON · переведено продавцу`, `${amount} TON · paid to the seller`)
-            : t(`${sellerAmount} TON · начислено на баланс`, `${sellerAmount} TON · added to your balance`);
+            ? t(`${amount} Gram · переведено продавцу`, `${amount} Gram · paid to the seller`)
+            : t(`${sellerAmount} Gram · начислено на баланс`, `${sellerAmount} Gram · added to your balance`);
     } else if (deal.status === 'refunded') {
         sub = buyer
-            ? t(`${amount} TON · возвращено на баланс`, `${amount} TON · refunded to your balance`)
-            : t(`${sellerAmount} TON · возвращено покупателю`, `${sellerAmount} TON · refunded to the buyer`);
+            ? t(`${amount} Gram · возвращено на баланс`, `${amount} Gram · refunded to your balance`)
+            : t(`${sellerAmount} Gram · возвращено покупателю`, `${sellerAmount} Gram · refunded to the buyer`);
     } else if (deal.status === 'disputed') {
-        sub = t(`${mine} TON · заморожено до решения спора`, `${mine} TON · frozen until the dispute is resolved`);
+        sub = t(`${mine} Gram · заморожено до решения спора`, `${mine} Gram · frozen until the dispute is resolved`);
     } else {
         sub = buyer
-            ? t(`${amount} TON · у площадки до подтверждения`, `${amount} TON · held until you confirm`)
-            : t(`${sellerAmount} TON · придут после подтверждения`, `${sellerAmount} TON · after the buyer confirms`);
+            ? t(`${amount} Gram · у площадки до подтверждения`, `${amount} Gram · held until you confirm`)
+            : t(`${sellerAmount} Gram · придут после подтверждения`, `${sellerAmount} Gram · after the buyer confirms`);
     }
 
     const finished = isFinished(deal);
@@ -63,7 +63,7 @@ export const DealCard: React.FC<{
     } else if (finished) {
         note = buyer
             ? t('Сделка завершена. Переписка остаётся доступной для чтения.', 'The deal is complete. The conversation stays readable.')
-            : t(`${sellerAmount} TON начислены на ваш баланс. Вывести их можно в профиле.`, `${sellerAmount} TON added to your balance. Withdraw it in your profile.`);
+            : t(`${sellerAmount} Gram начислены на ваш баланс. Вывести их можно в профиле.`, `${sellerAmount} Gram added to your balance. Withdraw it in your profile.`);
     } else {
         note = buyer
             ? t(
@@ -71,8 +71,8 @@ export const DealCard: React.FC<{
                 'The platform holds the money. The seller gets it once you confirm receipt. If you do not confirm, the deal closes itself after the deadline.',
             )
             : t(
-                `Покупатель оплатил ${amount} TON, деньги у площадки. После подтверждения вам начислят ${sellerAmount} TON, комиссия площадки ${commissionPercent}%.`,
-                `The buyer paid ${amount} TON, held by the platform. After confirmation you get ${sellerAmount} TON, platform fee ${commissionPercent}%.`,
+                `Покупатель оплатил ${amount} Gram, деньги у площадки. После подтверждения вам начислят ${sellerAmount} Gram, комиссия площадки ${commissionPercent}%.`,
+                `The buyer paid ${amount} Gram, held by the platform. After confirmation you get ${sellerAmount} Gram, platform fee ${commissionPercent}%.`,
             );
     }
 

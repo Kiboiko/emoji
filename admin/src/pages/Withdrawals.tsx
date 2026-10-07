@@ -38,7 +38,7 @@ type Tab = 'pending' | 'completed' | 'rejected';
 const tonText = (nano: string | null | undefined) => {
     if (nano === null || nano === undefined) return '—';
     const value = Number(nano) / 1e9;
-    return `${value.toLocaleString('ru-RU', { maximumFractionDigits: 4 })} TON`;
+    return `${value.toLocaleString('ru-RU', { maximumFractionDigits: 4 })} Gram`;
 };
 
 /** Ячейка с текстовым комментарием — так его видит получатель в кошельке */
@@ -157,7 +157,7 @@ export const Withdrawals: React.FC = () => {
     };
 
     const markPaid = async (w: Withdrawal) => {
-        const amount = `${w.amount} ${w.currency === 'USD' ? 'USDT' : 'TON'}`;
+        const amount = `${w.amount} ${w.currency === 'USD' ? 'USDT' : 'Gram'}`;
         const ok = window.confirm(
             w.status === 'sending'
                 ? `Перевод ${amount} точно дошёл?\n\nЗаявка закроется, человеку придёт сообщение. Отменить нельзя.`
@@ -215,7 +215,7 @@ export const Withdrawals: React.FC = () => {
     const money = (w: Withdrawal) => (w.currency === 'TON'
         // У TON девять знаков — округление до двух показало бы 0.00 вместо
         // реальной суммы
-        ? `${w.amount.toFixed(9).replace(/0+$/, '').replace(/\.$/, '')} TON`
+        ? `${w.amount.toFixed(9).replace(/0+$/, '').replace(/\.$/, '')} Gram`
         : `$${w.amount.toFixed(2)}`);
 
     const actions = (w: Withdrawal) => {

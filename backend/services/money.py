@@ -27,6 +27,10 @@ DECIMALS: Final[dict[str, int]] = {
 
 BP_DENOMINATOR: Final[int] = 10_000  # 100% = 10000 bp
 
+# Как валюта TON называется у людей — в боте, ошибках и админке. Код валюты
+# в базе и API остаётся «TON»; в приложении вместо слова рисуется знак.
+TON_LABEL: Final[str] = "Gram"
+
 
 class UnknownCurrency(ValueError):
     pass
@@ -70,7 +74,7 @@ def format_amount(amount_minor: int, currency: str) -> str:
 
 def format_ton_short(amount_nano: int) -> str:
     """
-    TON для людей: без хвоста из девяти знаков.
+    TON для людей: без хвоста из девяти знаков и под именем Gram.
 
     «0.006535948 TON» в сообщении читается как ошибка, а не как сумма. От
     единицы — два знака после точки, меньше — четыре, совсем мелочь — две
@@ -79,7 +83,7 @@ def format_ton_short(amount_nano: int) -> str:
     """
     value = from_minor(amount_nano, "TON")
     if value == 0:
-        return "0 TON"
+        return f"0 {TON_LABEL}"
     magnitude = abs(value)
     if magnitude >= 1:
         places = 2
@@ -90,7 +94,7 @@ def format_ton_short(amount_nano: int) -> str:
         places = -magnitude.adjusted() + 1
     rounded = value.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
     text = format(rounded.normalize(), "f")
-    return f"{text} TON"
+    return f"{text} {TON_LABEL}"
 
 
 def split_by_bp(amount_minor: int, bp: int) -> tuple[int, int]:

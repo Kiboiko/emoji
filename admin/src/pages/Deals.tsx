@@ -63,7 +63,7 @@ export const Deals: React.FC = () => {
             title: 'Сумма',
             render: (d) => (
                 <div className="whitespace-nowrap">
-                    <div>{d.amount_ton} TON</div>
+                    <div>{d.amount_ton} Gram</div>
                     <div className="text-xs text-gray-500">комиссия {d.commission_ton}</div>
                 </div>
             ),
@@ -210,7 +210,7 @@ const DealDrawer: React.FC<{
                         <>
                             <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-gray-400">
                                 <StatusBadge status={deal.status} />
-                                <span>{deal.amount_ton} TON</span>
+                                <span>{deal.amount_ton} Gram</span>
                                 {deal.store && <span>· магазин «{deal.store}»</span>}
                             </div>
 

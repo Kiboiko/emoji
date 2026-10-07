@@ -53,8 +53,8 @@ export const DealSheet: React.FC<{
                     <h3>{t('Вернуть деньги покупателю?', 'Refund the buyer?')}</h3>
                     <p>
                         {withGram(t(
-                            `Все ${ton(deal.amount_ton)} TON сразу вернутся на баланс покупателя, сделка закроется. Отменить возврат будет нельзя.`,
-                            `All ${ton(deal.amount_ton)} TON go straight back to the buyer's balance and the deal closes. The refund cannot be undone.`,
+                            `Все ${ton(deal.amount_ton)} Gram сразу вернутся на баланс покупателя, сделка закроется. Отменить возврат будет нельзя.`,
+                            `All ${ton(deal.amount_ton)} Gram go straight back to the buyer's balance and the deal closes. The refund cannot be undone.`,
                         ))}
                     </p>
                     <p>
@@ -78,8 +78,8 @@ export const DealSheet: React.FC<{
                     <h3>{t('Подтвердить получение?', 'Confirm receipt?')}</h3>
                     <p>
                         {withGram(t(
-                            `${ton(deal.amount_ton)} TON уйдут продавцу «${store}». После этого вернуть деньги или открыть спор будет нельзя.`,
-                            `${ton(deal.amount_ton)} TON will go to “${store}”. After that you cannot get a refund or open a dispute.`,
+                            `${ton(deal.amount_ton)} Gram уйдут продавцу «${store}». После этого вернуть деньги или открыть спор будет нельзя.`,
+                            `${ton(deal.amount_ton)} Gram will go to “${store}”. After that you cannot get a refund or open a dispute.`,
                         ))}
                     </p>
                     <div className="dchat-sheet-actions">

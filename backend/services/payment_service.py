@@ -21,6 +21,7 @@ from models.finance import LedgerEntryType, LedgerRefType
 from models.order import Order, OrderStatus
 from models.payment import Payment, PaymentStatus
 from services import finance_service, settings_service, ton_service
+from services.money import TON_LABEL
 from services.ton_service import CURRENCY, TransactionRequest
 
 logger = logging.getLogger(__name__)
@@ -319,8 +320,8 @@ async def _handle_underpaid(db: AsyncSession, payment: Payment, tx) -> PaymentSt
             await telegram_service.send_message(
                 chat_id,
                 f"Недоплата по заказу {payment.order_id}\n"
-                f"Ожидали: {payment.amount_nano / 1e9:.9f} TON\n"
-                f"Пришло:  {tx.value_nano / 1e9:.9f} TON\n"
+                f"Ожидали: {payment.amount_nano / 1e9:.9f} {TON_LABEL}\n"
+                f"Пришло:  {tx.value_nano / 1e9:.9f} {TON_LABEL}\n"
                 f"Отправитель: {tx.source}\n"
                 f"Транзакция: {tx.tx_hash}\n\n"
                 f"Товар не выдан, требуется решение",

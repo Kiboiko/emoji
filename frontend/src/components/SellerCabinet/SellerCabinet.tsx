@@ -353,7 +353,7 @@ const SellerSummary: React.FC<{
                 </div>
                 <div className="seller-stat">
                     <span className="seller-stat-value">
-                        {formatTon(profile.balance_ton ?? '0')} <GramIcon title="TON" />
+                        {formatTon(profile.balance_ton ?? '0')} <GramIcon title="Gram" />
                     </span>
                     <span className="seller-stat-label">{t('Заработано', 'Earned')}</span>
                 </div>

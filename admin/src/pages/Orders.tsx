@@ -106,7 +106,7 @@ export const Orders: React.FC = () => {
             render: (o) => (
                 <div className="whitespace-nowrap">
                     <div className="text-white font-medium">${o.total_usdt.toFixed(2)}</div>
-                    {o.total_ton && <div className="text-xs text-gray-500">{o.total_ton} TON</div>}
+                    {o.total_ton && <div className="text-xs text-gray-500">{o.total_ton} Gram</div>}
                 </div>
             ),
         },
@@ -285,11 +285,11 @@ const OrderCard: React.FC<{
                                     <Row label="Комментарий" value={data.payment.comment} mono />
                                     <Row
                                         label="Ожидалось"
-                                        value={`${(Number(data.payment.amount_nano) / 1e9).toFixed(9)} TON`}
+                                        value={`${(Number(data.payment.amount_nano) / 1e9).toFixed(9)} Gram`}
                                     />
                                     <Row
                                         label="Получено"
-                                        value={`${(Number(data.payment.received_nano) / 1e9).toFixed(9)} TON`}
+                                        value={`${(Number(data.payment.received_nano) / 1e9).toFixed(9)} Gram`}
                                     />
                                     {data.payment.tx_hash && (
                                         <Row label="Транзакция" value={data.payment.tx_hash} mono />

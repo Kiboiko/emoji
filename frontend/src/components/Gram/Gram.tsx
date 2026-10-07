@@ -3,9 +3,10 @@ import { formatTon } from '@/lib/ton';
 import './Gram.css';
 
 /**
- * Знак валюты — кристалл с искрой — вместо слова «TON».
+ * Знак валюты — кристалл с искрой — вместо её названия.
  *
- * Заказчик попросил показывать рядом с суммами сам логотип, а не тикер.
+ * Заказчик попросил показывать рядом с суммами сам логотип, а там, где
+ * картинку не вставить (бот, всплывашки, админка), — слово «Gram».
  * Искра вырезана маской, а не нарисована цветом фона: знак стоит и на
  * карточках, и на кнопках, и в пузырях чата — фон везде разный.
  */
@@ -45,22 +46,28 @@ export const GramIcon: React.FC<{ size?: number | string; className?: string; ti
 };
 
 /**
- * Текст, где слово «TON» заменено знаком: «12.5 TON у площадки» →
+ * Текст, где название валюты заменено знаком: «12.5 Gram у площадки» →
  * «12.5 ◆ у площадки». Для готовых фраз из t() и системных сообщений
- * сервера — переписывать каждую фразу в разметку незачем. Заменяется только
- * отдельное слово заглавными: «TonConnect» и прочее не трогается.
+ * сервера — переписывать каждую фразу в разметку незачем. Сервер пишет
+ * «Gram», в старых сообщениях осталось «TON» — знаком становятся оба.
+ * Заменяется только отдельное слово: «TonConnect», «Telegram» не трогаются.
  */
+const CURRENCY_WORD = /\b(?:TON|Gram)\b/;
+
 export function withGram(text: string | null | undefined): React.ReactNode {
     if (!text) return text ?? null;
     // Заодно укорачиваем сумму перед знаком: в старых сообщениях сервера
     // она записана всеми девятью знаками — «0.006535948 TON»
-    const short = text.replace(/(\d+(?:\.\d+)?)(\s*)TON\b/g, (_, n: string, gap: string) => `${formatTon(n)}${gap}TON`);
-    const parts = short.split(/\bTON\b/);
+    const short = text.replace(
+        /(\d+(?:\.\d+)?)(\s*)(TON|Gram)\b/g,
+        (_, n: string, gap: string, word: string) => `${formatTon(n)}${gap}${word}`,
+    );
+    const parts = short.split(CURRENCY_WORD);
     if (parts.length === 1) return short;
     return parts.map((part, index) => (
         <React.Fragment key={index}>
             {part}
-            {index < parts.length - 1 && <GramIcon title="TON" />}
+            {index < parts.length - 1 && <GramIcon title="Gram" />}
         </React.Fragment>
     ));
 }

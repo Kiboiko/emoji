@@ -454,8 +454,8 @@ class TestLanguages:
         await db.flush()
 
         dto = chat.message_dto(message, "buyer", None)
-        assert dto["text"].startswith("Оплата получена: 12.5 TON")
-        assert dto["text_en"].startswith("Payment received: 12.5 TON")
+        assert dto["text"].startswith("Оплата получена: 12.5 Gram")
+        assert dto["text_en"].startswith("Payment received: 12.5 Gram")
 
     async def test_language_choice_is_saved(self, db, buyer):
         from routes import users as user_routes
