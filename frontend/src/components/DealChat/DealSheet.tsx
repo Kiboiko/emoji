@@ -4,13 +4,13 @@ import { ton } from './dealFormat';
 
 type T = (ru: string, en: string) => string;
 
-export type SheetKind = 'confirm' | 'dispute';
+export type SheetKind = 'confirm' | 'dispute' | 'refund';
 
 /**
  * Шторки необратимых действий.
  *
- * Подтверждение получения и спор решают судьбу денег, поэтому одним
- * нажатием на кнопку в карточке они не выполняются: сначала шторка
+ * Подтверждение получения, возврат и спор решают судьбу денег, поэтому
+ * одним нажатием на кнопку в карточке они не выполняются: сначала шторка
  * объясняет, что произойдёт.
  */
 export const DealSheet: React.FC<{
@@ -20,8 +20,9 @@ export const DealSheet: React.FC<{
     busy: boolean;
     onClose: () => void;
     onConfirm: () => void;
+    onRefund: () => void;
     onDispute: (reason: string) => void;
-}> = ({ kind, deal, t, busy, onClose, onConfirm, onDispute }) => {
+}> = ({ kind, deal, t, busy, onClose, onConfirm, onRefund, onDispute }) => {
     const [reason, setReason] = useState<string | null>(null);
     const [note, setNote] = useState('');
 
@@ -45,7 +46,32 @@ export const DealSheet: React.FC<{
             className="dchat-sheet-host"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            {kind === 'confirm' ? (
+            {kind === 'refund' ? (
+                <div className="dchat-sheet" role="dialog" aria-modal="true">
+                    <span className="dchat-grab" />
+                    <h3>{t('Вернуть деньги покупателю?', 'Refund the buyer?')}</h3>
+                    <p>
+                        {t(
+                            `Все ${ton(deal.amount_ton)} TON сразу вернутся на баланс покупателя, сделка закроется. Отменить возврат будет нельзя.`,
+                            `All ${ton(deal.amount_ton)} TON go straight back to the buyer's balance and the deal closes. The refund cannot be undone.`,
+                        )}
+                    </p>
+                    <p>
+                        {t(
+                            'Товар снова станет доступен для покупки. Если его больше нет — уменьшите количество в объявлении.',
+                            'The item becomes available for purchase again. If you no longer have it, lower the quantity in the listing.',
+                        )}
+                    </p>
+                    <div className="dchat-sheet-actions">
+                        <button type="button" className="dchat-btn danger" onClick={onRefund} disabled={busy}>
+                            {t('Да, вернуть деньги', 'Yes, refund')}
+                        </button>
+                        <button type="button" className="dchat-btn ghost" onClick={onClose}>
+                            {t('Отмена', 'Cancel')}
+                        </button>
+                    </div>
+                </div>
+            ) : kind === 'confirm' ? (
                 <div className="dchat-sheet" role="dialog" aria-modal="true">
                     <span className="dchat-grab" />
                     <h3>{t('Подтвердить получение?', 'Confirm receipt?')}</h3>

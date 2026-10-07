@@ -25,7 +25,7 @@ from database import get_db
 from models.p2p import Deal, DealMessage
 from models.user import User
 from services import deal_chat_service as chat
-from services import deal_media, deal_service
+from services import deal_media, deal_service, stock_service
 from services.money import from_minor
 from utils.auth import get_current_user
 
@@ -150,9 +150,15 @@ async def deal_messages(
     ).scalars().all()
 
     seen = chat.read_at(deal, chat.other(role))
+
+    # Срок хранения закрытой переписки вышел — у сторон её больше нет
+    if chat.chat_expired(deal, await chat.retention_days(db)):
+        return {"messages": [], "counterpart_read_at": chat.iso(seen), "expired": True}
+
     return {
         "messages": [chat.message_dto(m, role, seen) for m in reversed(newest)],
         "counterpart_read_at": chat.iso(seen),
+        "expired": False,
     }
 
 
@@ -297,6 +303,31 @@ async def confirm_receipt(
 
     message = await chat.post_system(db, deal, "done", chat.DONE_TEXT, actor=user)
     chat.close_chat(deal)
+    await _after_action(db, deal, message)
+    return await _dto(db, deal, user)
+
+
+@router.post("/deals/{deal_id}/refund")
+async def refund(
+    deal_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Продавец сам возвращает деньги — сразу, без спора и модератора.
+
+    Вся сумма уходит на баланс покупателя, сделка закрывается, проданная
+    единица снова в продаже.
+    """
+    deal = await _participant_deal(db, deal_id, user)
+    try:
+        await deal_service.refund_by_seller(db, deal, user)
+    except deal_service.DealError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    message = await chat.post_system(db, deal, "refund", chat.refund_text(deal), actor=user)
+    if deal.product_id:
+        await stock_service.refresh_p2p_stock(db, deal.product_id)
     await _after_action(db, deal, message)
     return await _dto(db, deal, user)
 

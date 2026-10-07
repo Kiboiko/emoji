@@ -51,7 +51,17 @@ export const MyDealsPage: React.FC = () => {
     const t = useT();
     return (
         <CabinetPage title={t('Мои сделки', 'My deals')}>
-            <MyDeals />
+            <MyDeals mode="deals" />
+        </CabinetPage>
+    );
+};
+
+/** Вкладка «Чаты» в нижнем меню — переписки по сделкам, без кнопки назад */
+export const ChatsPage: React.FC = () => {
+    const t = useT();
+    return (
+        <CabinetPage title={t('Чаты', 'Chats')} back={false}>
+            <MyDeals mode="chats" />
         </CabinetPage>
     );
 };

@@ -33,7 +33,7 @@ from config import settings
 from models.order import OrderItem
 from models.p2p import Deal, DealMessage, DealStatus, MessageDirection, SellerProfile
 from models.user import User
-from services import deal_media
+from services import deal_media, settings_service
 from services.money import format_amount, from_minor
 from utils.websockets import manager
 
@@ -68,6 +68,13 @@ _MONTHS = (
     "января", "февраля", "марта", "апреля", "мая", "июня",
     "июля", "августа", "сентября", "октября", "ноября", "декабря",
 )
+_MONTHS_EN = (
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+)
+
+# Текст системного сообщения на двух языках: (русский, английский)
+Texts = tuple[str, str]
 # Даты в текстах сообщений — по Москве: время в базе в UTC, и срок, истекающий
 # в 23:00 по UTC, у покупателя из Москвы наступает уже на следующий день
 _TEXT_TZ = timedelta(hours=3)
@@ -91,6 +98,16 @@ def iso(value: datetime | None) -> str | None:
 def ru_date(value: datetime) -> str:
     local = value + _TEXT_TZ
     return f"{local.day} {_MONTHS[local.month - 1]}"
+
+
+def en_date(value: datetime) -> str:
+    local = value + _TEXT_TZ
+    return f"{_MONTHS_EN[local.month - 1]} {local.day}"
+
+
+def language_of(user: User | None) -> str:
+    """Язык, выбранный в приложении; кто не выбирал — русский, как и приложение."""
+    return "en" if user is not None and user.app_language == "en" else "ru"
 
 
 # ---------------------------------------------------------------------------
@@ -210,16 +227,19 @@ async def post_system(
     db: AsyncSession,
     deal: Deal,
     kind: str,
-    text: str,
+    text: Texts | str,
     *,
     actor: User | None = None,
 ) -> DealMessage:
     """
     Сообщение площадки в переписку: оплата, отправка, спор, завершение.
 
-    actor — тот, чьё действие вызвало сообщение. Ему оно не показывается
-    непрочитанным: продавец, нажавший «Я отправил товар», и так это знает.
+    text — пара (русский, английский): каждая сторона читает на языке,
+    выбранном в приложении. actor — тот, чьё действие вызвало сообщение. Ему
+    оно не показывается непрочитанным: продавец, нажавший «Я отправил
+    товар», и так это знает.
     """
+    ru, en = (text, None) if isinstance(text, str) else text
     now = utcnow()
     message = DealMessage(
         id=uuid.uuid4(),
@@ -227,7 +247,8 @@ async def post_system(
         direction=MessageDirection.SYSTEM,
         sender_id=None,
         kind=kind,
-        text=text,
+        text=ru,
+        text_en=en,
         created_at=now,
     )
     db.add(message)
@@ -272,8 +293,41 @@ def mark_read(deal: Deal, user: User) -> datetime:
 
 
 def close_chat(deal: Deal) -> None:
-    """Закрывает переписку на запись. История остаётся читаемой."""
+    """
+    Закрывает переписку на запись. Ещё chat_retention_days дней история
+    читается, потом пропадает у сторон.
+    """
     deal.chat_closed = True
+    if deal.chat_closed_at is None:
+        deal.chat_closed_at = utcnow()
+
+
+# ---------------------------------------------------------------------------
+# Сколько живёт закрытая переписка
+# ---------------------------------------------------------------------------
+#
+# После завершения сделки писать уже нельзя, но несколько дней переписку можно
+# перечитать: забрать ключ или логин, свериться с договорённостями. Потом она
+# пропадает у сторон. Из базы не удаляется: модератору переписка нужна и
+# позже — при жалобе или проверке мошенничества.
+
+async def retention_days(db: AsyncSession) -> int:
+    return await settings_service.get_int(db, "chat_retention_days")
+
+
+def chat_expires_at(deal: Deal, days: int) -> datetime | None:
+    if not deal.chat_closed:
+        return None
+    closed = (
+        deal.chat_closed_at or deal.released_at or deal.refunded_at
+        or deal.last_message_at or deal.created_at
+    )
+    return closed + timedelta(days=days) if closed else None
+
+
+def chat_expired(deal: Deal, days: int) -> bool:
+    expires = chat_expires_at(deal, days)
+    return expires is not None and expires <= utcnow()
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +340,11 @@ async def unread_counts(db: AsyncSession, user: User) -> dict[uuid.UUID, int]:
 
     Два запроса вместо одного с CASE: у покупателя и продавца разные колонки
     прочтения и разное «своё» направление, и так читается проще.
+
+    Переписка, которая уже пропала у сторон, не считается: иначе значок
+    горел бы вечно, а открыть и прочитать её было бы негде.
     """
+    visible_since = utcnow() - timedelta(days=await retention_days(db))
     counts: dict[uuid.UUID, int] = {}
     for role, party, seen in (
         ("buyer", Deal.buyer_id, Deal.buyer_read_at),
@@ -300,6 +358,7 @@ async def unread_counts(db: AsyncSession, user: User) -> dict[uuid.UUID, int]:
                     party == user.id,
                     DealMessage.direction != OWN_DIRECTION[role],
                     or_(seen.is_(None), DealMessage.created_at > seen),
+                    or_(Deal.chat_closed_at.is_(None), Deal.chat_closed_at > visible_since),
                 )
                 .group_by(DealMessage.deal_id)
             )
@@ -370,6 +429,9 @@ def message_dto(message: DealMessage, viewer_role: str, counterpart_seen: dateti
         "from": author,
         "kind": message.kind,
         "text": message.text,
+        # Английский вариант есть только у сообщений площадки; приложение
+        # выбирает по своему языку и при отсутствии берёт text
+        "text_en": message.text_en,
         "photo_url": deal_media.signed_url(message.media_path) if message.media_path else None,
         # Вложение, пришедшее когда-то через бота: файла у нас нет, есть
         # только file_id Telegram — показываем пометку, а не пустой пузырь
@@ -402,6 +464,7 @@ def _last_dto(message: DealMessage | None, role: str) -> dict | None:
     return {
         "from": _author_for(message, role),
         "text": message.text,
+        "text_en": message.text_en,
         "photo": bool(message.media_path or message.media_type),
         "created_at": iso(message.created_at),
     }
@@ -431,8 +494,10 @@ def deal_dto(
     last: DealMessage | None = None,
     reviewed: bool = False,
     counterpart: User | None = None,
+    retention: int = 7,
 ) -> dict:
     online, last_seen = _presence(deal, counterpart)
+    expired = chat_expired(deal, retention)
     return {
         "id": str(deal.id),
         "number": deal.number,
@@ -456,6 +521,10 @@ def deal_dto(
         "dispute_reason": deal.dispute_reason,
         "chat_closed": deal.chat_closed,
         "chat_open": is_open(deal),
+        # До какого момента закрытую переписку ещё можно прочитать; после —
+        # chat_expired, и сообщения сторонам больше не отдаются
+        "chat_expires_at": iso(chat_expires_at(deal, retention)),
+        "chat_expired": expired,
         "reviewed": reviewed,
         # Покупатель видит магазин; продавцу имя покупателя не отдаём вовсе
         "store": (
@@ -466,8 +535,8 @@ def deal_dto(
             }
             if store is not None and role == "buyer" else None
         ),
-        "unread": unread,
-        "last_message": _last_dto(last, role),
+        "unread": 0 if expired else unread,
+        "last_message": None if expired else _last_dto(last, role),
         "last_activity_at": iso(deal.last_message_at or deal.created_at),
         "counterpart_read_at": iso(read_at(deal, other(role))),
         "counterpart_online": online,
@@ -486,6 +555,7 @@ async def deal_dtos(
     stores, images = await _context(db, deals)
     unread = await unread_counts(db, user)
     latest = await _latest_messages(db, [d.id for d in deals])
+    retention = await retention_days(db)
     other_ids = {_counterpart_id(d, user) for d in deals if is_open(d)}
     others = {
         u.id: u
@@ -500,6 +570,7 @@ async def deal_dtos(
             last=latest.get(d.id),
             reviewed=d.id in reviewed,
             counterpart=others.get(_counterpart_id(d, user)),
+            retention=retention,
         )
         for d in deals
     ]
@@ -517,6 +588,7 @@ async def _dto_for_role(db: AsyncSession, deal: Deal, role: str) -> dict:
         unread=unread,
         last=latest.get(deal.id),
         counterpart=await db.get(User, party_id(deal, other(role))),
+        retention=await retention_days(db),
     )
 
 
@@ -665,11 +737,13 @@ NOTIFY_LOOKBACK = timedelta(days=3)
 PREVIEW_LIMIT = 110
 
 
-def _preview(message: DealMessage) -> str:
+def _preview(message: DealMessage, language: str = "ru") -> str:
+    body = message.text_en if language == "en" and message.text_en else message.text
+    photo = "Photo" if language == "en" else "Фото"
     if message.media_path or message.media_type:
-        text = "Фото" if not message.text else f"Фото · {message.text}"
+        text = photo if not body else f"{photo} · {body}"
     else:
-        text = message.text or ""
+        text = body or ""
     text = " ".join(text.replace("`", "").split())
     if len(text) > PREVIEW_LIMIT:
         text = text[: PREVIEW_LIMIT - 1].rstrip() + "…"
@@ -678,6 +752,10 @@ def _preview(message: DealMessage) -> str:
 
 def chat_url(deal: Deal) -> str:
     return f"{settings.SITE_URL.rstrip('/')}/my/deals/{deal.id}"
+
+
+def open_chat_label(language: str) -> str:
+    return "Open chat" if language == "en" else "Открыть чат"
 
 
 def open_chat_keyboard(deal: Deal, label: str = "Открыть чат") -> dict | None:
@@ -742,33 +820,42 @@ async def notify_unread(db: AsyncSession) -> int:
             recipient = await db.get(User, party_id(deal, role))
             if recipient is None:
                 continue
+            en = language_of(recipient) == "en"
 
             author = AUTHOR[last.direction]
             if author == "system":
-                who = "Площадка"
+                who = "Marketplace" if en else "Площадка"
             elif author == "moderator":
-                who = "Модератор"
+                who = "Moderator" if en else "Модератор"
             elif author == "seller":
                 store = (
                     await db.execute(
                         select(SellerProfile).where(SellerProfile.user_id == deal.seller_id)
                     )
                 ).scalars().first()
-                who = store.display_name if store else "Продавец"
+                who = store.display_name if store else ("Seller" if en else "Продавец")
             else:
-                who = "Покупатель"
+                who = "Buyer" if en else "Покупатель"
 
-            title = (
-                f"Новое сообщение по сделке №{deal.number}"
-                if len(unread) == 1
-                else f"Новые сообщения по сделке №{deal.number} ({len(unread)})"
-            )
-            text = f"{title}\n{who}: {_preview(last)}"
+            if en:
+                title = (
+                    f"New message in deal #{deal.number}"
+                    if len(unread) == 1
+                    else f"New messages in deal #{deal.number} ({len(unread)})"
+                )
+            else:
+                title = (
+                    f"Новое сообщение по сделке №{deal.number}"
+                    if len(unread) == 1
+                    else f"Новые сообщения по сделке №{deal.number} ({len(unread)})"
+                )
+            text = f"{title}\n{who}: {_preview(last, 'en' if en else 'ru')}"
 
             try:
                 await telegram_service.send_message(
                     recipient.telegram_id, text,
-                    parse_mode=None, reply_markup=open_chat_keyboard(deal),
+                    parse_mode=None,
+                    reply_markup=open_chat_keyboard(deal, open_chat_label("en" if en else "ru")),
                 )
                 sent += 1
             except Exception as e:
@@ -786,35 +873,74 @@ async def notify_unread(db: AsyncSession) -> int:
 # Тексты системных сообщений
 # ---------------------------------------------------------------------------
 
-def pay_text(deal: Deal) -> str:
+#
+# Каждый текст — пара (русский, английский). Английский пишется сразу, а не
+# переводится при показе: в нём те же суммы и даты, что были на момент
+# события, даже если сделка потом изменится.
+
+def pay_text(deal: Deal) -> Texts:
+    amount = format_amount(deal.amount_nano, "TON")
     return (
-        f"Оплата получена: {format_amount(deal.amount_nano, 'TON')}. "
-        "Деньги удерживаются площадкой до подтверждения получения."
+        f"Оплата получена: {amount}. "
+        "Деньги удерживаются площадкой до подтверждения получения.",
+        f"Payment received: {amount}. "
+        "The marketplace holds the money until receipt is confirmed.",
     )
 
 
-def ship_text(deal: Deal) -> str:
-    deadline = (
-        f" Если не подтвердить, сделка закроется автоматически {ru_date(deal.confirm_deadline_at)}."
-        if deal.confirm_deadline_at else ""
-    )
+def ship_text(deal: Deal) -> Texts:
+    deadline = deal.confirm_deadline_at
     return (
         "Продавец отметил отправку. Подтвердите получение, и деньги уйдут продавцу."
-        + deadline
+        + (f" Если не подтвердить, сделка закроется автоматически {ru_date(deadline)}."
+           if deadline else ""),
+        "The seller marked the item as sent. Confirm receipt and the money goes to the seller."
+        + (f" If you do not confirm, the deal closes automatically on {en_date(deadline)}."
+           if deadline else ""),
     )
 
 
-DONE_TEXT = "Покупатель подтвердил получение. Сделка завершена, чат закрыт."
-AUTO_DONE_TEXT = (
+DONE_TEXT: Texts = (
+    "Покупатель подтвердил получение. Сделка завершена, чат закрыт.",
+    "The buyer confirmed receipt. The deal is complete, the chat is closed.",
+)
+AUTO_DONE_TEXT: Texts = (
     "Срок подтверждения истёк — сделка закрыта автоматически, "
-    "деньги переведены продавцу. Чат закрыт."
+    "деньги переведены продавцу. Чат закрыт.",
+    "The confirmation period has expired — the deal closed automatically "
+    "and the money went to the seller. The chat is closed.",
 )
 
 
-def dispute_text(opener_role: str, reason: str) -> str:
-    who = "Покупатель" if opener_role == "buyer" else "Продавец"
+def refund_text(deal: Deal) -> Texts:
+    amount = format_amount(deal.amount_nano, "TON")
     return (
-        f"{who} открыл спор: «{reason}».\n"
-        "Деньги остаются у площадки до решения модератора. "
-        "Переписка здесь будет учтена при разборе."
+        f"Продавец оформил возврат: {amount} вернулись на баланс покупателя. "
+        "Сделка закрыта.",
+        f"The seller issued a refund: {amount} went back to the buyer's balance. "
+        "The deal is closed.",
     )
+
+
+def dispute_text(opener_role: str, reason: str) -> Texts:
+    buyer = opener_role == "buyer"
+    return (
+        f"{'Покупатель' if buyer else 'Продавец'} открыл спор: «{reason}».\n"
+        "Деньги остаются у площадки до решения модератора. "
+        "Переписка здесь будет учтена при разборе.",
+        f"The {'buyer' if buyer else 'seller'} opened a dispute: “{reason}”.\n"
+        "The money stays with the marketplace until a moderator decides. "
+        "This conversation will be taken into account.",
+    )
+
+
+def resolved_text(release: bool, comment: str | None) -> Texts:
+    if release:
+        ru = "Спор решён в пользу продавца, деньги перечислены ему."
+        en = "The dispute was resolved in the seller's favour, the money went to the seller."
+    else:
+        ru = "Спор решён в пользу покупателя, средства возвращены на его баланс."
+        en = "The dispute was resolved in the buyer's favour, the money went back to the buyer's balance."
+    # Комментарий модератора не переводим — он один на оба языка
+    note = (comment or "").strip()
+    return (f"{ru}\n{note}".strip(), f"{en}\n{note}".strip())

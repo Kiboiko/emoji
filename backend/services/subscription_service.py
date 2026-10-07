@@ -157,8 +157,10 @@ async def sync_plan_products(db: AsyncSession, channel: Channel) -> None:
         # Проставляется и здесь, а не только при создании тарифа, ради
         # товаров, заведённых до переезда подписок в магазин автора.
         product.owner_user_id = channel.owner_user_id
-        product.name_ru = f"{channel.title} — {plan.title_ru}"
-        product.name_en = f"{channel.title} — {plan.title_en}"
+        # Название автора главнее телеграмного: его не перезаписывает
+        # проверка прав бота, а в английском каталоге — английское
+        product.name_ru = f"{channel.display_title('ru')} — {plan.title_ru}"
+        product.name_en = f"{channel.display_title('en')} — {plan.title_en}"
         # Описание канала тоже подтягиваем: автор правит его в кабинете, а в
         # каталоге до этого висел текст, с которым тариф когда-то завели
         if channel.description:
@@ -423,7 +425,7 @@ async def expire_due_subscriptions(db: AsyncSession) -> int:
             try:
                 await telegram_service.send_message(
                     subscription.user.telegram_id,
-                    f"Подписка на «{subscription.channel.title}» закончилась.\n"
+                    f"Подписка на «{subscription.channel.display_title()}» закончилась.\n"
                     f"Доступ в канал закрыт. Продлить можно в приложении.",
                     parse_mode=None,
                 )
@@ -471,7 +473,7 @@ async def send_expiry_reminders(db: AsyncSession) -> int:
             try:
                 await telegram_service.send_message(
                     user.telegram_id,
-                    f"Подписка на «{channel.title}» заканчивается "
+                    f"Подписка на «{channel.display_title()}» заканчивается "
                     f"{'завтра' if days_left == 1 else f'через {days_left} дня'}.\n"
                     f"Продлить можно в приложении.",
                     parse_mode=None,

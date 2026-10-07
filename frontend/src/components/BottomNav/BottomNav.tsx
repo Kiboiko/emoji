@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, ShoppingCart, User } from 'lucide-react';
+import { Home, MessageCircle, ShoppingCart, User } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useDealsStore, selectUnreadTotal } from '@/store/dealsStore';
@@ -20,7 +20,8 @@ export const BottomNav: React.FC = () => {
         }, 0);
     });
     const { language } = useAuthStore();
-    // Непрочитанное в переписке по сделкам: сама переписка — в профиле
+    // Непрочитанное в переписке по сделкам — на вкладке «Чаты». Раньше
+    // значок висел на «Профиле»: переписка была спрятана внутри него
     const unreadDeals = useDealsStore(selectUnreadTotal);
 
     const navItems = [
@@ -36,10 +37,15 @@ export const BottomNav: React.FC = () => {
             badge: itemCount,
         },
         {
+            to: '/chats',
+            icon: MessageCircle,
+            label: language === 'ru' ? 'Чаты' : 'Chats',
+            badge: unreadDeals,
+        },
+        {
             to: '/profile',
             icon: User,
             label: language === 'ru' ? 'Профиль' : 'Profile',
-            badge: unreadDeals,
         },
     ];
 
@@ -56,7 +62,7 @@ export const BottomNav: React.FC = () => {
                     <div className="nav-icon">
                         <item.icon size={22} />
                         {item.badge !== undefined && item.badge > 0 && (
-                            <span className="nav-badge">{item.badge}</span>
+                            <span className="nav-badge">{item.badge > 99 ? '99+' : item.badge}</span>
                         )}
                     </div>
                     <span className="nav-label">{item.label}</span>

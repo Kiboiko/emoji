@@ -59,7 +59,12 @@ class Channel(Base):
     )
 
     telegram_chat_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
+    # Название из Telegram — обновляется при каждой проверке прав бота
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Название, которое автор задал сам, на двух языках. Главнее
+    # телеграмного: его не перезаписывает проверка прав бота
+    title_ru: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    title_en: Mapped[str | None] = mapped_column(String(255), nullable=True)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Описание для английского интерфейса: в каталоге подписка показывается
@@ -108,6 +113,12 @@ class Channel(Base):
     )
 
     __table_args__ = (Index("ix_channels_status", "status"),)
+
+    def display_title(self, language: str = "ru") -> str:
+        """Название в интерфейсе: заданное автором, а если его нет — из Telegram."""
+        if language == "en":
+            return self.title_en or self.title_ru or self.title
+        return self.title_ru or self.title
 
     def __repr__(self) -> str:
         return f"<Channel({self.title}, chat_id={self.telegram_chat_id}, {self.status.value})>"

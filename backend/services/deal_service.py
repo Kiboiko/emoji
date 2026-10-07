@@ -20,6 +20,9 @@ P2P-сделки: escrow, конечный автомат, разрешение 
                                           v            v
                                     [released]   [released] | [refunded]
 
+Из любого незакрытого состояния, включая спор, продавец может сам вернуть
+деньги покупателю — [refunded] без участия модератора (refund_by_seller).
+
 Выплата продавцу наружу — отдельное ручное действие через заявку на вывод.
 Здесь только внутреннее начисление.
 """
@@ -56,6 +59,23 @@ FINAL = (DealStatus.RELEASED, DealStatus.REFUNDED, DealStatus.CANCELLED)
 
 class DealError(Exception):
     pass
+
+
+# Продавец может сам вернуть деньги, пока сделка не закрыта — в том числе
+# посреди спора: признать претензию проще, чем ждать модератора
+REFUNDABLE_BY_SELLER = (
+    DealStatus.PAID_ESCROW,
+    DealStatus.CHAT_OPENED,
+    DealStatus.DELIVERED_CLAIMED,
+    DealStatus.DISPUTED,
+)
+
+
+def _close_chat(deal: Deal) -> None:
+    """Писать больше нельзя; отсюда отсчитываются дни, пока переписку видно."""
+    deal.chat_closed = True
+    if deal.chat_closed_at is None:
+        deal.chat_closed_at = datetime.utcnow()
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +256,7 @@ async def _release_to_seller(db: AsyncSession, deal: Deal, *, reason: str) -> No
 
     deal.status = DealStatus.RELEASED
     deal.released_at = datetime.utcnow()
-    deal.chat_closed = True
+    _close_chat(deal)
 
     profile = (
         await db.execute(select(SellerProfile).where(SellerProfile.user_id == deal.seller_id))
@@ -333,6 +353,34 @@ async def resolve_dispute(
         await _release_to_seller(db, deal, reason="решение по спору в пользу продавца")
         return deal
 
+    await _refund_to_buyer(db, deal, reason="возврат покупателю")
+    return deal
+
+
+async def refund_by_seller(db: AsyncSession, deal: Deal, seller: User) -> Deal:
+    """
+    Продавец сам возвращает деньги покупателю — без спора и модератора.
+
+    Безопасно без проверки третьей стороной: продавец отказывается от своих
+    же денег, покупатель от этого ничего не теряет.
+    """
+    if deal.seller_id != seller.id:
+        raise DealError("Вернуть деньги может только продавец")
+    if deal.status not in REFUNDABLE_BY_SELLER:
+        raise DealError("Сделка уже закрыта — вернуть деньги нельзя")
+
+    await _refund_to_buyer(db, deal, reason="возврат по решению продавца")
+    return deal
+
+
+async def _refund_to_buyer(db: AsyncSession, deal: Deal, *, reason: str) -> None:
+    """
+    Снимает заморозку и возвращает покупателю всю сумму на баланс.
+
+    Возврат зачисляется на внутренний баланс, а не отправляется в блокчейн:
+    выплаты наружу делаются вручную через заявку на вывод, чтобы не держать
+    приватный ключ кошелька площадки на сервере.
+    """
     platform = await finance_service.platform_account(db, CURRENCY)
     buyer_account = await finance_service.user_account(db, deal.buyer_id, CURRENCY)
 
@@ -343,7 +391,7 @@ async def resolve_dispute(
         entry_type=LedgerEntryType.ESCROW_REFUND,
         ref_type=LedgerRefType.DEAL,
         ref_id=deal.id,
-        comment=f"Сделка #{deal.number}: возврат покупателю",
+        comment=f"Сделка #{deal.number}: {reason}",
     )
     # Возвращаем ВСЮ сумму, включая комиссию: сделка не состоялась,
     # удерживать комиссию не за что
@@ -366,12 +414,13 @@ async def resolve_dispute(
 
     deal.status = DealStatus.REFUNDED
     deal.refunded_at = datetime.utcnow()
-    deal.chat_closed = True
+    # Автоподтверждение по закрытой сделке не нужно
+    deal.confirm_deadline_at = None
+    _close_chat(deal)
 
-    logger.warning("[DEAL] #%s: возврат покупателю %s нанотон", deal.number, deal.amount_nano)
+    logger.warning("[DEAL] #%s: %s, %s нанотон", deal.number, reason, deal.amount_nano)
     await db.flush()
     await complete_order_if_settled(db, deal.order_id)
-    return deal
 
 
 # ---------------------------------------------------------------------------

@@ -173,6 +173,42 @@ async def test_description_edit_returns_channel_to_moderation(db, channel_factor
     assert (await db.get(Product, plan.product_id)).is_active is False
 
 
+async def test_own_title_in_two_languages_reaches_the_catalog(db, channel_factory, author):
+    """
+    Автор задаёт название сам, по-русски и по-английски. Оно главнее
+    телеграмного и, как описание, уходит на повторную проверку.
+    """
+    channel = await channel_factory(ChannelStatus.ACTIVE)
+    plan = await _add_plan(db, channel, author)
+
+    result = await subscriptions.update_channel(
+        channel.id,
+        subscriptions.ChannelUpdate(title_ru="Крипто-сигналы", title_en="Crypto signals"),
+        user=author, db=db,
+    )
+
+    product = await db.get(Product, plan.product_id)
+    assert product.name_ru == "Крипто-сигналы — Месяц"
+    assert product.name_en == "Crypto signals — Month"
+    assert result["title"] == "Крипто-сигналы"
+    assert result["telegram_title"] == "Закрытый канал"
+    assert channel.status == ChannelStatus.DRAFT
+
+
+async def test_empty_own_title_falls_back_to_telegram(db, channel_factory, author):
+    channel = await channel_factory()
+    channel.title_ru = "Своё"
+    await db.flush()
+
+    await subscriptions.update_channel(
+        channel.id, subscriptions.ChannelUpdate(title_ru="", title_en=""),
+        user=author, db=db,
+    )
+
+    assert channel.display_title("ru") == "Закрытый канал"
+    assert channel.display_title("en") == "Закрытый канал"
+
+
 async def test_wallet_edit_keeps_channel_published(db, channel_factory, author):
     """Кошелёк покупателя не касается — снимать канал с продажи незачем."""
     channel = await channel_factory(ChannelStatus.ACTIVE)

@@ -99,7 +99,9 @@ export const Store: React.FC = () => {
         );
     }
 
-    const initial = store.name.trim().charAt(0).toUpperCase();
+    // У канала название бывает на двух языках; у магазина оно одно
+    const name = (language === 'en' && store.name_en) || store.name;
+    const initial = name.trim().charAt(0).toUpperCase();
 
     // Сколько человек здесь. Точная дата не нужна и выглядит слежкой —
     // месяц отвечает на единственный настоящий вопрос покупателя.
@@ -137,7 +139,7 @@ export const Store: React.FC = () => {
 
                     <div className="store-ident">
                         <h1 className="store-name">
-                            {store.name}
+                            {name}
                             {store.is_verified && (
                                 <BadgeCheck
                                     className="store-verified"

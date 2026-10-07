@@ -5,6 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/store/authStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { usePublicSettings } from '@/hooks/usePublicSettings';
+import { usersApi } from '@/api/client';
 import './AppSettings.css';
 
 /**
@@ -56,6 +57,10 @@ export const AppSettings: React.FC = () => {
     const pickLanguage = (next: 'ru' | 'en') => {
         haptic.impact('light');
         setLanguage(next);
+        // Сервер запоминает выбор: бот пишет уведомления на этом языке, и
+        // приложение откроется с ним в следующий раз. Не дошло — не страшно,
+        // в приложении язык уже переключён
+        usersApi.setLanguage(next).catch(() => undefined);
     };
 
     return (

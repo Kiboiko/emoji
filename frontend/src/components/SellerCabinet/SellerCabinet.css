@@ -622,31 +622,6 @@
     color: var(--accent-contrast);
 }
 
-/* Явная кнопка под названием магазина. Раньше на её месте была серая
-   подпись «Добавьте логотип магазина» — она читалась как ярлык, а не как
-   действие, и нажать на неё было нельзя. */
-.seller-logo-btn {
-    display: inline-flex;
-    align-items: center;
-    align-self: flex-start;
-    gap: var(--space-1-5);
-    margin-top: var(--space-1-5);
-    padding: var(--space-1-5) var(--space-2-5);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    font-family: inherit;
-    font-size: var(--font-sm);
-    font-weight: var(--weight-medium);
-    cursor: pointer;
-}
-
-.seller-logo-btn:disabled {
-    opacity: 0.6;
-    cursor: default;
-}
-
 .seller-brand-text {
     min-width: 0;
 }

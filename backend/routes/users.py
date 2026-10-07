@@ -8,7 +8,7 @@ from models.order import Order
 from models.p2p import Deal, DealStatus, ProductListing, ListingStatus, SellerProfile
 from models.subscription import Channel, Subscription, SubscriptionStatus
 from models.user import User
-from schemas.user import ReferralStats
+from schemas.user import LanguageIn, ReferralStats
 from utils.auth import get_current_user, require_admin
 from services.referral_service import get_referral_statistics
 
@@ -76,6 +76,24 @@ async def my_summary(
         "subscriptions": subscriptions,
         "deals": deals,
     }
+
+
+@router.put("/me/language")
+async def set_language(
+    payload: LanguageIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Язык, выбранный в приложении.
+
+    Раньше выбор жил только в памяти приложения и сбрасывался на русский
+    при каждом запуске, а бот о нём не знал вовсе. Теперь на нём бот пишет
+    уведомления, и с ним приложение открывается в следующий раз.
+    """
+    user.app_language = payload.language
+    await db.commit()
+    return {"language": user.app_language}
 
 
 @router.get("/referral-stats", response_model=ReferralStats)

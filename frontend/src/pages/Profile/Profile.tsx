@@ -6,7 +6,6 @@ import {
 import { usersApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
-import { useDealsStore, selectUnreadTotal } from '@/store/dealsStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { PaymentWallet } from '@/components/PaymentWallet/PaymentWallet';
 import { CabinetNav, type CabinetLink } from '@/components/CabinetNav/CabinetNav';
@@ -16,7 +15,6 @@ import './Profile.css';
 
 export const Profile: React.FC = () => {
     const { user, language } = useAuthStore();
-    const unreadDeals = useDealsStore(selectUnreadTotal);
     const showToast = useToastStore((s) => s.show);
     const { haptic } = useTelegram();
     const [stats, setStats] = useState<ReferralStats | null>(null);
@@ -195,7 +193,7 @@ export const Profile: React.FC = () => {
             label: t('Мои сделки', 'My deals'),
             hint: t('Покупки и продажи через эскроу', 'Escrow purchases and sales'),
             count: summary?.deals ?? null,
-            badge: unreadDeals,
+            // Непрочитанное — на вкладке «Чаты» нижнего меню, здесь не дублируем
         },
         {
             to: '/my/subscriptions',

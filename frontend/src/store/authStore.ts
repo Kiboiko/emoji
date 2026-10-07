@@ -17,7 +17,11 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
     accessToken: localStorage.getItem('access_token'),
     language: 'ru',
 
-    setUser: (user) => set({ user }),
+    // Язык, выбранный раньше, приходит вместе с пользователем: без этого
+    // приложение при каждом запуске открывалось по-русски
+    setUser: (user) => set(user?.app_language
+        ? { user, language: user.app_language }
+        : { user }),
 
     setAccessToken: (token) => {
         set({ accessToken: token });

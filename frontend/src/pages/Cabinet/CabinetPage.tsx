@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useAuthStore } from '@/store/authStore';
 import './CabinetPage.css';
 
 /**
@@ -12,17 +13,22 @@ import './CabinetPage.css';
  */
 export const CabinetPage: React.FC<{
     title: string;
+    /** Раздел из нижнего меню («Чаты») — возвращаться из него некуда */
+    back?: boolean;
     children: React.ReactNode;
-}> = ({ title, children }) => {
+}> = ({ title, back = true, children }) => {
     const navigate = useNavigate();
+    const { language } = useAuthStore();
 
     return (
         <div className="cabinet-page">
             <div className="container">
-                <button className="btn-back" onClick={() => navigate('/profile')}>
-                    <ArrowLeft size={20} />
-                    <span>Профиль</span>
-                </button>
+                {back && (
+                    <button className="btn-back" onClick={() => navigate('/profile')}>
+                        <ArrowLeft size={20} />
+                        <span>{language === 'ru' ? 'Профиль' : 'Profile'}</span>
+                    </button>
+                )}
 
                 <h1 className="cabinet-title">{title}</h1>
 

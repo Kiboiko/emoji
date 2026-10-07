@@ -264,7 +264,7 @@ def _author_fields(product, sellers: dict, channels: dict, platform=None) -> dic
         return {
             "author_kind": "channel",
             "author_id": channel.id,
-            "author_name": channel.title,
+            "author_name": channel.display_title(),
             "author_avatar": channel.avatar_url,
             "author_verified": channel.is_verified,
             "author_link": channel.username,

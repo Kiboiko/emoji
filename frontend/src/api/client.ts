@@ -227,6 +227,11 @@ export const usersApi = {
     // живут на своих экранах и на главной не нужны
     getSummary: async (): Promise<ProfileSummary> =>
         (await apiClient.get('/users/me/summary')).data,
+
+    // Выбранный язык — на нём бот пишет уведомления, и с ним приложение
+    // откроется в следующий раз
+    setLanguage: async (language: 'ru' | 'en') =>
+        (await apiClient.put('/users/me/language', { language })).data,
 };
 
 // Витрины магазинов. Площадка — такой же продавец, поэтому отдельного
@@ -334,7 +339,15 @@ export const p2pApi = {
         (await apiClient.post(`/p2p/deals/${id}/confirm`)).data,
     openDispute: async (id: string, reason: string): Promise<Deal> =>
         (await apiClient.post(`/p2p/deals/${id}/dispute`, { reason })).data,
-    getMessages: async (id: string): Promise<{ messages: DealMessage[]; counterpart_read_at: string | null }> =>
+    // Продавец сам возвращает деньги покупателю — без спора
+    refund: async (id: string): Promise<Deal> =>
+        (await apiClient.post(`/p2p/deals/${id}/refund`)).data,
+    getMessages: async (id: string): Promise<{
+        messages: DealMessage[];
+        counterpart_read_at: string | null;
+        /** Срок хранения закрытой переписки вышел — сообщений больше нет */
+        expired?: boolean;
+    }> =>
         (await apiClient.get(`/p2p/deals/${id}/messages`)).data,
     sendMessage: async (id: string, text: string): Promise<DealMessage> =>
         (await apiClient.post(`/p2p/deals/${id}/messages`, { text })).data,
@@ -415,6 +428,9 @@ export const subscriptionsApi = {
         (await apiClient.post(`/subscriptions/author/channels/${channelId}/submit`)).data,
 
     updateChannel: async (channelId: string, data: {
+        /** Своё название; пустая строка — вернуться к названию из Telegram */
+        title_ru?: string;
+        title_en?: string;
         description?: string;
         description_en?: string;
         payout_wallet?: string;

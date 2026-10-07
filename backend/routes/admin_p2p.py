@@ -607,15 +607,13 @@ async def resolve_dispute(
     except deal_service.DealError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    verdict = (
-        "Спор решён в пользу продавца, деньги перечислены ему."
-        if payload.release
-        else "Спор решён в пользу покупателя, средства возвращены на его баланс."
-    )
     message = await deal_chat_service.post_system(
-        db, deal, "resolved", f"{verdict}\n{payload.comment or ''}".strip(),
+        db, deal, "resolved", deal_chat_service.resolved_text(payload.release, payload.comment),
     )
     deal_chat_service.close_chat(deal)
+    if not payload.release and deal.product_id:
+        # Возврат освобождает проданную единицу — она снова в продаже
+        await stock_service.refresh_p2p_stock(db, deal.product_id)
     await db.commit()
     await deal_chat_service.push_message(deal, message)
     await deal_chat_service.push_deal(db, deal)

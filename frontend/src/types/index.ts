@@ -8,6 +8,8 @@ export interface User {
     referral_code: string;
     referral_earnings: number;
     created_at: string;
+    /** Язык, выбранный в приложении; null — ещё не выбирал */
+    app_language?: 'ru' | 'en' | null;
 }
 
 export interface Category {
@@ -86,6 +88,8 @@ export interface Store {
     kind: StoreKind;
     id: string;
     name: string;
+    /** Английское название — только у канала, если автор его задал */
+    name_en?: string;
     avatar_url: string | null;
     description: string | null;
     is_verified: boolean;
@@ -219,7 +223,9 @@ export interface MySubscription {
     id: string;
     channel_id: string;
     channel_title: string | null;
+    channel_title_en?: string | null;
     plan_title: string | null;
+    plan_title_en?: string | null;
     status: 'pending' | 'active' | 'expired' | 'revoked';
     started_at: string | null;
     expires_at: string | null;
@@ -244,7 +250,13 @@ export interface ChannelPlan {
 
 export interface AuthorChannel {
     id: string;
+    /** Название для показа: заданное автором, иначе из Telegram */
     title: string;
+    title_en?: string;
+    /** Что автор задал сам — для формы правки; null — берётся из Telegram */
+    custom_title_ru?: string | null;
+    custom_title_en?: string | null;
+    telegram_title?: string;
     username: string | null;
     description: string | null;
     /** Описание для английского интерфейса */
@@ -273,9 +285,11 @@ export type DealMessageFrom = 'me' | 'them' | 'system' | 'moderator';
 export interface DealMessage {
     id: string;
     from: DealMessageFrom;
-    /** Вид системного сообщения: pay / ship / done / dispute / resolved */
+    /** Вид системного сообщения: pay / ship / done / refund / dispute / resolved */
     kind: string | null;
     text: string | null;
+    /** Английский текст — только у сообщений площадки */
+    text_en?: string | null;
     /** Подписанная ссылка на фото — действует несколько часов */
     photo_url: string | null;
     /** Вложение, пришедшее когда-то через бота: самого файла у нас нет */
@@ -309,6 +323,10 @@ export interface Deal {
     chat_closed: boolean;
     /** Писать в переписку ещё можно */
     chat_open: boolean;
+    /** До какого момента закрытую переписку можно прочитать */
+    chat_expires_at?: string | null;
+    /** Срок вышел — переписки у сторон больше нет */
+    chat_expired?: boolean;
     dispute_reason: string | null;
     /** Магазин продавца — только у покупателя; продавец покупателя не видит */
     store: { name: string; verified: boolean; avatar_url: string | null } | null;
@@ -316,6 +334,7 @@ export interface Deal {
     last_message: {
         from: DealMessageFrom;
         text: string | null;
+        text_en?: string | null;
         photo: boolean;
         created_at: string;
     } | null;

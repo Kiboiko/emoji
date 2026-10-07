@@ -42,6 +42,12 @@ class User(Base):
     # сети» в чате сделки. «В сети» сейчас знает менеджер сокетов, а не база
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Язык, выбранный в приложении: на нём бот пишет уведомления, и с ним
+    # приложение открывается при следующем запуске. language_code — язык
+    # самого Telegram: он бывает английским и у русскоязычных, поэтому не
+    # годится. Пусто — человек не выбирал, по умолчанию русский
+    app_language: Mapped[str | None] = mapped_column(String(5), nullable=True)
+
     # Relationships
     referrer: Mapped["User | None"] = relationship(
         "User",

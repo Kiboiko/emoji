@@ -62,7 +62,9 @@ export const MySubscriptions: React.FC = () => {
                     return (
                         <div key={s.id} className={`subscription-item status-${s.status}`}>
                             <div className="subscription-head">
-                                <span className="subscription-channel">{s.channel_title}</span>
+                                <span className="subscription-channel">
+                                    {language === 'en' ? s.channel_title_en ?? s.channel_title : s.channel_title}
+                                </span>
                                 <span className={`subscription-badge badge-${s.status}`}>
                                     {s.status === 'active' && t('Активна', 'Active')}
                                     {s.status === 'expired' && t('Истекла', 'Expired')}
@@ -72,7 +74,9 @@ export const MySubscriptions: React.FC = () => {
                             </div>
 
                             {s.plan_title && (
-                                <div className="subscription-plan">{s.plan_title}</div>
+                                <div className="subscription-plan">
+                                    {language === 'en' ? s.plan_title_en ?? s.plan_title : s.plan_title}
+                                </div>
                             )}
 
                             {isActive && s.expires_at && (

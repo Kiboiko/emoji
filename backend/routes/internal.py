@@ -148,9 +148,11 @@ async def relay_incoming(payload: RelayIn, db: AsyncSession = Depends(get_db)):
     if user is None:
         return {"reply": "Вы ещё не пользовались магазином. Откройте его кнопкой ниже."}
 
+    en = chat.language_of(user) == "en"
+
     deals = await chat.open_deals_for(db, user)
     if not deals:
-        return {"reply": "У вас нет активных сделок."}
+        return {"reply": "You have no active deals." if en else "У вас нет активных сделок."}
 
     rows = []
     for deal in deals[:8]:
@@ -160,16 +162,22 @@ async def relay_incoming(payload: RelayIn, db: AsyncSession = Depends(get_db)):
         rows.append(keyboard["inline_keyboard"][0])
 
     text = (
+        "Deal chats are now in the app: you can see which deal you are writing "
+        "about and send photos. This message was not sent to anyone."
+        if en else
         "Переписка по сделкам теперь в приложении: там видно, по какой сделке "
         "вы пишете, и можно отправить фото. Это сообщение никому не отправлено."
     )
     if not rows:
-        return {"reply": text + "\nОткройте магазин и зайдите в «Мои сделки»."}
+        return {"reply": text + (
+            "\nOpen the store and go to «Chats»." if en
+            else "\nОткройте магазин и зайдите в «Чаты»."
+        )}
 
     try:
         await telegram_service.send_message(
             user.telegram_id,
-            text + ("\nВыберите сделку:" if len(rows) > 1 else ""),
+            text + (("\nChoose a deal:" if en else "\nВыберите сделку:") if len(rows) > 1 else ""),
             parse_mode=None,
             reply_markup={"inline_keyboard": rows},
         )

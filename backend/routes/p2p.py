@@ -6,7 +6,6 @@ P2P: кабинет продавца и заявки на размещение.
 
 from __future__ import annotations
 
-import io
 import logging
 import uuid
 from datetime import datetime, timedelta
@@ -18,11 +17,11 @@ import aiofiles
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, UploadFile,
 )
-from PIL import Image
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from starlette.concurrency import run_in_threadpool
 
 from config import settings
 from database import get_db
@@ -33,7 +32,7 @@ from models.p2p import (
 )
 from models.product import Product
 from models.user import User
-from services import settings_service, stock_service, terms_service
+from services import image_upload, settings_service, stock_service, terms_service
 from services.money import from_minor
 from utils.auth import get_current_user
 
@@ -41,9 +40,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/p2p", tags=["P2P"])
 
-# Разрешаем только растровые форматы, которые точно безопасно отдавать
-# браузеру. SVG исключён намеренно: он может содержать скрипты.
-ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP"}
+# Допустимые форматы — в services/image_upload.py: только растровые, SVG
+# исключён намеренно, он может содержать скрипты
 MAX_IMAGES_PER_LISTING = 8
 
 
@@ -207,38 +205,26 @@ async def _save_listing_image(upload: UploadFile, subdir: str = "listings") -> s
 
     Штатный save_image в routes/products.py не проверяет ни тип, ни размер —
     для товаров площадки это терпимо (их заводит админ), для файлов от
-    пользователей нет. Тип определяется по СОДЕРЖИМОМУ через Pillow, а не по
-    расширению и не по content-type: и то и другое подделывается тривиально.
+    пользователей нет. Проверка и пережатие — в services/image_upload.py:
+    тип по содержимому, уменьшение до разумного размера, без EXIF.
     """
-    content = await upload.read()
-
-    if len(content) > settings.MAX_UPLOAD_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Файл больше {settings.MAX_UPLOAD_SIZE // 1024 // 1024} МБ",
-        )
+    # +1 байт: так «ровно на лимите» отличается от «больше лимита»
+    content = await upload.read(settings.MAX_UPLOAD_SIZE + 1)
 
     try:
-        image = Image.open(io.BytesIO(content))
-        image.verify()          # ловит битые и поддельные файлы
-        fmt = (image.format or "").upper()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Файл не является изображением")
-
-    if fmt not in ALLOWED_IMAGE_FORMATS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Формат {fmt or 'неизвестный'} не поддерживается. "
-                   f"Допустимы: {', '.join(sorted(ALLOWED_IMAGE_FORMATS))}",
+        # Pillow держит процессор: в потоке, чтобы не вставал весь сервер
+        data, extension = await run_in_threadpool(
+            image_upload.prepare, content, settings.MAX_UPLOAD_SIZE,
         )
+    except image_upload.ImageError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    extension = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}[fmt]
     file_name = f"{uuid.uuid4()}{extension}"
     directory = Path(settings.UPLOAD_DIR) / subdir
     directory.mkdir(parents=True, exist_ok=True)
 
     async with aiofiles.open(directory / file_name, "wb") as out:
-        await out.write(content)
+        await out.write(data)
 
     return f"/uploads/{subdir}/{file_name}"
 

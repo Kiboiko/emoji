@@ -35,6 +35,12 @@ class UserResponse(UserBase):
     referral_code: str
     referral_earnings: float
     created_at: datetime
+    # Язык, выбранный в приложении; None — ещё не выбирал
+    app_language: Optional[str] = None
+
+
+class LanguageIn(BaseModel):
+    language: str = Field(..., pattern="^(ru|en)$")
 
 
 class ReferralStats(BaseModel):

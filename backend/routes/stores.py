@@ -371,7 +371,8 @@ async def channel_store(
     return {
         "kind": "channel",
         "id": str(channel.id),
-        "name": channel.title,
+        "name": channel.display_title("ru"),
+        "name_en": channel.display_title("en"),
         "avatar_url": channel.avatar_url,
         "description": channel.description,
         "is_verified": channel.is_verified,

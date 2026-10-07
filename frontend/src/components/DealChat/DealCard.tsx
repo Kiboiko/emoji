@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Check, ChevronDown, Clock, Package, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Clock, Package, RotateCcw, ShieldCheck } from 'lucide-react';
 import type { Deal } from '@/types';
 import { fmtDate, statusLabel, statusTone, ton } from './dealFormat';
 
@@ -17,7 +17,8 @@ export const DealCard: React.FC<{
     onShip: () => void;
     onConfirm: () => void;
     onProblem: () => void;
-}> = ({ deal, language, t, busy, onShip, onConfirm, onProblem }) => {
+    onRefund: () => void;
+}> = ({ deal, language, t, busy, onShip, onConfirm, onProblem, onRefund }) => {
     const [expanded, setExpanded] = useState(false);
 
     const buyer = deal.role === 'buyer';
@@ -195,6 +196,16 @@ export const DealCard: React.FC<{
             )}
 
             {actions && <div className="dchat-actions">{actions}</div>}
+
+            {/* Возврат — продавцу, пока сделка не закрыта, в том числе в споре.
+                Ссылкой, а не третьей кнопкой: действие редкое, и в ряду с
+                основным оно бы спорило за внимание */}
+            {!buyer && !finished && (
+                <button type="button" className="dchat-refund-link" onClick={onRefund} disabled={busy}>
+                    <RotateCcw size={14} />
+                    {t('Вернуть деньги покупателю', 'Refund the buyer')}
+                </button>
+            )}
         </div>
     );
 };

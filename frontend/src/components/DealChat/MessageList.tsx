@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    AlertCircle, AlertTriangle, Check, CheckCheck, Clock, Package, ShieldCheck,
+    AlertCircle, AlertTriangle, Check, CheckCheck, Clock, Package, RotateCcw, ShieldCheck,
 } from 'lucide-react';
 import type { DealMessage } from '@/types';
 import { dayLabel, fmtTime, sameDay, splitCode } from './dealFormat';
@@ -22,8 +22,13 @@ const SYSTEM_ICON: Record<string, React.ReactNode> = {
     ship: <Package size={15} />,
     done: <Check size={15} />,
     resolved: <Check size={15} />,
+    refund: <RotateCcw size={15} />,
     dispute: <AlertTriangle size={15} />,
 };
+
+/** Сообщение площадки на языке приложения; у старых английского нет */
+export const systemText = (m: { text: string | null; text_en?: string | null }, language: string) =>
+    (language === 'en' && m.text_en) || m.text;
 
 const Tick: React.FC<{ message: ChatMessage }> = ({ message }) => {
     if (message.pending === 'sending') return <Clock size={11} />;
@@ -80,7 +85,7 @@ export const MessageList: React.FC<{
                 <div key={key} className={`dchat-sys ${message.kind ?? ''}`}>
                     {SYSTEM_ICON[message.kind ?? ''] ?? <ShieldCheck size={15} />}
                     <span>
-                        {message.text} <span className="dchat-sys-time">{time}</span>
+                        {systemText(message, language)} <span className="dchat-sys-time">{time}</span>
                     </span>
                 </div>,
             );
@@ -129,7 +134,7 @@ export const MessageList: React.FC<{
                         {dir === 'mod' && first && (
                             <span className="dchat-from">
                                 <ShieldCheck size={13} />
-                                {t('Модератор площадки', 'Marketplace moderator')}
+                                {t('Модератор', 'Moderator')}
                             </span>
                         )}
                         {message.legacy_media && (

@@ -397,6 +397,113 @@ class TestPhotos:
         assert dto["photo_url"].startswith(f"/api/p2p/deal-media/{name}?e=")
 
 
+class TestRetention:
+    """После завершения переписку можно читать ещё chat_retention_days дней."""
+
+    async def _closed(self, db, deal, buyer, *, days_ago: float):
+        await _send(db, deal, buyer, "Ключ: `ABC-123`")
+        deal.status = DealStatus.RELEASED
+        chat.close_chat(deal)
+        deal.chat_closed_at = datetime.utcnow() - timedelta(days=days_ago)
+        await db.flush()
+
+    async def test_fresh_closed_chat_is_readable(self, db, deal, buyer):
+        await self._closed(db, deal, buyer, days_ago=2)
+
+        history = await deal_routes.deal_messages(deal.id, user=buyer, db=db)
+        card = await deal_routes.deal_card(deal.id, user=buyer, db=db)
+
+        assert history["expired"] is False
+        assert history["messages"]
+        assert card["chat_expired"] is False
+        assert card["chat_expires_at"] is not None
+
+    async def test_old_chat_disappears_for_both_sides(self, db, deal, buyer, seller):
+        await self._closed(db, deal, buyer, days_ago=8)
+
+        for user in (buyer, seller):
+            history = await deal_routes.deal_messages(deal.id, user=user, db=db)
+            assert history == {"messages": [], "counterpart_read_at": history["counterpart_read_at"],
+                                "expired": True}
+
+        card = await deal_routes.deal_card(deal.id, user=seller, db=db)
+        assert card["chat_expired"] is True
+        assert card["last_message"] is None
+
+    async def test_unread_of_vanished_chat_is_not_counted(self, db, deal, buyer, seller):
+        """Иначе значок горел бы вечно: прочитать переписку уже негде."""
+        await self._closed(db, deal, buyer, days_ago=8)
+        assert (await chat.unread_counts(db, seller)).get(deal.id) is None
+
+    async def test_moderator_still_sees_the_history(self, db, deal, buyer, user_factory):
+        await self._closed(db, deal, buyer, days_ago=30)
+        admin = await user_factory(username="chat_admin_ret", is_admin=True)
+
+        result = await admin_p2p.deal_conversation(deal.id, admin=admin, db=db)
+        assert any("ABC-123" in (m["text"] or "") for m in result["messages"])
+
+
+class TestLanguages:
+
+    async def test_system_message_has_both_languages(self, db, deal):
+        message = await chat.post_system(db, deal, "pay", chat.pay_text(deal))
+        await db.flush()
+
+        dto = chat.message_dto(message, "buyer", None)
+        assert dto["text"].startswith("Оплата получена: 12.5 TON")
+        assert dto["text_en"].startswith("Payment received: 12.5 TON")
+
+    async def test_language_choice_is_saved(self, db, buyer):
+        from routes import users as user_routes
+        from schemas.user import LanguageIn
+
+        await user_routes.set_language(LanguageIn(language="en"), user=buyer, db=db)
+        assert buyer.app_language == "en"
+
+    async def test_notification_follows_recipient_language(self, db, deal, buyer, seller):
+        seller.app_language = "en"
+        message = await chat.post_message(db, deal, buyer, text="Hello!")
+        _age(message, 60)
+        await db.flush()
+
+        with patch.object(telegram_service, "send_message", AsyncMock()) as sent:
+            await chat.notify_unread(db)
+
+        text = sent.await_args.args[1]
+        assert text.startswith(f"New message in deal #{deal.number}")
+        assert "Buyer: Hello!" in text
+        button = sent.await_args.kwargs["reply_markup"]
+        assert button is None or button["inline_keyboard"][0][0]["text"] == "Open chat"
+
+    async def test_old_bot_era_messages_are_cleaned_by_migration(self):
+        """Миграция убирает «Пишите сюда…» и переводит известные тексты."""
+        import importlib.util
+        from pathlib import Path
+
+        path = next(
+            (Path(__file__).resolve().parent.parent / "alembic" / "versions")
+            .glob("*_e0f1a2b3c4d5_*.py")
+        )
+        spec = importlib.util.spec_from_file_location("migration_0022", path)
+        migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(migration)
+
+        ru, en = migration.translate(
+            "Оплата получена, деньги удерживаются платформой до подтверждения получения.\n\n"
+            "Пишите сюда — сообщения передаются второй стороне через бота, контакты не раскрываются."
+        )
+        assert "Пишите сюда" not in ru
+        assert en.startswith("Payment received.")
+
+        _, en = migration.translate(
+            "Продавец отметил отправку. Подтвердите получение, и деньги уйдут продавцу. "
+            "Если не подтвердить, сделка закроется автоматически 13 октября."
+        )
+        assert en.endswith("closes automatically on October 13.")
+
+        assert migration.translate("Что-то незнакомое") == ("Что-то незнакомое", None)
+
+
 class TestBotRedirect:
 
     async def test_message_to_bot_gets_chat_buttons(self, db, deal, buyer, monkeypatch):

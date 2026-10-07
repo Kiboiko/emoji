@@ -8,6 +8,7 @@ import type { Deal } from '@/types';
 import {
     author, listTime, statusLabel, statusTone,
 } from '@/components/DealChat/dealFormat';
+import { systemText } from '@/components/DealChat/MessageList';
 import './MyDeals.css';
 
 /**
@@ -17,10 +18,20 @@ import './MyDeals.css';
  * карточки с кнопкой «Писать в боте»: переписка шла через бота, и при двух
  * открытых сделках он переспрашивал, кому адресовано сообщение.
  */
-export const MyDeals: React.FC = () => {
+export const MyDeals: React.FC<{
+    /**
+     * chats — вкладка «Чаты»: только переписки, которые ещё можно открыть.
+     * deals — «Мои сделки» в профиле: все сделки, в том числе те, чья
+     * переписка уже удалена по сроку.
+     */
+    mode?: 'chats' | 'deals';
+}> = ({ mode = 'deals' }) => {
     const navigate = useNavigate();
     const { language, accessToken } = useAuthStore();
-    const deals = useDealsStore((s) => s.deals);
+    const allDeals = useDealsStore((s) => s.deals);
+    const deals = mode === 'chats' && allDeals
+        ? allDeals.filter((d) => !d.chat_expired)
+        : allDeals;
     const unread = useDealsStore((s) => s.unread);
     const typing = useDealsStore((s) => s.typing);
     const [error, setError] = useState<string | null>(null);
@@ -48,21 +59,30 @@ export const MyDeals: React.FC = () => {
     if (deals.length === 0) {
         return (
             <p className="mydeals-empty">
-                {t(
-                    'Сделок пока нет. Здесь появятся покупки и продажи товаров с рук — у каждой своя переписка.',
-                    'No deals yet. Purchases and sales between users appear here, each with its own chat.',
-                )}
+                {mode === 'chats'
+                    ? t(
+                        'Чатов пока нет. Когда вы купите или продадите товар, здесь появится переписка с другой стороной.',
+                        'No chats yet. When you buy or sell an item, the conversation with the other side appears here.',
+                    )
+                    : t(
+                        'Сделок пока нет. Здесь появятся покупки и продажи товаров с рук — у каждой своя переписка.',
+                        'No deals yet. Purchases and sales between users appear here, each with its own chat.',
+                    )}
             </p>
         );
     }
 
     const preview = (deal: Deal) => {
+        if (deal.chat_expired) {
+            return <span className="mydeals-last">{t('Переписка удалена', 'Conversation deleted')}</span>;
+        }
         if ((typing[deal.id] ?? 0) > Date.now()) {
             return <span className="mydeals-last typing">{t('печатает…', 'typing…')}</span>;
         }
         const last = deal.last_message;
         if (!last) return <span className="mydeals-last">{t('Переписки ещё нет', 'No messages yet')}</span>;
-        const text = last.photo && !last.text ? t('Фото', 'Photo') : (last.text ?? '').replace(/`/g, '');
+        const body = systemText(last, language);
+        const text = last.photo && !body ? t('Фото', 'Photo') : (body ?? '').replace(/`/g, '');
         return (
             <span className="mydeals-last">
                 {last.from !== 'system' && (

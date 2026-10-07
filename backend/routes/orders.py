@@ -573,7 +573,7 @@ async def _activate_subscriptions(
             )
 
         if subscription.invite_link:
-            invites.append((channel.title, subscription.invite_link))
+            invites.append((channel.display_title(), subscription.invite_link))
 
     return invites
 

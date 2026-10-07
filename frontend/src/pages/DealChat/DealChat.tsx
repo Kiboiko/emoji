@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
     AlertTriangle, ArrowLeft, ArrowUp, BadgeCheck, Lock, Paperclip, User as UserIcon, X,
 } from 'lucide-react';
@@ -15,10 +15,11 @@ import { DealCard } from '@/components/DealChat/DealCard';
 import { DealReview } from '@/components/DealChat/DealReview';
 import { DealSheet, type SheetKind } from '@/components/DealChat/DealSheet';
 import { MessageList, type ChatMessage } from '@/components/DealChat/MessageList';
-import { CONTACT, counterpartName, lastSeen } from '@/components/DealChat/dealFormat';
+import { CONTACT, counterpartName, fmtDate, lastSeen } from '@/components/DealChat/dealFormat';
 import './DealChat.css';
 
-const MAX_PHOTO = 8 * 1024 * 1024;
+// Как на сервере (DEAL_MEDIA_MAX_SIZE): там фото всё равно уменьшается
+const MAX_PHOTO = 20 * 1024 * 1024;
 // «Печатает» шлём не на каждую букву: собеседнику хватит сигнала раз в пару секунд
 const TYPING_EVERY = 2500;
 
@@ -37,6 +38,11 @@ const drafts = new Map<string, string>();
 export const DealChat: React.FC = () => {
     const { dealId = '' } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
+    // Назад — туда, откуда пришли: во вкладку «Чаты» или в «Мои сделки».
+    // Открыли по кнопке из уведомления бота — истории внутри приложения нет,
+    // тогда в «Чаты»
+    const goBack = () => (location.key !== 'default' ? navigate(-1) : navigate('/chats'));
     const { language, accessToken } = useAuthStore();
     const { haptic } = useTelegram();
     const showToast = useToastStore((s) => s.show);
@@ -268,7 +274,7 @@ export const DealChat: React.FC = () => {
             return;
         }
         if (file.size > MAX_PHOTO) {
-            showToast(t('Фото больше 8 МБ', 'The photo is larger than 8 MB'), 'error');
+            showToast(t('Фото больше 20 МБ', 'The photo is larger than 20 MB'), 'error');
             return;
         }
         const message = localMessage({ localPhoto: URL.createObjectURL(file) });
@@ -342,9 +348,9 @@ export const DealChat: React.FC = () => {
     if (failed && !deal) {
         return (
             <div className="dchat dchat-empty">
-                <button className="btn-back" onClick={() => navigate('/my/deals')}>
+                <button className="btn-back" onClick={() => navigate('/chats')}>
                     <ArrowLeft size={20} />
-                    <span>{t('Мои сделки', 'My deals')}</span>
+                    <span>{t('Чаты', 'Chats')}</span>
                 </button>
                 <p>{failed}</p>
             </div>
@@ -361,8 +367,8 @@ export const DealChat: React.FC = () => {
                 <button
                     type="button"
                     className="dchat-icon-btn"
-                    onClick={() => navigate('/my/deals')}
-                    aria-label={t('К списку сделок', 'Back to deals')}
+                    onClick={goBack}
+                    aria-label={t('Назад', 'Back')}
                 >
                     <ArrowLeft size={22} />
                     {elsewhere > 0 && <span className="dchat-back-count">{elsewhere}</span>}
@@ -417,6 +423,7 @@ export const DealChat: React.FC = () => {
                         )}
                         onConfirm={() => setSheet('confirm')}
                         onProblem={() => setSheet('dispute')}
+                        onRefund={() => setSheet('refund')}
                     />
                 ) : (
                     <div className="dchat-deal skeleton dchat-deal-skeleton" />
@@ -424,7 +431,15 @@ export const DealChat: React.FC = () => {
             </div>
 
             <div className="dchat-msgs" ref={listRef} onScroll={onScroll} role="log" aria-live="polite">
-                {deal && messages.length === 0 && (
+                {deal?.chat_expired ? (
+                    <div className="dchat-day">
+                        {/* Без числа дней: срок меняется в настройках админки */}
+                        {t(
+                            'Переписка удалена: после завершения сделки она хранится несколько дней.',
+                            'The conversation was deleted: it is kept for a few days after the deal ends.',
+                        )}
+                    </div>
+                ) : deal && messages.length === 0 && (
                     <div className="dchat-day">
                         {t('Сообщений пока нет', 'No messages yet')}
                     </div>
@@ -460,10 +475,17 @@ export const DealChat: React.FC = () => {
                     <div className="dchat-closed">
                         <Lock size={15} />
                         <span>
-                            {t(
-                                'Сделка завершена. Писать больше нельзя, история сохранена.',
-                                'The deal is closed. You can no longer write; the history is kept.',
-                            )}
+                            {deal.chat_expired
+                                ? t('Сделка завершена.', 'The deal is closed.')
+                                : deal.chat_expires_at
+                                    ? t(
+                                        `Сделка завершена, писать больше нельзя. Переписка удалится ${fmtDate(deal.chat_expires_at, language)} — сохраните ключи и данные, если они нужны.`,
+                                        `The deal is closed, you can no longer write. The conversation will be deleted on ${fmtDate(deal.chat_expires_at, language)} — save any keys and details you need.`,
+                                    )
+                                    : t(
+                                        'Сделка завершена. Писать больше нельзя.',
+                                        'The deal is closed. You can no longer write.',
+                                    )}
                         </span>
                     </div>
                 ) : (
@@ -516,6 +538,10 @@ export const DealChat: React.FC = () => {
                     busy={busy}
                     onClose={() => setSheet(null)}
                     onConfirm={() => act(() => p2pApi.confirmReceipt(dealId))}
+                    onRefund={() => act(
+                        () => p2pApi.refund(dealId),
+                        t('Деньги возвращены покупателю', 'The buyer has been refunded'),
+                    )}
                     onDispute={(reason) => act(() => p2pApi.openDispute(dealId, reason))}
                 />
             )}

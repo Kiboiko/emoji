@@ -289,6 +289,9 @@ class Deal(Base):
     chat_closed: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
+    # Когда закрыт: ещё chat_retention_days дней переписку можно прочитать,
+    # потом она пропадает у сторон (модератор её по-прежнему видит)
+    chat_closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Последнее сообщение в переписке: порядок списка сделок и выборка для
     # уведомлений
@@ -348,8 +351,12 @@ class DealMessage(Base):
     )
 
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Вид системного сообщения: pay / ship / done / dispute / resolved —
-    # по нему чат рисует значок
+    # Английский текст системного сообщения. Оба текста пишутся сразу: в
+    # приложении язык переключается на лету, и сообщение должно читаться
+    # на выбранном. Сообщения людей не переводятся — у них только text
+    text_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Вид системного сообщения: pay / ship / done / refund / dispute /
+    # resolved — по нему чат рисует значок
     kind: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # photo / document / voice / video / ...
     media_type: Mapped[str | None] = mapped_column(String(30), nullable=True)

@@ -91,13 +91,16 @@ class Settings(BaseSettings):
     
     # File uploads
     UPLOAD_DIR: str = "uploads"
-    MAX_UPLOAD_SIZE: int = 5 * 1024 * 1024  # 5MB
+    # 20 МБ: снимок с современного телефона весит 8–15 МБ. Хранится не
+    # оригинал, а уменьшенная копия (services/image_upload.py). Лимит тела
+    # запроса в nginx/nginx.conf должен быть больше этого
+    MAX_UPLOAD_SIZE: int = 20 * 1024 * 1024
 
     # Фото из переписки по сделкам. Отдельно от UPLOAD_DIR: тот целиком
     # раздаётся наружу через nginx, а здесь скриншоты аккаунтов и ключей —
     # они уходят только по подписанной ссылке (services/deal_media.py)
     DEAL_MEDIA_DIR: str = "deal_media"
-    DEAL_MEDIA_MAX_SIZE: int = 8 * 1024 * 1024
+    DEAL_MEDIA_MAX_SIZE: int = 20 * 1024 * 1024
 
     # Реферальные проценты переехали в настройки БД (referral_l1_bp) —
     # заказчик меняет их в админке без передеплоя. См. services/settings_service.py

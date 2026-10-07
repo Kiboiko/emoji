@@ -215,6 +215,57 @@ class TestDispute:
             await deals.resolve_dispute(db, funded_deal, admin, release=True)
 
 
+class TestSellerRefund:
+    """Продавец сам возвращает деньги — без спора и модератора."""
+
+    async def test_refund_returns_everything_to_buyer(self, db, funded_deal, buyer, seller):
+        await deals.refund_by_seller(db, funded_deal, seller)
+
+        buyer_account = await fin.user_account(db, buyer.id, TON)
+        platform = await fin.platform_account(db, TON)
+
+        assert funded_deal.status == DealStatus.REFUNDED
+        assert buyer_account.balance_minor == AMOUNT     # вместе с комиссией
+        assert platform.balance_minor == 0
+        assert platform.hold_minor == 0
+        assert funded_deal.chat_closed is True
+        assert funded_deal.chat_closed_at is not None
+        assert (await fin.reconcile(db)).ok
+
+    async def test_seller_can_concede_a_dispute(self, db, funded_deal, buyer, seller):
+        """Признать претензию проще, чем ждать модератора."""
+        await deals.open_dispute(db, funded_deal, buyer, "товар не пришёл")
+
+        await deals.refund_by_seller(db, funded_deal, seller)
+
+        assert funded_deal.status == DealStatus.REFUNDED
+
+    async def test_buyer_cannot_refund_himself(self, db, funded_deal, buyer):
+        with pytest.raises(deals.DealError):
+            await deals.refund_by_seller(db, funded_deal, buyer)
+
+    async def test_no_refund_after_release(self, db, funded_deal, buyer, seller):
+        """Деньги уже у продавца — возвращать из escrow нечего."""
+        await deals.confirm_receipt(db, funded_deal, buyer)
+        with pytest.raises(deals.DealError):
+            await deals.refund_by_seller(db, funded_deal, seller)
+
+    async def test_refund_button_posts_message_for_both_languages(
+        self, db, funded_deal, seller
+    ):
+        from routes import deals as deal_routes
+        from utils.websockets import manager
+
+        with patch.object(manager, "send_personal_message", AsyncMock()):
+            card = await deal_routes.refund(funded_deal.id, user=seller, db=db)
+
+        assert card["status"] == "refunded"
+        assert card["chat_open"] is False
+        last = card["last_message"]
+        assert "Продавец оформил возврат" in last["text"]
+        assert "The seller issued a refund" in last["text_en"]
+
+
 class TestAutoConfirm:
     async def test_expired_deadline_releases_to_seller(self, db, funded_deal, seller):
         """

@@ -53,6 +53,9 @@ class ChannelCreate(BaseModel):
 
 
 class ChannelUpdate(BaseModel):
+    # Своё название канала; пустая строка — вернуться к названию из Telegram
+    title_ru: Optional[str] = Field(None, max_length=120)
+    title_en: Optional[str] = Field(None, max_length=120)
     description: Optional[str] = Field(None, max_length=2000)
     description_en: Optional[str] = Field(None, max_length=2000)
     payout_wallet: Optional[str] = Field(None, min_length=10, max_length=80)
@@ -76,7 +79,13 @@ class PlanUpdate(BaseModel):
 def _channel_dto(channel: Channel, plans: list[SubscriptionPlan] | None = None) -> dict:
     return {
         "id": str(channel.id),
-        "title": channel.title,
+        # Название для показа: заданное автором, иначе из Telegram
+        "title": channel.display_title("ru"),
+        "title_en": channel.display_title("en"),
+        # Для формы правки: что задал автор и что пришло из Telegram
+        "custom_title_ru": channel.title_ru,
+        "custom_title_en": channel.title_en,
+        "telegram_title": channel.title,
         "username": channel.username,
         "description": channel.description,
         "description_en": channel.description_en,
@@ -153,9 +162,11 @@ async def my_subscriptions(
     return [
         {
             "id": str(s.id),
-            "channel_title": s.channel.title if s.channel else None,
+            "channel_title": s.channel.display_title("ru") if s.channel else None,
+            "channel_title_en": s.channel.display_title("en") if s.channel else None,
             "channel_id": str(s.channel_id),
             "plan_title": s.plan.title_ru if s.plan else None,
+            "plan_title_en": s.plan.title_en if s.plan else None,
             "status": s.status.value,
             "started_at": s.started_at.isoformat() if s.started_at else None,
             "expires_at": s.expires_at.isoformat() if s.expires_at else None,
@@ -497,8 +508,8 @@ async def create_plan(
     category_id = await _subscriptions_category_id(db)
     product = Product(
         id=uuid.uuid4(),
-        name_ru=f"{channel.title} — {payload.title_ru}",
-        name_en=f"{channel.title} — {payload.title_en}",
+        name_ru=f"{channel.display_title('ru')} — {payload.title_ru}",
+        name_en=f"{channel.display_title('en')} — {payload.title_en}",
         description_ru=channel.description or f"Доступ в закрытый канал на {payload.duration_days} дн.",
         # Английское описание берём английское: раньше сюда шло русское, и
         # подписка в англоязычном каталоге читалась по-русски
@@ -554,6 +565,16 @@ async def update_channel(
 
     changed_text = False
 
+    # Название — такой же публичный текст, как описание: его видит модератор
+    for field in ("title_ru", "title_en"):
+        value = getattr(payload, field)
+        if value is None:
+            continue
+        value = value.strip() or None
+        if value != getattr(channel, field):
+            setattr(channel, field, value)
+            changed_text = True
+
     if payload.description is not None:
         new_description = payload.description.strip() or None
         if new_description != channel.description:
@@ -571,7 +592,7 @@ async def update_channel(
     if changed_text and channel.status == ChannelStatus.ACTIVE:
         channel.status = ChannelStatus.DRAFT
         channel.moderation_comment = (
-            "Описание изменено — канал снят с публикации до повторной проверки"
+            "Название или описание изменено — канал снят с публикации до повторной проверки"
         )
 
     await subscription_service.sync_plan_products(db, channel)

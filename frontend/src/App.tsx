@@ -19,7 +19,7 @@ import { Store } from './pages/Store/Store';
 import { TermsPage } from './pages/Terms/TermsPage';
 import { DealChat } from './pages/DealChat/DealChat';
 import {
-    MyListingsPage, MyChannelsPage, MyOrdersPage, MyDealsPage, MySubscriptionsPage,
+    ChatsPage, MyListingsPage, MyChannelsPage, MyOrdersPage, MyDealsPage, MySubscriptionsPage,
 } from './pages/Cabinet/CabinetRoutes';
 
 // Dev-вход без Telegram. Включается только на локальной сборке
@@ -279,6 +279,12 @@ const AppContent: React.FC = () => {
                 <Route path="/profile" element={
                     <PageTransition>
                         <Profile />
+                    </PageTransition>
+                } />
+                {/* Вкладка «Чаты» нижнего меню — переписки по сделкам */}
+                <Route path="/chats" element={
+                    <PageTransition>
+                        <ChatsPage />
                     </PageTransition>
                 } />
 

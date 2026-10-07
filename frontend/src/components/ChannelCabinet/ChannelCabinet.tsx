@@ -490,7 +490,9 @@ const ChannelCard: React.FC<{
                 {channel.avatar_url && (
                     <img className="channel-avatar" src={channel.avatar_url} alt="" />
                 )}
-                <span className="channel-title">{channel.title}</span>
+                <span className="channel-title">
+                    {language === 'en' ? channel.title_en ?? channel.title : channel.title}
+                </span>
                 {channel.is_verified && (
                     <BadgeCheck
                         className="channel-verified"
@@ -752,11 +754,12 @@ const ChannelCard: React.FC<{
 /* ------------------------------------------------------------------ */
 
 /**
- * Описание и кошелёк.
+ * Название, описание и кошелёк.
  *
- * Название и аватар сюда не входят: и то и другое берётся из Telegram и
- * обновляется по кнопке «Проверить». Своё поле под них означало бы два
- * источника правды и расхождение между каналом и карточкой в каталоге.
+ * Название по умолчанию берётся из Telegram и обновляется по кнопке
+ * «Проверить». Своё название автор задаёт на двух языках — оно главнее
+ * телеграмного; пустое поле возвращает название из Telegram. Аватар здесь
+ * не правится: для каталога есть обложка.
  */
 const ChannelEditForm: React.FC<{
     channel: AuthorChannel;
@@ -767,15 +770,20 @@ const ChannelEditForm: React.FC<{
 }> = ({ channel, language, onDone, onCancel, onError }) => {
     const { haptic } = useTelegram();
     const showToast = useToastStore((s) => s.show);
+    const [titleRu, setTitleRu] = useState(channel.custom_title_ru ?? '');
+    const [titleEn, setTitleEn] = useState(channel.custom_title_en ?? '');
     const [description, setDescription] = useState(channel.description ?? '');
     const [descriptionEn, setDescriptionEn] = useState(channel.description_en ?? '');
     const [wallet, setWallet] = useState(channel.payout_wallet ?? '');
     const [busy, setBusy] = useState(false);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
+    const telegramTitle = channel.telegram_title ?? channel.title;
 
     const descriptionChanged =
-        description.trim() !== (channel.description ?? '').trim()
+        titleRu.trim() !== (channel.custom_title_ru ?? '').trim()
+        || titleEn.trim() !== (channel.custom_title_en ?? '').trim()
+        || description.trim() !== (channel.description ?? '').trim()
         || descriptionEn.trim() !== (channel.description_en ?? '').trim();
     const willUnpublish = channel.status === 'active' && descriptionChanged;
 
@@ -784,6 +792,8 @@ const ChannelEditForm: React.FC<{
         setBusy(true);
         try {
             await subscriptionsApi.updateChannel(channel.id, {
+                title_ru: titleRu.trim(),
+                title_en: titleEn.trim(),
                 description: description.trim(),
                 description_en: descriptionEn.trim(),
                 payout_wallet: wallet.trim(),
@@ -792,8 +802,8 @@ const ChannelEditForm: React.FC<{
             if (willUnpublish) {
                 showToast(
                     t(
-                        'Описание изменено — канал снят с публикации до повторной проверки',
-                        'Description changed — the channel is unlisted pending review',
+                        'Название или описание изменено — канал снят с публикации до повторной проверки',
+                        'Title or description changed — the channel is unlisted pending review',
                     ),
                     'info',
                 );
@@ -808,6 +818,37 @@ const ChannelEditForm: React.FC<{
 
     return (
         <form className="channel-form channel-form-inline" onSubmit={submit}>
+            {/* Подсказка в поле — название из Telegram: пустое поле его и
+                оставит, а заполненное заменит */}
+            <label className="channel-label">
+                {t('Название по-русски', 'Title in Russian')}
+                <input
+                    className="channel-input"
+                    value={titleRu}
+                    onChange={(e) => setTitleRu(e.target.value)}
+                    placeholder={telegramTitle}
+                    maxLength={120}
+                />
+            </label>
+
+            <label className="channel-label">
+                {t('Название по-английски', 'Title in English')}
+                <input
+                    className="channel-input"
+                    value={titleEn}
+                    onChange={(e) => setTitleEn(e.target.value)}
+                    placeholder={titleRu.trim() || telegramTitle}
+                    maxLength={120}
+                />
+            </label>
+
+            <span className="channel-note">
+                {t(
+                    'Пустое поле — останется название из Telegram.',
+                    'Leave empty to keep the title from Telegram.',
+                )}
+            </span>
+
             <label className="channel-label">
                 {t('Описание по-русски', 'Description in Russian')}
                 <textarea
@@ -845,8 +886,8 @@ const ChannelEditForm: React.FC<{
             {willUnpublish && (
                 <span className="channel-note channel-note--warn">
                     {t(
-                        'Описание проверяет модератор, поэтому канал уйдёт на повторную проверку и пропадёт из каталога.',
-                        'The description is moderated, so the channel will go back for review and leave the catalog.',
+                        'Название и описание проверяет модератор, поэтому канал уйдёт на повторную проверку и пропадёт из каталога.',
+                        'The title and description are moderated, so the channel will go back for review and leave the catalog.',
                     )}
                 </span>
             )}
