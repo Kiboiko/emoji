@@ -4,7 +4,7 @@ from sqlalchemy import func, or_, select
 import uuid
 
 from database import get_db
-from models.order import Order
+from models.order import Order, OrderItem, OrderStatus
 from models.p2p import Deal, DealStatus, ProductListing, ListingStatus, SellerProfile
 from models.subscription import Channel, Subscription, SubscriptionStatus
 from models.user import User
@@ -65,6 +65,23 @@ async def my_summary(
             or_(Deal.buyer_id == user.id, Deal.seller_id == user.id),
             Deal.status.notin_([DealStatus.CANCELLED, DealStatus.REFUNDED]),
         )
+    )
+    # «Мои сделки» показывают и покупки у самой площадки (раньше они жили в
+    # «Моих заказах»). P2P-позиции уже посчитаны сделками, подписки — в своём
+    # разделе
+    snapshots = (
+        await db.execute(
+            select(OrderItem.product_snapshot)
+            .join(Order, Order.id == OrderItem.order_id)
+            .where(
+                Order.user_id == user.id,
+                Order.status.in_([OrderStatus.PAID, OrderStatus.COMPLETED]),
+            )
+        )
+    ).scalars().all()
+    deals += sum(
+        1 for snap in snapshots
+        if not (snap or {}).get("is_p2p") and (snap or {}).get("type") != "subscription"
     )
 
     return {

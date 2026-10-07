@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/authStore';
 import { SellerCabinet } from '@/components/SellerCabinet/SellerCabinet';
 import { ChannelCabinet } from '@/components/ChannelCabinet/ChannelCabinet';
 import { MyDeals } from '@/components/MyDeals/MyDeals';
-import { MyOrders } from '@/components/MyOrders/MyOrders';
+import { Purchases } from '@/pages/Purchases/Purchases';
 import { MySubscriptions } from '@/components/MySubscriptions/MySubscriptions';
 import { CabinetPage } from './CabinetPage';
 
@@ -38,20 +38,12 @@ export const MyChannelsPage: React.FC = () => {
     );
 };
 
-export const MyOrdersPage: React.FC = () => {
-    const t = useT();
-    return (
-        <CabinetPage title={t('Мои заказы', 'My orders')}>
-            <MyOrders />
-        </CabinetPage>
-    );
-};
-
+/** Мои сделки: все покупки и продажи, включая покупки у самой площадки */
 export const MyDealsPage: React.FC = () => {
     const t = useT();
     return (
         <CabinetPage title={t('Мои сделки', 'My deals')}>
-            <MyDeals mode="deals" />
+            <Purchases />
         </CabinetPage>
     );
 };

@@ -1,10 +1,13 @@
 import type { Deal, DealMessage } from '@/types';
+import { formatTon } from '@/lib/ton';
 
 type T = (ru: string, en: string) => string;
 
-/** 12.500000000 → 12.5: сервер отдаёт TON со всеми девятью знаками */
-export const ton = (value: string) =>
-    value.includes('.') ? value.replace(/\.?0+$/, '') : value;
+/**
+ * Сумма в TON для показа: 0.006535948 → 0.0065, 14.553 → 14.55.
+ * Сервер отдаёт все девять знаков, а длинный хвост читается как ошибка.
+ */
+export const ton = (value: string) => formatTon(value);
 
 const locale = (language: string) => (language === 'ru' ? 'ru-RU' : 'en-US');
 
@@ -52,6 +55,38 @@ export function lastSeen(iso: string | null | undefined, language: string, t: T)
     }
     const day = fmtDate(iso, language);
     return t(`был(а) в сети ${day}`, `last seen ${day}`);
+}
+
+/** Сделка закрыта: дальше её состояние не меняется */
+export const FINISHED_STATUSES: Deal['status'][] = ['released', 'refunded', 'cancelled', 'confirmed'];
+
+export const isFinished = (deal: Deal) => FINISHED_STATUSES.includes(deal.status);
+
+/**
+ * Этапы сделки «Оплачено → Отправлено → Получено» с датами. Общие для
+ * карточки над перепиской и страницы сделки — чтобы показывали одно и то же.
+ * current — этап, который сейчас ждёт; -1, когда ждать нечего.
+ */
+export function dealSteps(deal: Deal, language: string, t: T) {
+    const received = deal.released_at ?? deal.confirmed_at;
+    const deadline = deal.confirm_deadline_at ? fmtDate(deal.confirm_deadline_at, language) : null;
+    const steps: { title: string; when: string; done: boolean }[] = [
+        { title: t('Оплачено', 'Paid'), when: fmtDate(deal.paid_at, language), done: true },
+        {
+            title: t('Отправлено', 'Shipped'),
+            when: deal.delivered_at ? fmtDate(deal.delivered_at, language) : t('ещё нет', 'not yet'),
+            done: Boolean(deal.delivered_at),
+        },
+        {
+            title: t('Получено', 'Received'),
+            when: received
+                ? fmtDate(received, language)
+                : deal.status === 'delivered_claimed' && deadline ? t(`до ${deadline}`, `by ${deadline}`) : '—',
+            done: Boolean(received),
+        },
+    ];
+    const current = isFinished(deal) || deal.status === 'disputed' ? -1 : steps.findIndex((s) => !s.done);
+    return { steps, current, deadline };
 }
 
 export function statusLabel(status: Deal['status'], t: T): string {

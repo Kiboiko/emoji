@@ -25,7 +25,7 @@ from models.finance import Account, AccountOwnerType, LedgerEntryType, LedgerRef
 from models.user import User
 from models.withdrawal import Withdrawal, WithdrawalStatus
 from services import finance_service, ton_service
-from services.money import format_amount, from_minor, to_minor
+from services.money import format_ton_short, from_minor, to_minor
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ async def reject(db: AsyncSession, w: Withdrawal, reason: str) -> None:
 def _amount_text(w: Withdrawal) -> str:
     currency = w.currency or "USD"
     if currency == "TON":
-        return format_amount(amount_minor(w), "TON")
+        return format_ton_short(amount_minor(w))
     return f"{from_minor(amount_minor(w), currency)} USDT"
 
 

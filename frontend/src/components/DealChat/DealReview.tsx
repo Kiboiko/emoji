@@ -8,40 +8,44 @@ import type { Deal } from '@/types';
 type T = (ru: string, en: string) => string;
 
 /**
- * Отзыв о продавце по завершённой сделке — внизу её переписки.
+ * Отзыв о покупке: звёзды, потом пара слов.
  *
- * Здесь, а не в списке заказов: покупатель товара с рук думает о сделке, а не
- * о заказе, и оценивать продавца идёт туда, где с ним переписывался.
- * Бэкенд принимает отзыв только после завершения и только от покупателя.
+ * Общий для сделки с продавцом и покупки у площадки: бэкенд опознаёт
+ * покупку по заказу и товару, а принимает отзыв только после завершения
+ * и только от покупателя. Текст обязателен — отзывы публикуются дальше.
  */
-export const DealReview: React.FC<{
-    deal: Deal;
+export const ReviewBox: React.FC<{
+    orderId: string;
+    productId: string | null;
+    title: string;
+    reviewed: boolean;
+    doneText: string;
     t: T;
     onDone: () => void;
-}> = ({ deal, t, onDone }) => {
+}> = ({ orderId, productId, title, reviewed, doneText, t, onDone }) => {
     const { haptic } = useTelegram();
     const showToast = useToastStore((s) => s.show);
     const [rating, setRating] = useState(0);
     const [text, setText] = useState('');
     const [busy, setBusy] = useState(false);
 
-    if (deal.reviewed) {
+    if (reviewed) {
         return (
             <div className="dchat-review-done">
                 <Check size={16} />
-                {t('Отзыв о продавце оставлен', 'Review left')}
+                {doneText}
             </div>
         );
     }
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!rating || !text.trim() || !deal.product_id) return;
+        if (!rating || !text.trim() || !productId) return;
         setBusy(true);
         try {
             await reviewsApi.createReview({
-                product_id: deal.product_id,
-                order_id: deal.order_id,
+                product_id: productId,
+                order_id: orderId,
                 text: text.trim(),
                 rating,
             });
@@ -58,9 +62,7 @@ export const DealReview: React.FC<{
 
     return (
         <form className="dchat-review" onSubmit={submit}>
-            <span className="dchat-review-title">
-                {t(`Оцените продавца «${deal.store?.name ?? ''}»`, `Rate “${deal.store?.name ?? 'the seller'}”`)}
-            </span>
+            <span className="dchat-review-title">{title}</span>
             <div className="dchat-stars">
                 {[1, 2, 3, 4, 5].map((value) => (
                     <button
@@ -80,7 +82,7 @@ export const DealReview: React.FC<{
                         className="dchat-review-text"
                         value={text}
                         onChange={(e) => setText(e.target.value)}
-                        placeholder={t('Пара слов о сделке', 'A few words about the deal')}
+                        placeholder={t('Пара слов о покупке', 'A few words about the purchase')}
                         maxLength={150}
                         rows={2}
                     />
@@ -92,3 +94,24 @@ export const DealReview: React.FC<{
         </form>
     );
 };
+
+/**
+ * Отзыв о продавце по завершённой сделке — внизу её переписки и на
+ * странице сделки. Покупатель товара с рук думает о сделке, а не о
+ * заказе, и оценивать продавца идёт туда, где с ним переписывался.
+ */
+export const DealReview: React.FC<{
+    deal: Deal;
+    t: T;
+    onDone: () => void;
+}> = ({ deal, t, onDone }) => (
+    <ReviewBox
+        orderId={deal.order_id}
+        productId={deal.product_id}
+        title={t(`Оцените продавца «${deal.store?.name ?? ''}»`, `Rate “${deal.store?.name ?? 'the seller'}”`)}
+        reviewed={deal.reviewed}
+        doneText={t('Отзыв о продавце оставлен', 'Review left')}
+        t={t}
+        onDone={onDone}
+    />
+);

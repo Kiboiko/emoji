@@ -1,0 +1,463 @@
+/* --- Страница сделки и покупки у площадки --------------------------------
+   Без нижнего меню: внизу своя панель действий. Отступ сверху — как у
+   разделов кабинета, под плавающие кнопки Telegram. */
+
+.dpage {
+    min-height: 100vh;
+    padding-top: calc(var(--tg-chrome-top) + var(--space-4));
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.dpage-body {
+    display: grid;
+    gap: var(--space-4);
+    /* Место под панель действий, чтобы она не закрывала последний блок */
+    padding-bottom: calc(150px + var(--safe-area-bottom));
+}
+
+.dpage-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.dpage-top .btn-back {
+    margin: 0;
+}
+
+.dpage-number {
+    font-size: 13px;
+    color: var(--text-tertiary);
+}
+
+.dpage-muted {
+    color: var(--text-secondary);
+}
+
+.dpage-skeleton-photo {
+    height: 240px;
+    border-radius: 20px;
+}
+
+.dpage-skeleton-line {
+    height: 60px;
+    border-radius: 14px;
+}
+
+/* Фото листаются пальцем: прокрутка с привязкой, без своей карусели */
+.dpage-gallery {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.dpage-photos {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    border-radius: 20px;
+    scrollbar-width: none;
+}
+
+.dpage-photos::-webkit-scrollbar {
+    display: none;
+}
+
+.dpage-photos img {
+    flex: 0 0 100%;
+    width: 100%;
+    height: 260px;
+    object-fit: cover;
+    scroll-snap-align: start;
+    background: var(--bg-tertiary);
+}
+
+.dpage-dots {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+}
+
+.dpage-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bg-tertiary);
+    transition: width 0.2s ease;
+}
+
+.dpage-dots span.on {
+    width: 18px;
+    background: var(--accent-primary);
+}
+
+.dpage-nophoto {
+    height: 160px;
+    border-radius: 20px;
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dpage-title {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.dpage-chips {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+.dpage-title h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.dpage-price {
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.dpage-price span {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.dpage-price.struck {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+}
+
+.dpage-store {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 16px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.dpage-store > svg {
+    flex: none;
+    color: var(--text-tertiary);
+}
+
+.dpage-store-ava {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: rgba(var(--accent-rgb), 0.16);
+    color: var(--accent-primary);
+    font-size: 18px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dpage-store-ava img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dpage-store-text {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.dpage-store-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.dpage-store-name svg {
+    color: var(--accent-primary);
+}
+
+.dpage-store-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.dpage-store-meta svg {
+    color: #f59e0b;
+}
+
+.dpage-steps-card {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 16px;
+    background: var(--bg-secondary);
+}
+
+.dpage-note {
+    display: flex;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.dpage-note svg {
+    flex: none;
+    margin-top: 1px;
+    color: var(--accent-primary);
+}
+
+.dpage-section {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.dpage-section h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.dpage-section p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+.dpage-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+
+.dpage-facts > div {
+    display: grid;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    font-size: 13px;
+}
+
+.dpage-facts span {
+    color: var(--text-tertiary);
+}
+
+.dpage-facts strong {
+    font-weight: 500;
+}
+
+/* --- Панель действий ----------------------------------------------------- */
+
+.dpage-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-nav);
+    display: grid;
+    gap: var(--space-2);
+    padding: 12px 16px calc(12px + var(--safe-area-bottom));
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-primary);
+}
+
+.dpage-bar-main {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+
+.dpage-bar-main.single {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.dpage-bar-main .dchat-btn,
+.dpage-chat {
+    height: 48px;
+    border-radius: 14px;
+    font-size: 15px;
+}
+
+.dpage-chat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.dpage-chat-count {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    box-sizing: border-box;
+    border-radius: 10px;
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dpage-bar-links {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-5, 20px);
+}
+
+.dpage-bar-links button {
+    min-height: 32px;
+    padding: 0 4px;
+    border: 0;
+    background: none;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.dpage-bar-links button.danger {
+    color: var(--accent-error);
+}
+
+.dpage-bar-links button:disabled {
+    opacity: 0.5;
+}
+
+/* Шторки подтверждения поверх страницы. Сама шторка — из переписки
+   (DealSheet), ей нужен слой во весь экран */
+.dsheet-layer {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+}
+
+/* --- Покупка у площадки: выданный товар ----------------------------------- */
+
+.dpage-product {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+
+.dpage-product-thumb {
+    flex: none;
+    width: 96px;
+    height: 96px;
+    border-radius: 18px;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dpage-product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dpage-product .dpage-title {
+    min-width: 0;
+    gap: 6px;
+}
+
+.dpage-product .dpage-title h1 {
+    font-size: 20px;
+}
+
+.dpage-product .dpage-price {
+    font-size: 18px;
+}
+
+.dpage-goods {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 16px;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.dpage-goods h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.dpage-key {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dpage-key code,
+.dpage-instruction {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--bg-tertiary);
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    overflow-wrap: anywhere;
+}
+
+.dpage-instruction {
+    font-family: inherit;
+    letter-spacing: 0;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.dpage-copy {
+    flex: none;
+    width: 48px;
+    height: 48px;
+    border: 0;
+    border-radius: 12px;
+    background: rgba(var(--accent-rgb), 0.16);
+    color: var(--accent-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.dpage-goods-note {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}

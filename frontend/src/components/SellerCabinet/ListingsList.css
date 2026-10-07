@@ -1,0 +1,204 @@
+/* --- Мои объявления: короткий список ------------------------------------ */
+
+.llist {
+    display: grid;
+    gap: var(--space-3);
+    margin-top: var(--space-5, 20px);
+}
+
+.llist-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.llist-head h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.llist-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: 12px;
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.llist-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+}
+
+.llist-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    /* 16px: iOS приближает страницу при фокусе на поле мельче */
+    font-size: 16px;
+    outline: none;
+}
+
+/* Фильтры листаются вбок, если не помещаются */
+.llist-filters {
+    display: flex;
+    gap: var(--space-2);
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 calc(-1 * var(--space-4));
+    padding: 0 var(--space-4);
+}
+
+.llist-filters::-webkit-scrollbar {
+    display: none;
+}
+
+.llist-filters button {
+    flex: none;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 17px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.llist-filters button.is-active {
+    border-color: var(--accent-primary);
+    background: rgba(var(--accent-rgb), 0.14);
+    color: var(--accent-primary);
+    font-weight: 600;
+}
+
+.llist-rows {
+    border-radius: 16px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.llist-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+}
+
+.llist-row + .llist-row {
+    border-top: 1px solid var(--border-color);
+}
+
+.llist-row-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.llist-thumb {
+    flex: none;
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.llist-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.llist-text {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.llist-name {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.llist-price {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.llist-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.llist-meta-text {
+    min-width: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.llist-row.is-dim .llist-name,
+.llist-row.is-dim .llist-price {
+    color: var(--text-secondary);
+}
+
+.llist-edit {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.llist-empty {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* Красный ярлык — отклонено модератором */
+.dchat-chip.danger {
+    background: rgba(239, 68, 68, 0.16);
+    color: var(--accent-error);
+}

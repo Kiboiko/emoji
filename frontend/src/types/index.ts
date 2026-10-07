@@ -157,6 +157,8 @@ export interface OrderItem {
         /** Фотографии на момент покупки: продавец мог их потом сменить */
         images?: string[];
         type?: string;
+        /** Товар продавца — по нему есть сделка, в списке покупок он идёт ею */
+        is_p2p?: boolean;
     };
     is_reviewed: boolean;
 }
@@ -359,6 +361,27 @@ export interface Deal {
     counterpart_online: boolean | null;
     counterpart_last_seen_at: string | null;
     created_at: string;
+    /** Только у одной сделки (GET /p2p/deals/{id}) — для страницы сделки */
+    details?: DealDetails;
+}
+
+/** Товар таким, каким его купили, и магазин — для страницы сделки */
+export interface DealDetails {
+    description: string | null;
+    description_en: string | null;
+    name_en: string | null;
+    images: string[];
+    quantity: number;
+    /** Только покупателю */
+    store: { id: string; rating: number | null; rating_count: number; deals_completed: number } | null;
+}
+
+/** Что покупатель получил по позиции заказа у площадки */
+export interface OrderDelivery {
+    kind: 'digital' | 'instruction' | 'service' | 'subscription' | 'p2p' | string;
+    keys: string[];
+    instruction: string | null;
+    link: string | null;
 }
 
 export interface SellerProfile {

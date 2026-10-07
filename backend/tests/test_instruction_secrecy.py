@@ -146,6 +146,55 @@ class TestUnpaidOrder:
         assert item.product_snapshot["content_data"] == {"instruction": SECRET}
 
 
+class TestDeliveryPage:
+    """Купленное видно на странице покупки — но только после оплаты."""
+
+    async def _order_and_item(self, db, buyer, product, monkeypatch):
+        _stub_payment(monkeypatch)
+        order_id = await _unpaid_order(db, buyer, product)
+        item = (
+            await db.execute(select(OrderItem).where(OrderItem.order_id == uuid.UUID(order_id)))
+        ).scalar_one()
+        return uuid.UUID(order_id), item.id
+
+    async def test_unpaid_order_shows_nothing(self, db, user_factory, instruction, monkeypatch):
+        from fastapi import HTTPException
+
+        buyer = await user_factory(username="delivery_freeloader")
+        order_id, item_id = await self._order_and_item(db, buyer, instruction, monkeypatch)
+
+        with pytest.raises(HTTPException) as exc:
+            await order_routes.item_delivery(order_id, item_id, user=buyer, db=db)
+        assert exc.value.status_code == 403
+
+    async def test_paid_order_shows_the_instruction(self, db, user_factory, instruction, monkeypatch):
+        from models.order import Order, OrderStatus
+
+        buyer = await user_factory(username="delivery_buyer")
+        order_id, item_id = await self._order_and_item(db, buyer, instruction, monkeypatch)
+        (await db.get(Order, order_id)).status = OrderStatus.COMPLETED
+        await db.flush()
+
+        result = await order_routes.item_delivery(order_id, item_id, user=buyer, db=db)
+
+        assert result["kind"] == "instruction"
+        assert result["instruction"] == SECRET
+
+    async def test_someone_elses_order_is_not_found(self, db, user_factory, instruction, monkeypatch):
+        from fastapi import HTTPException
+        from models.order import Order, OrderStatus
+
+        buyer = await user_factory(username="delivery_owner")
+        stranger = await user_factory(username="delivery_stranger")
+        order_id, item_id = await self._order_and_item(db, buyer, instruction, monkeypatch)
+        (await db.get(Order, order_id)).status = OrderStatus.COMPLETED
+        await db.flush()
+
+        with pytest.raises(HTTPException) as exc:
+            await order_routes.item_delivery(order_id, item_id, user=stranger, db=db)
+        assert exc.value.status_code == 404
+
+
 class TestBroadcast:
 
     async def test_edit_does_not_broadcast_instruction(

@@ -173,6 +173,10 @@ class TestDealCard:
         assert as_buyer["store"]["name"] == "Цифровой угол"
         assert as_seller["store"] is None
         assert as_buyer["product_image"] == "/uploads/listings/cp.jpg"
+        # Подробности для страницы сделки — из снимка покупки
+        assert as_buyer["details"]["images"] == ["/uploads/listings/cp.jpg"]
+        assert as_buyer["details"]["store"]["deals_completed"] == 0
+        assert as_seller["details"]["store"] is None
 
     async def test_list_shows_last_message_and_unread(self, db, deal, buyer, seller):
         await _send(db, deal, buyer, "Здравствуйте!")

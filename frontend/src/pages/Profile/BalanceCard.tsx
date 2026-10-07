@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { TonConnectButton, useTonAddress } from '@tonconnect/ui-react';
-import { CheckCircle2, Clock, Download, Wallet, X, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Download, Info, Wallet, X, XCircle } from 'lucide-react';
 import { withdrawalsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
@@ -37,6 +37,7 @@ export const BalanceCard: React.FC = () => {
     const [open, setOpen] = useState(false);
     const [amount, setAmount] = useState('');
     const [sending, setSending] = useState(false);
+    const [infoOpen, setInfoOpen] = useState(false);
 
     const load = async () => {
         setFailed(false);
@@ -109,9 +110,28 @@ export const BalanceCard: React.FC = () => {
                 <span className="refwallet-label">
                     <span className="refwallet-dot" aria-hidden="true" />
                     {t('Баланс', 'Balance')}
+                    {/* Пояснение спрятано за «i»: в карточке оно занимало две
+                        строки, а нужно один раз — понять, что сюда попадает */}
+                    <button
+                        type="button"
+                        className="balance-info-btn"
+                        onClick={() => setInfoOpen(!infoOpen)}
+                        aria-expanded={infoOpen}
+                        aria-label={t('Что входит в баланс', 'What the balance includes')}
+                    >
+                        <Info size={16} />
+                    </button>
                 </span>
-                {enough && <span className="refwallet-pill">{t('можно вывести', 'ready')}</span>}
             </div>
+
+            {infoOpen && (
+                <div className="balance-info">
+                    {t(
+                        'Продажи, подписки, возвраты и реферальные — всё здесь. Выводится на кошелёк, подключённый в профиле.',
+                        'Sales, subscriptions, refunds and referral rewards — all in one place. Withdrawn to the wallet connected in your profile.',
+                    )}
+                </div>
+            )}
 
             {failed ? (
                 <div className="refwallet-failed">
@@ -121,7 +141,12 @@ export const BalanceCard: React.FC = () => {
             ) : available === null ? (
                 <div className="skeleton refwallet-skeleton" />
             ) : (
-                <div className="refwallet-amount">
+                <div className="refwallet-amount balance-amount">
+                    <span className="balance-ton-mark" aria-hidden="true">
+                        <svg width="22" height="22" viewBox="0 0 56 56" fill="currentColor">
+                            <path d="M37.58 15.4H18.42c-3.52 0-5.75 3.8-3.98 6.87l11.82 20.49c.77 1.34 2.7 1.34 3.47 0l11.83-20.49c1.76-3.06-.47-6.87-3.98-6.87zM26.25 36.62l-2.57-4.98-6.21-11.1c-.41-.71.1-1.62.95-1.62h7.82v17.7zm12.28-16.09l-6.2 11.1-2.58 4.98V18.91h7.83c.85 0 1.36.91.95 1.62z" />
+                        </svg>
+                    </span>
                     {ton(available)}
                     <span className="refwallet-currency">TON</span>
                 </div>
@@ -136,22 +161,13 @@ export const BalanceCard: React.FC = () => {
                 </div>
             )}
 
-            <div className="refwallet-note">
-                {t(
-                    'Продажи, подписки, возвраты и реферальные — всё здесь.',
-                    'Sales, subscriptions, refunds and referral rewards — all in one place.',
-                )}
-            </div>
-
             <button className="refwallet-cta" onClick={openSheet} disabled={!enough}>
                 <Download size={18} />
                 {t('Вывести', 'Withdraw')}
             </button>
-            {!enough && available !== null && (
-                <div className="refwallet-note balance-min">
-                    {t(`Вывести можно от ${minimum} TON`, `You can withdraw from ${minimum} TON`)}
-                </div>
-            )}
+            <div className="refwallet-note balance-min">
+                {t(`Минимальная сумма — ${minimum} TON`, `Minimum — ${minimum} TON`)}
+            </div>
 
             {history.length > 0 && (
                 <ul className="balance-history">

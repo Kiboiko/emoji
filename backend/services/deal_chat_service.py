@@ -34,7 +34,7 @@ from models.order import OrderItem
 from models.p2p import Deal, DealMessage, DealStatus, MessageDirection, SellerProfile
 from models.user import User
 from services import deal_media, settings_service
-from services.money import format_amount, from_minor
+from services.money import format_ton_short, from_minor
 from utils.websockets import manager
 
 logger = logging.getLogger(__name__)
@@ -879,7 +879,7 @@ async def notify_unread(db: AsyncSession) -> int:
 # события, даже если сделка потом изменится.
 
 def pay_text(deal: Deal) -> Texts:
-    amount = format_amount(deal.amount_nano, "TON")
+    amount = format_ton_short(deal.amount_nano)
     return (
         f"Оплата получена: {amount}. "
         "Деньги удерживаются площадкой до подтверждения получения.",
@@ -913,7 +913,7 @@ AUTO_DONE_TEXT: Texts = (
 
 
 def refund_text(deal: Deal) -> Texts:
-    amount = format_amount(deal.amount_nano, "TON")
+    amount = format_ton_short(deal.amount_nano)
     return (
         f"Продавец оформил возврат: {amount} вернулись на баланс покупателя. "
         "Сделка закрыта.",

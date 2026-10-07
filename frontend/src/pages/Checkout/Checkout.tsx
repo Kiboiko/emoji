@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { useTonPayment } from '@/hooks/useTonPayment';
+import { formatTon } from '@/lib/ton';
 import { TermsGate } from '@/components/TermsGate/TermsGate';
 import './Checkout.css';
 
@@ -163,7 +164,7 @@ export const Checkout: React.FC = () => {
                     {request && (
                         <div className="total-row total-row-secondary">
                             <span>{t('В TON', 'In TON')}</span>
-                            <span>{Number(request.amount_ton).toFixed(4)} TON</span>
+                            <span>{formatTon(request.amount_ton)} TON</span>
                         </div>
                     )}
 

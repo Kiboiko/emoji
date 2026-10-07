@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/authStore';
 import type {
-    AuthorChannel, ChannelStatus, Deal, DealMessage, MyWithdrawal, ProfileSummary, Store, StoreCard,
-    PublicSettings,
+    AuthorChannel, ChannelStatus, Deal, DealMessage, MyWithdrawal, Order, OrderDelivery, ProfileSummary,
+    Store, StoreCard, PublicSettings,
 } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -148,10 +148,14 @@ export const cartApi = {
 
 // Orders API
 export const ordersApi = {
-    getOrders: async () => {
+    getOrders: async (): Promise<Order[]> => {
         const response = await apiClient.get('/orders');
         return response.data;
     },
+
+    // Купленное по позиции: ключи, инструкция — только после оплаты
+    getDelivery: async (orderId: string, itemId: string): Promise<OrderDelivery> =>
+        (await apiClient.get(`/orders/${orderId}/items/${itemId}/delivery`)).data,
 
     getOrder: async (id: string) => {
         const response = await apiClient.get(`/orders/${id}`);

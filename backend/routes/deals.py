@@ -122,9 +122,52 @@ async def deal_card(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Одна сделка — чат открывают и по ссылке из уведомления, минуя список."""
+    """
+    Одна сделка — чат открывают и по ссылке из уведомления, минуя список.
+
+    В отличие от списка, здесь ещё и подробности товара для страницы сделки
+    в «Мои сделки»: описание, все фото, количество и магазин.
+    """
     deal = await _participant_deal(db, deal_id, user)
-    return await _dto(db, deal, user)
+    card = await _dto(db, deal, user)
+    card["details"] = await _details(db, deal, card["role"])
+    return card
+
+
+async def _details(db: AsyncSession, deal: Deal, role: str) -> dict:
+    """
+    Товар таким, каким его купили: из снимка позиции заказа, а не из
+    текущей карточки — продавец мог сменить описание или снять товар.
+    Магазин — только покупателю: продавец о своём и так знает.
+    """
+    from models.order import OrderItem
+    from models.p2p import SellerProfile
+
+    item = await db.get(OrderItem, deal.order_item_id) if deal.order_item_id else None
+    snapshot = (item.product_snapshot if item else None) or {}
+    images = snapshot.get("images") or ([snapshot["image_url"]] if snapshot.get("image_url") else [])
+
+    store = None
+    if role == "buyer":
+        profile = (
+            await db.execute(select(SellerProfile).where(SellerProfile.user_id == deal.seller_id))
+        ).scalars().first()
+        if profile is not None:
+            store = {
+                "id": str(profile.id),
+                "rating": profile.rating,
+                "rating_count": profile.rating_count,
+                "deals_completed": profile.deals_completed,
+            }
+
+    return {
+        "description": snapshot.get("description_ru"),
+        "description_en": snapshot.get("description_en"),
+        "name_en": snapshot.get("name_en"),
+        "images": images,
+        "quantity": item.quantity if item else 1,
+        "store": store,
+    }
 
 
 # ---------------------------------------------------------------------------

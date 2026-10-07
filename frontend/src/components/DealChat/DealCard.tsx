@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, Clock, Package, RotateCcw, ShieldCheck } from 'lucide-react';
 import type { Deal } from '@/types';
-import { fmtDate, statusLabel, statusTone, ton } from './dealFormat';
+import { dealSteps, fmtDate, isFinished, statusLabel, statusTone, ton } from './dealFormat';
 
 type T = (ru: string, en: string) => string;
 
@@ -44,24 +44,8 @@ export const DealCard: React.FC<{
             : t(`${sellerAmount} TON · придут после подтверждения`, `${sellerAmount} TON · after the buyer confirms`);
     }
 
-    const finished = ['released', 'refunded', 'cancelled', 'confirmed'].includes(deal.status);
-    const received = deal.released_at ?? deal.confirmed_at;
-    const steps: [string, string, boolean][] = [
-        [t('Оплачено', 'Paid'), fmtDate(deal.paid_at, language), true],
-        [
-            t('Отправлено', 'Shipped'),
-            deal.delivered_at ? fmtDate(deal.delivered_at, language) : t('ещё нет', 'not yet'),
-            Boolean(deal.delivered_at),
-        ],
-        [
-            t('Получено', 'Received'),
-            received
-                ? fmtDate(received, language)
-                : deal.status === 'delivered_claimed' && deadline ? t(`до ${deadline}`, `by ${deadline}`) : '—',
-            Boolean(received),
-        ],
-    ];
-    const current = finished || deal.status === 'disputed' ? -1 : steps.findIndex((s) => !s[2]);
+    const finished = isFinished(deal);
+    const { steps, current } = dealSteps(deal, language, t);
 
     const commissionPercent = Number(deal.amount_ton) > 0
         ? Math.round((Number(deal.commission_ton) / Number(deal.amount_ton)) * 1000) / 10
@@ -177,7 +161,7 @@ export const DealCard: React.FC<{
                         {t(`Сделка №${deal.number}`, `Deal #${deal.number}`)}
                     </div>
                     <div className="dchat-steps">
-                        {steps.map(([title, when, done], index) => (
+                        {steps.map(({ title, when, done }, index) => (
                             <span
                                 key={title}
                                 className={`dchat-step${done ? ' done' : ''}${index === current ? ' current' : ''}`}

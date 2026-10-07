@@ -51,7 +51,7 @@
 
 /* :where — нулевая специфичность: цвет по умолчанию для кнопок внутри
    чата, который перебивает любой класс конкретной кнопки */
-:where(.dchat) button {
+:where(.dchat, .dpage, .dsheet-layer) button {
     color: inherit;
     font-family: inherit;
 }
@@ -429,17 +429,17 @@
     flex: none;
 }
 
-.dchat .dchat-btn.primary {
+:is(.dchat, .dpage, .dsheet-layer) .dchat-btn.primary {
     background: var(--accent-primary);
     color: var(--accent-contrast);
 }
 
-.dchat .dchat-btn.ghost {
+:is(.dchat, .dpage, .dsheet-layer) .dchat-btn.ghost {
     background: var(--bg-tertiary);
     color: var(--text-primary);
 }
 
-.dchat .dchat-btn.danger {
+:is(.dchat, .dpage, .dsheet-layer) .dchat-btn.danger {
     background: rgba(239, 68, 68, 0.12);
     color: var(--accent-error);
 }

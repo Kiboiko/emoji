@@ -1,0 +1,168 @@
+/* --- Мои сделки: покупки и продажи одним списком ------------------------ */
+
+.purchases {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.purchases-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border-radius: 14px;
+    background: var(--bg-secondary);
+}
+
+.purchases-tabs button {
+    height: 38px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.purchases-tabs button.is-active {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.purchases-group {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.purchases-group-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.purchases-list {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.purchases-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 16px;
+    border: 1px solid transparent;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+/* Сделки, где следующий шаг за человеком, выделены рамкой: их надо
+   заметить среди десятка завершённых */
+.purchases-row.needs-you {
+    border-color: rgba(var(--accent-rgb), 0.35);
+}
+
+.purchases-skeleton {
+    height: 86px;
+}
+
+.purchases-thumb {
+    flex: none;
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.purchases-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.purchases-main {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.purchases-name {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.purchases-who {
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Подсказка переносится под ярлык, если рядом не помещается: обрезанное
+   «Подтвердите д…» хуже лишней строки */
+.purchases-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    min-width: 0;
+}
+
+.purchases-hint {
+    min-width: 0;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.purchases-hint.warn {
+    color: var(--accent-warning);
+}
+
+.purchases-side {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    color: var(--text-tertiary);
+}
+
+.purchases-amount {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Возврат: сумма зачёркнута — деньги вернулись */
+.purchases-amount.struck {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+}
+
+.purchases-empty {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}

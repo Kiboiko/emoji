@@ -1,0 +1,350 @@
+/* --- Объявление: просмотр, правка, создание ------------------------------
+   Каркас страницы, панель внизу и шторки — из DealPage.css */
+
+.led-gallery {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.led-cover {
+    height: 220px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+}
+
+.led-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.led-cover-empty {
+    width: 100%;
+    height: 100%;
+    border: 1px dashed var(--border-color);
+    border-radius: 20px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    cursor: pointer;
+}
+
+.led-thumbs {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+
+.led-thumb {
+    position: relative;
+    aspect-ratio: 1;
+}
+
+.led-thumb-pick {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    cursor: pointer;
+}
+
+.led-thumb.is-cover .led-thumb-pick {
+    border-color: var(--accent-primary);
+}
+
+.led-thumb-pick img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.led-thumb-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--bg-primary);
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+}
+
+.led-thumb-add {
+    aspect-ratio: 1;
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.led-hint {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.led-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+
+.led-stats > div {
+    display: grid;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: var(--bg-secondary);
+}
+
+.led-stats strong {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.led-stats span {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.led-banner {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(var(--accent-rgb), 0.1);
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.led-banner svg {
+    flex: none;
+    margin-top: 1px;
+    color: var(--accent-primary);
+}
+
+.led-banner.warn {
+    background: rgba(245, 158, 11, 0.12);
+}
+
+.led-banner.warn svg {
+    color: var(--accent-warning);
+}
+
+.led-banner.danger {
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.led-banner.danger svg {
+    color: var(--accent-error);
+}
+
+/* fieldset — чтобы на модерации все поля выключались одной строкой */
+.led-form {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+    display: grid;
+    gap: 14px;
+}
+
+.led-field {
+    display: grid;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.led-field input,
+.led-field textarea,
+.led-field select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-family: inherit;
+    /* 16px: iOS приближает страницу при фокусе на поле мельче */
+    font-size: 16px;
+    font-weight: 400;
+    outline: none;
+}
+
+.led-field textarea {
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.led-field input:focus,
+.led-field textarea:focus,
+.led-field select:focus {
+    border-color: var(--accent-primary);
+}
+
+.led-form:disabled .led-field input,
+.led-form:disabled .led-field textarea,
+.led-form:disabled .led-field select {
+    opacity: 0.7;
+}
+
+.led-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.led-stepper {
+    height: 48px;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: center;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.led-stepper button {
+    height: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.led-stepper span {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.led-english {
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.led-english-head {
+    width: 100%;
+    min-height: 56px;
+    padding: 10px 14px;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font-family: inherit;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.led-english-head > span {
+    display: grid;
+    gap: 2px;
+}
+
+.led-english-head strong {
+    font-size: 15px;
+}
+
+.led-english-head small {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.led-english-head small.warn {
+    color: var(--accent-warning);
+}
+
+.led-english-head svg {
+    flex: none;
+    color: var(--text-tertiary);
+    transition: transform 0.2s ease;
+}
+
+.led-english.is-open .led-english-head svg {
+    transform: rotate(180deg);
+}
+
+.led-english-body {
+    display: grid;
+    gap: 12px;
+    padding: 0 14px 14px;
+}
+
+.led-english-body .led-field input,
+.led-english-body .led-field textarea {
+    background: var(--bg-primary);
+}
+
+/* Панель действий: две кнопки рядом или одна во всю ширину */
+.led-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.led-bar.single {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.led-bar .dchat-btn {
+    height: 48px;
+    border-radius: 14px;
+    font-size: 15px;
+}
+
+:is(.dpage) .led-delete {
+    color: var(--accent-error);
+}
+
+.led-points {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 10px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.led-points li {
+    display: flex;
+    gap: 10px;
+}
+
+.led-points svg {
+    flex: none;
+    margin-top: 1px;
+    color: var(--accent-primary);
+}

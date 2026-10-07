@@ -19,17 +19,19 @@ import { Store } from './pages/Store/Store';
 import { TermsPage } from './pages/Terms/TermsPage';
 import { DealChat } from './pages/DealChat/DealChat';
 import {
-    ChatsPage, MyListingsPage, MyChannelsPage, MyOrdersPage, MyDealsPage, MySubscriptionsPage,
+    ChatsPage, MyListingsPage, MyChannelsPage, MyDealsPage, MySubscriptionsPage,
 } from './pages/Cabinet/CabinetRoutes';
+import { DealPage } from './pages/DealPage/DealPage';
+import { OrderPage } from './pages/DealPage/OrderPage';
+import { ListingEditor } from './pages/ListingEditor/ListingEditor';
 
 // Dev-вход без Telegram. Включается только на локальной сборке
 // (VITE_DEV_AUTH=true) и дополнительно требует DEBUG=true на бэкенде.
 const DEV_AUTH_ENABLED = import.meta.env.VITE_DEV_AUTH === 'true';
 
-// Отдельной страницы заказов не было — только заглушка «Coming Soon».
-// Редирект вместо неё: по ссылке из старой переписки или закладки человек
-// попадает туда, где заказы действительно есть.
-const Orders = () => <Navigate to="/my/orders" replace />;
+// «Мои заказы» влились в «Мои сделки»: там и покупки у площадки, и сделки
+// с продавцами. Старые ссылки и закладки ведут туда же.
+const Orders = () => <Navigate to="/my/deals" replace />;
 
 export const App: React.FC = () => {
     const { initData, startParam, isReady } = useTelegram();
@@ -308,9 +310,22 @@ const AppContent: React.FC = () => {
                         <MyChannelsPage />
                     </PageTransition>
                 } />
-                <Route path="/my/orders" element={
+                <Route path="/my/orders" element={<Orders />} />
+                {/* Новое объявление и правка существующего — отдельным экраном */}
+                <Route path="/my/listings/:listingId" element={
                     <PageTransition>
-                        <MyOrdersPage />
+                        <ListingEditor />
+                    </PageTransition>
+                } />
+                {/* Страница сделки и покупки у площадки — из «Мои сделки» */}
+                <Route path="/my/deal/:dealId" element={
+                    <PageTransition>
+                        <DealPage />
+                    </PageTransition>
+                } />
+                <Route path="/my/purchase/:orderId/:itemId" element={
+                    <PageTransition>
+                        <OrderPage />
                     </PageTransition>
                 } />
                 <Route path="/my/deals" element={
@@ -413,10 +428,12 @@ const HomeWithProductOverlay: React.FC = () => {
 const NavigationWrapper: React.FC = () => {
     const location = useLocation();
     const isProductPage = location.pathname.startsWith('/product/');
-    // В чате сделки снизу поле ввода — меню там только мешало бы
-    const isDealChat = location.pathname.startsWith('/my/deals/');
+    // В чате сделки снизу поле ввода, на странице сделки и в правке
+    // объявления — своя панель действий: меню там только мешало бы
+    const ownBottomBar = ['/my/deals/', '/my/deal/', '/my/listings/']
+        .some((prefix) => location.pathname.startsWith(prefix));
 
-    if (isProductPage || isDealChat) return null;
+    if (isProductPage || ownBottomBar) return null;
 
     return <BottomNav />;
 };

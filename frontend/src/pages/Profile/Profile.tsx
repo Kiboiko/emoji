@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Copy, Store, Radio, Package, Handshake, Ticket } from 'lucide-react';
+import { Copy, Store, Radio, Handshake, Ticket } from 'lucide-react';
 import { usersApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
@@ -84,18 +84,13 @@ export const Profile: React.FC = () => {
             count: summary?.channels ?? null,
         },
         {
-            to: '/my/orders',
-            icon: <Package size={18} />,
-            label: t('Мои заказы', 'My orders'),
-            count: summary?.orders ?? null,
-        },
-        {
+            // «Мои заказы» влились сюда: покупки у площадки и сделки с
+            // продавцами — одним списком. Непрочитанное — на вкладке «Чаты»
             to: '/my/deals',
             icon: <Handshake size={18} />,
             label: t('Мои сделки', 'My deals'),
-            hint: t('Покупки и продажи через эскроу', 'Escrow purchases and sales'),
+            hint: t('Покупки и продажи', 'Purchases and sales'),
             count: summary?.deals ?? null,
-            // Непрочитанное — на вкладке «Чаты» нижнего меню, здесь не дублируем
         },
         {
             to: '/my/subscriptions',

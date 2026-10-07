@@ -89,6 +89,60 @@ async def get_order(
     return order_data
 
 
+@router.get("/{order_id}/items/{item_id}/delivery")
+async def item_delivery(
+    order_id: uuid.UUID,
+    item_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Что покупатель получил по позиции заказа: ключи, инструкцию, данные услуги.
+
+    Раньше купленное уходило только файлом в Telegram, а в приложении его не
+    было вовсе — потерял сообщение, и ключа больше нигде нет. Теперь его
+    видно на странице покупки в «Мои сделки».
+
+    Только владельцу и только после оплаты: снапшот пишется при оформлении
+    заказа, и без проверки статуса инструкцию снова можно было бы прочитать,
+    не заплатив (см. tests/test_instruction_secrecy.py).
+    """
+    order = await db.get(Order, order_id)
+    if order is None or order.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    if order.status not in (OrderStatus.PAID, OrderStatus.COMPLETED):
+        raise HTTPException(status_code=403, detail="Заказ не оплачен")
+
+    item = (
+        await db.execute(
+            select(OrderItem).where(OrderItem.id == item_id, OrderItem.order_id == order.id)
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Позиция не найдена")
+
+    snapshot = item.product_snapshot or {}
+    kind = "p2p" if snapshot.get("is_p2p") else (snapshot.get("type") or "digital")
+    result: dict = {"kind": kind, "keys": [], "instruction": None, "link": None}
+
+    if kind == "digital":
+        rows = (
+            await db.execute(
+                select(DigitalItem.content).where(
+                    DigitalItem.order_id == order.id,
+                    DigitalItem.product_id == item.product_id,
+                )
+            )
+        ).scalars().all()
+        result["keys"] = [row for row in rows if row]
+    elif kind == "instruction":
+        result["instruction"] = (snapshot.get("content_data") or {}).get("instruction") or None
+    elif kind == "service":
+        # Услугу выполняет админ вручную — показываем, что передал покупатель
+        result["link"] = (item.user_data or {}).get("link")
+    return result
+
+
 @router.post("/{order_id}/cancel", response_model=dict)
 async def cancel_order(
     order_id: str,

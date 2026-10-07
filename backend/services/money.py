@@ -15,7 +15,7 @@
     целыми числами и не округлять дважды.
 """
 
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 from typing import Final
 
 
@@ -66,6 +66,31 @@ def format_amount(amount_minor: int, currency: str) -> str:
     if value == value.to_integral_value():
         value = value.quantize(Decimal(1))
     return f"{value} {currency}"
+
+
+def format_ton_short(amount_nano: int) -> str:
+    """
+    TON для людей: без хвоста из девяти знаков.
+
+    «0.006535948 TON» в сообщении читается как ошибка, а не как сумма. От
+    единицы — два знака после точки, меньше — четыре, совсем мелочь — две
+    значащие цифры, чтобы не превратиться в ноль. Считать по этому нельзя —
+    только показывать; точные суммы — format_amount и минорные единицы.
+    """
+    value = from_minor(amount_nano, "TON")
+    if value == 0:
+        return "0 TON"
+    magnitude = abs(value)
+    if magnitude >= 1:
+        places = 2
+    elif magnitude >= Decimal("0.0001"):
+        places = 4
+    else:
+        # Две значащие цифры: 0.0000123 → 0.000012
+        places = -magnitude.adjusted() + 1
+    rounded = value.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
+    text = format(rounded.normalize(), "f")
+    return f"{text} TON"
 
 
 def split_by_bp(amount_minor: int, bp: int) -> tuple[int, int]:

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { formatTon } from '@/lib/ton';
 import {
     Radio, Plus, Send, ShieldCheck, ShieldAlert, RefreshCw, Image as ImageIcon,
     ChevronDown, ChevronUp, Check, Wallet, Pencil, Trash2, EyeOff, BadgeCheck, X,
@@ -148,13 +149,13 @@ const AuthorPayout: React.FC<{ language: string }> = ({ language }) => {
         <div className="channel-payout">
             <div className="channel-payout-row">
                 <span className="channel-payout-label">{t('Баланс, TON', 'Balance, TON')}</span>
-                <span className="channel-payout-value">{available}</span>
+                <span className="channel-payout-value">{formatTon(available)}</span>
             </div>
 
             {hold > 0 && (
                 <span className="channel-note">
                     {t('Выводится: ', 'Being withdrawn: ')}
-                    {(hold / 1e9).toFixed(9).replace(/0+$/, '').replace(/\.$/, '')} TON
+                    {formatTon(hold / 1e9)} TON
                 </span>
             )}
 

@@ -5,8 +5,8 @@ from decimal import Decimal
 import pytest
 
 from services.money import (
-    UnknownCurrency, bp_to_percent, format_amount, from_minor, percent_to_bp,
-    split_by_bp, to_minor,
+    UnknownCurrency, bp_to_percent, format_amount, format_ton_short, from_minor,
+    percent_to_bp, split_by_bp, to_minor,
 )
 
 
@@ -99,3 +99,12 @@ class TestPercentHelpers:
         assert format_amount(24_500_000_000, "TON") == "24.5 TON"
         assert format_amount(1_000_000_000, "TON") == "1 TON"
         assert format_amount(1234, "USD") == "12.34 USD"
+
+    def test_short_ton_for_people(self):
+        """В сообщениях людям — без хвоста из девяти знаков."""
+        assert format_ton_short(6_535_948) == "0.0065 TON"
+        assert format_ton_short(61_783_440) == "0.0618 TON"
+        assert format_ton_short(14_553_000_000) == "14.55 TON"
+        assert format_ton_short(100_000_000_000) == "100 TON"
+        assert format_ton_short(12_300) == "0.000012 TON"     # мелочь не в ноль
+        assert format_ton_short(0) == "0 TON"
