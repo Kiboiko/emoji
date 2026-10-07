@@ -640,6 +640,95 @@ html[data-platform="android"] .refwallet-card {
     }
 }
 
+/* --- Баланс: история выводов и окно вывода ------------------------------ */
+
+.balance-min {
+    text-align: center;
+}
+
+.balance-history {
+    list-style: none;
+    margin: var(--space-4) 0 0;
+    padding: var(--space-3) 0 0;
+    border-top: 1px solid var(--border-color);
+    display: grid;
+    gap: var(--space-2-5);
+}
+
+.balance-history li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px var(--space-2);
+}
+
+.balance-history-main {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    min-width: 0;
+}
+
+.balance-history-amount {
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+}
+
+.balance-history-date {
+    font-size: var(--font-sm);
+    color: var(--text-tertiary);
+}
+
+.balance-history-reason {
+    grid-column: 1 / -1;
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+}
+
+.balance-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.balance-status.done {
+    color: var(--accent-success);
+}
+
+.balance-status.rejected {
+    color: var(--accent-error);
+}
+
+.balance-address {
+    display: block;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 13px;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.balance-connect {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: start;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.balance-terms {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
 /* Баланс не загрузился. Раньше на этом месте вечно крутился скелетон:
    пустой ответ и ошибка выглядели одинаково. */
 .refwallet-failed {

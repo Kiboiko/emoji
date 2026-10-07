@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Radio, Plus, Send, ShieldCheck, ShieldAlert, RefreshCw, Image as ImageIcon,
     ChevronDown, ChevronUp, Check, Wallet, Pencil, Trash2, EyeOff, BadgeCheck, X,
@@ -79,7 +80,7 @@ export const ChannelCabinet: React.FC<{ standalone?: boolean }> = ({ standalone 
 
             {open && channels !== null && (
                 <>
-                    {hasChannels && <AuthorPayout language={language} onError={fail} />}
+                    {hasChannels && <AuthorPayout language={language} />}
 
                     {channels.map((channel) => (
                         <ChannelCard
@@ -122,130 +123,48 @@ export const ChannelCabinet: React.FC<{ standalone?: boolean }> = ({ standalone 
 /* ------------------------------------------------------------------ */
 
 /**
- * Баланс и заявка на вывод.
+ * Заработок автора.
  *
- * Заработок автора канала лежит на том же счёте в TON, что и заработок
- * продавца, но показывался только в кабинете продавца — то есть человек,
- * продающий подписки и не торгующий вещами, своих денег не видел вообще.
- * В профиле сверху выводится реферальный баланс в USD, и на него легко
- * посмотреть и решить, что заработка нет.
+ * Сам вывод — в профиле: баланс у человека один на всё (продажи, подписки,
+ * возвраты, реферальные), и выводится он на кошелёк, подключённый через
+ * TonConnect. Здесь — только сколько заработано и куда идти за деньгами.
  */
-const AuthorPayout: React.FC<{
-    language: string;
-    onError: (e: unknown, fallback: string) => void;
-}> = ({ language, onError }) => {
-    const { haptic } = useTelegram();
-    const showToast = useToastStore((s) => s.show);
-
+const AuthorPayout: React.FC<{ language: string }> = ({ language }) => {
     const [available, setAvailable] = useState<string>('0');
     const [hold, setHold] = useState(0);
-    const [formOpen, setFormOpen] = useState(false);
-    const [amount, setAmount] = useState('');
-    const [wallet, setWallet] = useState('');
-    const [busy, setBusy] = useState(false);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
-    const load = useCallback(async () => {
-        try {
-            const data = await withdrawalsApi.getBalances();
-            setAvailable(data.TON?.available ?? '0');
-            setHold(data.TON?.hold_minor ?? 0);
-        } catch {
-            setAvailable('0');
-        }
+    useEffect(() => {
+        withdrawalsApi.getBalances()
+            .then((data) => {
+                setAvailable(data.TON?.available ?? '0');
+                setHold(data.TON?.hold_minor ?? 0);
+            })
+            .catch(() => setAvailable('0'));
     }, []);
-
-    useEffect(() => { load(); }, [load]);
-
-    const submit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setBusy(true);
-        try {
-            await withdrawalsApi.requestWithdrawal({
-                amount: amount.trim(),
-                wallet: wallet.trim(),
-                currency: 'TON',
-            });
-            haptic.notification('success');
-            showToast(t('Заявка на вывод отправлена', 'Withdrawal requested'), 'success');
-            setFormOpen(false);
-            setAmount('');
-            await load();
-        } catch (err) {
-            onError(err, t('Не удалось отправить заявку', 'Failed to request withdrawal'));
-        } finally {
-            setBusy(false);
-        }
-    };
 
     return (
         <div className="channel-payout">
             <div className="channel-payout-row">
-                <span className="channel-payout-label">{t('Заработано, TON', 'Earned, TON')}</span>
+                <span className="channel-payout-label">{t('Баланс, TON', 'Balance, TON')}</span>
                 <span className="channel-payout-value">{available}</span>
             </div>
 
             {hold > 0 && (
                 <span className="channel-note">
-                    {t('Заморожено по заявкам на вывод: ', 'On hold for withdrawals: ')}
-                    {(hold / 1e9).toFixed(9)} TON
+                    {t('Выводится: ', 'Being withdrawn: ')}
+                    {(hold / 1e9).toFixed(9).replace(/0+$/, '').replace(/\.$/, '')} TON
                 </span>
             )}
 
-            {formOpen ? (
-                <form className="channel-form channel-form-inline" onSubmit={submit}>
-                    <label className="channel-label">
-                        {t('Сумма к выводу', 'Amount')}
-                        <input
-                            className="channel-input"
-                            type="number"
-                            step="0.000000001"
-                            min="0.000000001"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            placeholder={available}
-                            required
-                        />
-                    </label>
-                    <label className="channel-label">
-                        {t('Кошелёк TON', 'TON wallet')}
-                        <input
-                            className="channel-input"
-                            value={wallet}
-                            onChange={(e) => setWallet(e.target.value)}
-                            placeholder="UQ..."
-                            minLength={10}
-                            required
-                        />
-                    </label>
-                    <div className="channel-row">
-                        <button className="channel-btn" type="submit" disabled={busy}>
-                            {busy ? t('Отправляем...', 'Sending...') : t('Отправить заявку', 'Send request')}
-                        </button>
-                        <button
-                            className="channel-btn-secondary"
-                            type="button"
-                            onClick={() => setFormOpen(false)}
-                        >
-                            {t('Отмена', 'Cancel')}
-                        </button>
-                    </div>
-                </form>
-            ) : (
-                <button
-                    className="channel-btn-secondary"
-                    onClick={() => setFormOpen(true)}
-                    disabled={Number(available) <= 0}
-                >
-                    <Wallet size={16} />
-                    {t('Вывести', 'Withdraw')}
-                </button>
-            )}
+            <Link className="channel-btn-secondary" to="/profile">
+                <Wallet size={16} />
+                {t('Вывести — в профиле', 'Withdraw in your profile')}
+            </Link>
         </div>
     );
 };
-
 /* ------------------------------------------------------------------ */
 /* Подключение канала                                                  */
 /* ------------------------------------------------------------------ */
@@ -257,7 +176,6 @@ const ConnectForm: React.FC<{
 }> = ({ language, onDone, onError }) => {
     const { haptic } = useTelegram();
     const [identifier, setIdentifier] = useState('');
-    const [wallet, setWallet] = useState('');
     const [description, setDescription] = useState('');
     const [descriptionEn, setDescriptionEn] = useState('');
     const [accepted, setAccepted] = useState(false);
@@ -285,7 +203,6 @@ const ConnectForm: React.FC<{
         try {
             await subscriptionsApi.connectChannel({
                 chat_identifier: identifier.trim(),
-                payout_wallet: wallet.trim(),
                 description: description.trim() || undefined,
                 description_en: descriptionEn.trim() || undefined,
                 accept_terms: accepted,
@@ -331,19 +248,6 @@ const ConnectForm: React.FC<{
                     placeholder={t('@username или -1001234567890', '@username or -1001234567890')}
                     minLength={2}
                     maxLength={100}
-                    required
-                />
-            </label>
-
-            <label className="channel-label">
-                {t('Кошелёк TON для выплат', 'TON payout wallet')}
-                <input
-                    className="channel-input"
-                    value={wallet}
-                    onChange={(e) => setWallet(e.target.value)}
-                    placeholder="UQ..."
-                    minLength={10}
-                    maxLength={80}
                     required
                 />
             </label>
@@ -774,7 +678,6 @@ const ChannelEditForm: React.FC<{
     const [titleEn, setTitleEn] = useState(channel.custom_title_en ?? '');
     const [description, setDescription] = useState(channel.description ?? '');
     const [descriptionEn, setDescriptionEn] = useState(channel.description_en ?? '');
-    const [wallet, setWallet] = useState(channel.payout_wallet ?? '');
     const [busy, setBusy] = useState(false);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
@@ -796,7 +699,6 @@ const ChannelEditForm: React.FC<{
                 title_en: titleEn.trim(),
                 description: description.trim(),
                 description_en: descriptionEn.trim(),
-                payout_wallet: wallet.trim(),
             });
             haptic.notification('success');
             if (willUnpublish) {
@@ -866,18 +768,6 @@ const ChannelEditForm: React.FC<{
                     value={descriptionEn}
                     onChange={(e) => setDescriptionEn(e.target.value)}
                     maxLength={2000}
-                />
-            </label>
-
-            <label className="channel-label">
-                {t('Кошелёк TON для выплат', 'TON payout wallet')}
-                <input
-                    className="channel-input"
-                    value={wallet}
-                    onChange={(e) => setWallet(e.target.value)}
-                    placeholder="UQ..."
-                    minLength={10}
-                    maxLength={80}
                 />
             </label>
 

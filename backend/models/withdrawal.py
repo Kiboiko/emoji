@@ -8,9 +8,20 @@ from database import Base
 
 
 class WithdrawalStatus(str, PyEnum):
-    """Withdrawal status enumeration"""
+    """
+    Заявка на вывод.
+
+        pending ──«Выплатить» в админке──> sending ──перевод найден в сети──> completed
+           │                                  │
+           │                                  └──«перевод не прошёл»──> pending
+           ├──«Отметить выплаченным» (перевод сделан вручную)──> completed
+           └──«Отклонить»──> rejected (деньги вернулись на баланс)
+    """
     PENDING = "pending"
+    # Админ подписал перевод в кошельке площадки, ждём его в блокчейне
+    SENDING = "sending"
     COMPLETED = "completed"
+    REJECTED = "rejected"
 
 
 class Withdrawal(Base):
@@ -46,6 +57,16 @@ class Withdrawal(Base):
         nullable=False
     )
     
+    # Выплата через TonConnect из админки. Комментарий перевода уникален на
+    # заявку: по нему перевод находится в блокчейне и заявка закрывается сама
+    payout_comment: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tx_hash: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Почему отклонена — человек видит это в истории выводов
+    reject_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

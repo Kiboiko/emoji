@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
     Store, Star, Plus, Upload, X, Send, Pencil, Trash2, Camera, ChevronRight,
-    EyeOff, Eye, AlertTriangle, ChevronDown, ChevronUp, Check, Wallet,
+    EyeOff, Eye, AlertTriangle, ChevronDown, ChevronUp, Check,
 } from 'lucide-react';
-import { p2pApi, categoriesApi, termsApi, withdrawalsApi } from '@/api/client';
+import { p2pApi, categoriesApi, termsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
@@ -164,7 +164,6 @@ const SellerRegistration: React.FC<{
 }> = ({ language, busy, setBusy, onDone, onError }) => {
     const { haptic } = useTelegram();
     const [name, setName] = useState('');
-    const [wallet, setWallet] = useState('');
     const [accepted, setAccepted] = useState(false);
     const [termsOpen, setTermsOpen] = useState(false);
     const [termsText, setTermsText] = useState<string | null>(null);
@@ -187,9 +186,10 @@ const SellerRegistration: React.FC<{
         e.preventDefault();
         setBusy(true);
         try {
+            // Кошелька для выплат больше нет: деньги выводятся из профиля на
+            // кошелёк, подключённый через TonConnect
             await p2pApi.registerSeller({
                 display_name: name.trim(),
-                payout_wallet: wallet.trim(),
                 accept_terms: accepted,
             });
             haptic.notification('success');
@@ -233,19 +233,6 @@ const SellerRegistration: React.FC<{
                 )}
             </p>
 
-            <label className="seller-label">
-                {t('Кошелёк TON для выплат', 'TON payout wallet')}
-                <input
-                    className="seller-input"
-                    value={wallet}
-                    onChange={(e) => setWallet(e.target.value)}
-                    placeholder="UQ..."
-                    minLength={10}
-                    maxLength={80}
-                    required
-                />
-            </label>
-
             <label className="seller-check">
                 <input
                     type="checkbox"
@@ -286,7 +273,6 @@ const SellerSummary: React.FC<{
     const { haptic } = useTelegram();
     const [editing, setEditing] = useState(false);
     const [name, setName] = useState(profile.display_name ?? '');
-    const [wallet, setWallet] = useState(profile.payout_wallet ?? '');
     const [about, setAbout] = useState(profile.description ?? '');
     const [saving, setSaving] = useState(false);
     const avatarInput = useRef<HTMLInputElement | null>(null);
@@ -299,9 +285,8 @@ const SellerSummary: React.FC<{
         try {
             await p2pApi.updateSeller({
                 // Запертое имя не отправляем вовсе: сервер такую правку
-                // отклоняет, и сохранение кошелька падало бы вместе с ней
+                // отклоняет, и сохранение описания падало бы вместе с ней
                 display_name: profile.name_locked ? undefined : name.trim(),
-                payout_wallet: wallet.trim(),
                 description: about.trim(),
             });
             haptic.notification('success');
@@ -434,7 +419,6 @@ const SellerSummary: React.FC<{
                 <div className="seller-identity">
                     <div className="seller-identity-text">
                         <div className="seller-name">{profile.display_name}</div>
-                        <div className="seller-wallet">{profile.payout_wallet}</div>
                         {profile.description && (
                             <div className="seller-about">{profile.description}</div>
                         )}
@@ -483,14 +467,6 @@ const SellerSummary: React.FC<{
                         placeholder={t('О магазине (необязательно)', 'About the store (optional)')}
                         maxLength={1000}
                     />
-                    <input
-                        className="seller-input"
-                        value={wallet}
-                        onChange={(e) => setWallet(e.target.value)}
-                        minLength={10}
-                        maxLength={80}
-                        required
-                    />
                     <div className="seller-row-btns">
                         <button className="seller-btn" type="submit" disabled={saving}>
                             <Check size={14} />
@@ -507,124 +483,19 @@ const SellerSummary: React.FC<{
                 </form>
             )}
 
+            {/* Вывод — в профиле: баланс у человека один на всё (продажи,
+                подписки, возвраты, реферальные), и выводится он на кошелёк,
+                подключённый через TonConnect. Отдельного кошелька для выплат
+                у магазина больше нет */}
             {Number(profile.balance_ton ?? 0) > 0 && (
-                <Payout
-                    balance={profile.balance_ton ?? '0'}
-                    wallet={profile.payout_wallet ?? ''}
-                    language={language}
-                    onDone={onSaved}
-                    onError={onError}
-                />
+                <Link className="seller-payout seller-storefront" to="/profile">
+                    {t('Вывести — в профиле', 'Withdraw in your profile')}
+                    <ChevronRight size={14} />
+                </Link>
             )}
         </div>
     );
 };
-
-/**
- * Вывод заработка продавца.
- *
- * Деньги уходят не мгновенно: заявка замораживает сумму на счёте, а перевод
- * делает администрация вручную. Так написано и в тексте — иначе продавец ждёт
- * поступления сразу и идёт в поддержку.
- */
-const Payout: React.FC<{
-    balance: string;
-    wallet: string;
-    language: string;
-    onDone: () => Promise<SellerProfile>;
-    onError: (e: any, fallback: string) => void;
-}> = ({ balance, wallet, language, onDone, onError }) => {
-    const { haptic } = useTelegram();
-    const [open, setOpen] = useState(false);
-    const [amount, setAmount] = useState(balance);
-    const [busy, setBusy] = useState(false);
-    const [sent, setSent] = useState(false);
-
-    const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
-
-    const submit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (Number(amount) <= 0 || Number(amount) > Number(balance)) {
-            onError(null, t('Некорректная сумма', 'Invalid amount'));
-            return;
-        }
-
-        setBusy(true);
-        try {
-            await withdrawalsApi.requestWithdrawal({
-                amount, wallet, currency: 'TON',
-            });
-            haptic.notification('success');
-            setSent(true);
-            setOpen(false);
-            await onDone();
-        } catch (err) {
-            onError(err, t('Не удалось создать заявку', 'Request failed'));
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    if (sent) {
-        return (
-            <p className="seller-hint">
-                {t(
-                    'Заявка на вывод создана. Администрация переведёт средства на указанный кошелёк.',
-                    'Withdrawal requested. The admins will send the funds to the wallet above.',
-                )}
-            </p>
-        );
-    }
-
-    if (!open) {
-        return (
-            <div className="seller-payout">
-                <button className="seller-btn" onClick={() => setOpen(true)}>
-                    <Wallet size={14} />
-                    {t('Вывести', 'Withdraw')} {balance} TON
-                </button>
-            </div>
-        );
-    }
-
-    return (
-        <form className="seller-form" onSubmit={submit}>
-            <label className="seller-label">
-                {t('Сумма к выводу', 'Amount')}
-                <input
-                    className="seller-input"
-                    type="number"
-                    step="0.000000001"
-                    min="0.000000001"
-                    max={balance}
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    required
-                />
-            </label>
-
-            <p className="seller-hint">
-                {t('На кошелёк ', 'To wallet ')}
-                <span className="seller-wallet-inline">{wallet}</span>
-                {t('. Изменить его можно выше.', '. You can change it above.')}
-            </p>
-
-            <div className="seller-row-btns">
-                <button className="seller-btn" type="submit" disabled={busy}>
-                    {t('Отправить заявку', 'Request')}
-                </button>
-                <button
-                    className="seller-btn seller-btn-ghost"
-                    type="button"
-                    onClick={() => setOpen(false)}
-                >
-                    {t('Отмена', 'Cancel')}
-                </button>
-            </div>
-        </form>
-    );
-};
-
 /* ------------------------------------------------------------------ */
 /* Заявки                                                              */
 /* ------------------------------------------------------------------ */

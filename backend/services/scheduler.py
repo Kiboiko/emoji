@@ -170,6 +170,24 @@ async def poll_ton_payments():
             await db.rollback()
 
 
+async def confirm_payouts():
+    """
+    Закрывает выплаты, отправленные из админки через кошелёк площадки.
+
+    Раз в минуту: сразу после подписи заявка проверяется и так, а фоновая
+    проверка ловит переводы, которые дошли позже. Без заявок в ожидании к
+    индексеру не ходит.
+    """
+    from services import withdrawal_service
+
+    async with AsyncSessionLocal() as db:
+        try:
+            await withdrawal_service.confirm_sent_payouts(db)
+        except Exception as e:
+            logger.exception("[SCHEDULER] Проверка выплат упала: %s", e)
+            await db.rollback()
+
+
 async def process_subscriptions():
     """
     Истечение подписок и напоминания.
@@ -206,6 +224,12 @@ def start_scheduler():
             notify_deal_messages,
             trigger=IntervalTrigger(seconds=20),
             id="notify_deal_messages",
+            replace_existing=True
+        )
+        scheduler.add_job(
+            confirm_payouts,
+            trigger=IntervalTrigger(seconds=60),
+            id="confirm_payouts",
             replace_existing=True
         )
         scheduler.add_job(

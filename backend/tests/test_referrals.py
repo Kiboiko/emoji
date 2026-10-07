@@ -234,6 +234,28 @@ async def test_mixed_order_counts_only_enabled_part(db, chain, order_with_items)
     assert await _balance_cents(db, parent) == 500
 
 
+async def test_paid_in_ton_accrues_ton_to_the_shared_balance(db, chain, order_with_items):
+    """
+    Баланс у пользователя один — в TON. Реферальные с оплаченного в TON
+    заказа идут туда же, от фактически пришедшей суммы и только с подходящих
+    позиций.
+    """
+    _, parent, buyer = chain
+    await settings_service.set_setting(db, "referral_l1_bp", 1000)   # 10%
+    await settings_service.set_setting(db, "referral_applies_to", ["product"])
+    order = await order_with_items(buyer, [("product", "60.00"), ("subscription", "40.00")])
+
+    # За заказ на 100 долларов пришло 20 TON; товару приходится 12 TON
+    await refs.process_referral_commission(db, order, buyer, received_nano=20 * 10**9)
+
+    ton = await fin.user_account(db, parent.id, "TON")
+    assert ton.balance_minor == 1_200_000_000            # 10% от 12 TON
+    assert await _balance_cents(db, parent) == 0          # долларового начисления нет
+
+    stats = await refs.get_referral_statistics(db, parent)
+    assert stats["earned_ton"] == "1.2"
+
+
 async def test_p2p_source_recorded(db, chain, order_with_items):
     _, parent, buyer = chain
     await settings_service.set_setting(db, "referral_l1_bp", 300)

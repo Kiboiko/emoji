@@ -59,6 +59,16 @@ async def eligible_cents(db: AsyncSession, order: Order) -> tuple[int, dict[str,
     return sum(by_source.values()), by_source
 
 
+async def _order_total_cents(db: AsyncSession, order: Order) -> int:
+    items = (
+        await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))
+    ).scalars().all()
+    return sum(
+        to_minor(Decimal(str(item.price_usdt)) * item.quantity, REFERRAL_CURRENCY)
+        for item in items
+    )
+
+
 async def _accrue(
     db: AsyncSession,
     *,
@@ -67,15 +77,20 @@ async def _accrue(
     beneficiary: User,
     level: int,
     bp: int,
-    base_cents: int,
+    base_minor: int,
     source: str,
+    currency: str = REFERRAL_CURRENCY,
 ) -> bool:
-    """Одно начисление конкретному рефереру. True, если деньги реально ушли."""
-    commission_cents, _ = split_by_bp(base_cents, bp)
-    if commission_cents <= 0:
+    """
+    Одно начисление конкретному рефереру. True, если деньги реально ушли.
+
+    base_minor — в валюте начисления: центы для USD, нанотоны для TON.
+    """
+    commission_minor, _ = split_by_bp(base_minor, bp)
+    if commission_minor <= 0:
         return False
 
-    account = await finance_service.user_account(db, beneficiary.id, REFERRAL_CURRENCY)
+    account = await finance_service.user_account(db, beneficiary.id, currency)
 
     # key_suffix обязателен: без него оба уровня дают одинаковый ключ на
     # проводке по внешнему счёту, и начисление второго уровня молча теряется
@@ -84,7 +99,7 @@ async def _accrue(
     result = await finance_service.deposit_from_external(
         db,
         account=account,
-        amount_minor=commission_cents,
+        amount_minor=commission_minor,
         ref_type=LedgerRefType.ORDER,
         ref_id=order.id,
         entry_type=LedgerEntryType.REFERRAL_ACCRUAL,
@@ -104,22 +119,23 @@ async def _accrue(
         referrer_id=beneficiary.id,
         referral_id=buyer.id,
         order_id=order.id,
-        amount=from_minor(commission_cents, REFERRAL_CURRENCY),
-        amount_minor=commission_cents,
-        currency=REFERRAL_CURRENCY,
+        amount=from_minor(commission_minor, currency),
+        amount_minor=commission_minor,
+        currency=currency,
         level=level,
         percent_bp_applied=bp,
         source=source,
     ))
 
-    # Денормализованный кеш для существующего API
-    beneficiary.referral_earnings = float(
-        from_minor(account.balance_minor, REFERRAL_CURRENCY)
-    )
+    # Денормализованный кеш для старого API — только реферальный USD
+    if currency == REFERRAL_CURRENCY:
+        beneficiary.referral_earnings = float(
+            from_minor(account.balance_minor, REFERRAL_CURRENCY)
+        )
 
     logger.info(
-        "[REFERRAL] Ур.%s: начислено %s центов пользователю %s с заказа %s",
-        level, commission_cents, beneficiary.id, order.id,
+        "[REFERRAL] Ур.%s: начислено %s (%s, минорные единицы) пользователю %s с заказа %s",
+        level, commission_minor, currency, beneficiary.id, order.id,
     )
     return True
 
@@ -128,6 +144,7 @@ async def process_referral_commission(
     db: AsyncSession,
     order: Order,
     referral_user: User,
+    received_nano: int = 0,
 ) -> None:
     """
     Начисляет реферальную комиссию с оплаченного заказа.
@@ -136,8 +153,13 @@ async def process_referral_commission(
     без передеплоя. Второй уровень (реферер реферера) включается ненулевым
     referral_l2_bp.
 
-    Расчёт целочисленный, в центах: в исходной версии комиссия считалась в
-    Decimal, а складывалась в поле типа Float, и погрешность накапливалась.
+    received_nano — сколько TON пришло за заказ. Если известно, начисление
+    идёт в TON, от той части платежа, что приходится на подходящие позиции:
+    баланс у пользователя один, в TON, и выводится на кошелёк TON. Без него —
+    по-старому, в долларах (USD-счёт, вывод на USDT).
+
+    Расчёт целочисленный: в исходной версии комиссия считалась в Decimal, а
+    складывалась в поле типа Float, и погрешность накапливалась.
 
     Начисление идёт через журнал проводок и потому идемпотентно — повторный
     вызов (ретрай, двойное срабатывание) не удвоит сумму.
@@ -157,6 +179,15 @@ async def process_referral_commission(
     # записей ради него значило бы усложнять журнал без пользы.
     source = max(by_source, key=by_source.get)
 
+    currency, base_minor = REFERRAL_CURRENCY, base_cents
+    if received_nano > 0:
+        total_cents = await _order_total_cents(db, order)
+        if total_cents > 0:
+            currency = "TON"
+            # Доля платежа, приходящаяся на позиции, с которых положены
+            # реферальные: в заказе их может быть не все
+            base_minor = received_nano * base_cents // total_cents
+
     l1 = await db.get(User, referral_user.referrer_id)
     if l1 is None:
         return
@@ -165,7 +196,7 @@ async def process_referral_commission(
     if bp_l1 > 0:
         await _accrue(
             db, order=order, buyer=referral_user, beneficiary=l1,
-            level=1, bp=bp_l1, base_cents=base_cents, source=source,
+            level=1, bp=bp_l1, base_minor=base_minor, source=source, currency=currency,
         )
 
     bp_l2 = await settings_service.get_int(db, "referral_l2_bp")
@@ -187,7 +218,7 @@ async def process_referral_commission(
 
     await _accrue(
         db, order=order, buyer=referral_user, beneficiary=l2,
-        level=2, bp=bp_l2, base_cents=base_cents, source=source,
+        level=2, bp=bp_l2, base_minor=base_minor, source=source, currency=currency,
     )
 
 
@@ -230,9 +261,16 @@ async def get_referral_statistics(db: AsyncSession, user: User) -> dict:
     # второго referral_id — это покупатель-внук, которого в списке прямых
     # рефералов нет, и его сумма в разбивке по людям оказалась бы потеряна.
     # Поэтому второй уровень показываем отдельной строкой.
+    #
+    # Начисления в TON считаются отдельно: складывать их с долларовыми в одну
+    # сумму нельзя. Долларовые — старые, до общего баланса в TON.
     commission_by_user: dict[uuid.UUID, Decimal] = {}
     level2_total = Decimal(0)
+    earned_ton_minor = 0
     for tx in transactions:
+        if tx.currency == "TON":
+            earned_ton_minor += tx.amount_minor or 0
+            continue
         if tx.level == 2:
             level2_total += Decimal(str(tx.amount))
             continue
@@ -260,6 +298,9 @@ async def get_referral_statistics(db: AsyncSession, user: User) -> dict:
         "referral_code": user.referral_code,
         "referral_count": len(referrals),
         "total_earnings": user.referral_earnings,
+        # Всего заработано на рефералах в TON за всё время — сами деньги
+        # лежат на общем балансе вместе с продажами
+        "earned_ton": str(from_minor(earned_ton_minor, "TON")),
         "level2_earnings": float(level2_total),
         "referral_percent": percent_bp / 100,
         "paid_orders_count": len(orders),

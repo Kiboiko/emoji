@@ -592,7 +592,8 @@ async def complete_order(order: Order, db: AsyncSession, received_nano: int = 0)
     
     # Process referral commission
     user = await db.get(User, order.user_id)
-    await process_referral_commission(db, order, user)
+    # С суммой в TON — реферальные начисляются в TON, на общий баланс
+    await process_referral_commission(db, order, user, received_nano=received_nano)
     
     # Fetch items explicitly to avoid async lazy loading errors
     stmt = select(OrderItem).where(OrderItem.order_id == order.id)

@@ -1,6 +1,9 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/authStore';
-import type { AuthorChannel, ChannelStatus, Deal, DealMessage, ProfileSummary, Store, StoreCard, PublicSettings } from '@/types';
+import type {
+    AuthorChannel, ChannelStatus, Deal, DealMessage, MyWithdrawal, ProfileSummary, Store, StoreCard,
+    PublicSettings,
+} from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -269,7 +272,7 @@ export const p2pApi = {
     getSellerProfile: async () => (await apiClient.get('/p2p/seller/me')).data,
 
     registerSeller: async (data: {
-        display_name: string; payout_wallet: string; accept_terms: boolean;
+        display_name: string; payout_wallet?: string; accept_terms: boolean;
     }) => (await apiClient.post('/p2p/seller/register', data)).data,
 
     updateSeller: async (data: {
@@ -405,7 +408,7 @@ export const subscriptionsApi = {
 
     connectChannel: async (data: {
         chat_identifier: string;
-        payout_wallet: string;
+        payout_wallet?: string;
         description?: string;
         description_en?: string;
         accept_terms: boolean;
@@ -477,9 +480,11 @@ export const withdrawalsApi = {
     // зарегистрированным продавцам, а в профиле — реферальный баланс в USD.
     getBalances: async (): Promise<Record<string, {
         available: string; available_minor: number; hold_minor: number;
+        /** Только у TON: минимальная сумма вывода из настроек админки */
+        min_withdrawal?: string;
     }>> => (await apiClient.get('/withdrawals/balance')).data,
 
-    getMyWithdrawals: async () => {
+    getMyWithdrawals: async (): Promise<MyWithdrawal[]> => {
         const response = await apiClient.get('/withdrawals/my');
         return response.data;
     },

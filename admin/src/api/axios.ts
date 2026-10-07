@@ -115,6 +115,35 @@ export const adminApi = {
     // Withdrawals
     getWithdrawals: (params: { status?: string, skip?: number, limit?: number }) => api.get<any>('/api/withdrawals/admin/all', { params }),
     updateWithdrawalStatus: (id: string, status: string) => api.patch(`/api/withdrawals/admin/${id}`, { status }),
+    // Чьи деньги на кошельке площадки и сколько из них можно забрать себе
+    getPayoutSummary: () => api.get<PayoutSummary>('/api/withdrawals/admin/summary'),
+    // Перевод для подписи в кошельке площадки через TonConnect
+    preparePayout: (id: string) => api.post<PreparedPayout>(`/api/withdrawals/admin/${id}/payout`),
+    // Кошелёк подписал и отправил — сервер ждёт перевод в блокчейне
+    payoutSent: (id: string) => api.post(`/api/withdrawals/admin/${id}/sent`),
+    rejectWithdrawal: (id: string, reason: string) =>
+        api.post(`/api/withdrawals/admin/${id}/reject`, { reason }),
 };
+
+export interface PayoutSummary {
+    /** null — индексер не ответил, баланс кошелька неизвестен */
+    wallet_nano: string | null;
+    users_nano: string;
+    withdrawals_nano: string;
+    escrow_nano: string;
+    owed_nano: string;
+    free_nano: string | null;
+    platform_address: string | null;
+    network: string;
+}
+
+export interface PreparedPayout {
+    address: string;
+    amount_nano: string;
+    comment: string;
+    valid_until: number;
+    network: string;
+    platform_address: string | null;
+}
 
 export default api;

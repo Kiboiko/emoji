@@ -194,6 +194,8 @@ export interface ReferralStats {
     referral_code: string;
     referral_count: number;
     total_earnings: number;
+    /** Заработано на рефералах в TON за всё время — деньги на общем балансе */
+    earned_ton?: string;
     /** Заработок со второго уровня. 0, когда второй уровень выключен. */
     level2_earnings?: number;
     /** Процент первого уровня: без него непонятно, от чего считается сумма */
@@ -218,6 +220,19 @@ export interface AuthResponse {
 
 export type Theme = 'light' | 'dark';
 export type Language = 'ru' | 'en';
+
+/** Заявка на вывод — в истории выводов в профиле */
+export interface MyWithdrawal {
+    id: string;
+    amount: number;
+    currency: 'TON' | 'USD';
+    wallet: string;
+    /** sending — администратор отправил перевод, ждём подтверждения сети */
+    status: 'pending' | 'sending' | 'completed' | 'rejected';
+    created_at: string;
+    completed_at: string | null;
+    reject_reason?: string | null;
+}
 
 export interface MySubscription {
     id: string;

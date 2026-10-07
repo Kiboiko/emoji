@@ -48,6 +48,8 @@ class ReferralStats(BaseModel):
     referral_code: str
     referral_count: int
     total_earnings: float
+    # Заработано на рефералах в TON за всё время (строкой — девять знаков)
+    earned_ton: str = "0"
     level2_earnings: float = 0.0
     # Процент первого уровня: реферер должен понимать, от чего считается
     # его вознаграждение, иначе сумму начисления нечем проверить

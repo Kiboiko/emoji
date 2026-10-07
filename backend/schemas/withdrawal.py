@@ -37,7 +37,10 @@ class WithdrawalResponse(BaseModel):
     status: WithdrawalStatus
     created_at: datetime
     completed_at: Optional[datetime]
-    
+    sent_at: Optional[datetime] = None
+    tx_hash: Optional[str] = None
+    reject_reason: Optional[str] = None
+
     # Optional user info for admin view
     user_first_name: Optional[str] = None
     user_telegram_id: Optional[int] = None

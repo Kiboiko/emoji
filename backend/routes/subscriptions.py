@@ -48,7 +48,9 @@ class ChannelCreate(BaseModel):
     chat_identifier: str = Field(..., min_length=2, max_length=100)
     description: Optional[str] = Field(None, max_length=2000)
     description_en: Optional[str] = Field(None, max_length=2000)
-    payout_wallet: str = Field(..., min_length=10, max_length=80)
+    # Больше не нужен: выплаты идут на кошелёк, подключённый в приложении
+    # через TonConnect. Поле принимается ради старых клиентов
+    payout_wallet: Optional[str] = Field(None, max_length=80)
     accept_terms: bool
 
 
@@ -295,7 +297,7 @@ async def connect_channel(
         username=chat.get("username"),
         description=payload.description,
         description_en=payload.description_en,
-        payout_wallet=payload.payout_wallet.strip(),
+        payout_wallet=(payload.payout_wallet or "").strip() or None,
         status=ChannelStatus.DRAFT,
         terms_version=terms_version,
         terms_accepted_at=datetime.utcnow(),

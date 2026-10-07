@@ -265,6 +265,78 @@ async def fetch_incoming_transactions(limit: int | None = None) -> list[OnChainT
 
 
 @dataclass
+class OutTransfer:
+    """Перевод С кошелька площадки — выплата пользователю."""
+    tx_hash: str
+    utime: int
+    destination: str
+    value_nano: int
+    comment: str
+
+
+async def _get(method: str, params: dict) -> dict:
+    """Запрос к toncenter v2 с теми же правилами ошибок, что и у входящих."""
+    if settings.TON_API_KEY:
+        params = {**params, "api_key": settings.TON_API_KEY}
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(f"{settings.ton_api_base}/{method}", params=params)
+            resp.raise_for_status()
+            payload = resp.json()
+    except httpx.HTTPStatusError as e:
+        raise TonError(f"Индексер ответил {e.response.status_code} на {method}") from e
+    except httpx.HTTPError as e:
+        raise TonError(f"Индексер недоступен: {e}") from e
+    except ValueError as e:
+        raise TonError(f"Индексер вернул не-JSON: {e}") from e
+    if not payload.get("ok"):
+        raise TonError(f"Индексер вернул ошибку: {payload.get('error')!r}")
+    return payload
+
+
+async def fetch_outgoing_transfers(limit: int | None = None) -> list[OutTransfer]:
+    """
+    Последние переводы с кошелька площадки.
+
+    Выплату подписывает админ в своём кошельке через TonConnect, сервер
+    узнаёт о ней только отсюда: перевод с комментарием заявки появился в
+    блокчейне — значит, деньги ушли. Если на кошельке не хватило средств,
+    транзакция есть, но исходящих сообщений в ней нет — такая выплата не
+    засчитывается.
+    """
+    payload = await _get("getTransactions", {
+        "address": require_receiving_address(),
+        "limit": limit or settings.TON_TX_FETCH_LIMIT,
+    })
+    result: list[OutTransfer] = []
+    for tx in payload.get("result", []):
+        for out in tx.get("out_msgs") or []:
+            try:
+                value = int(out.get("value") or 0)
+            except (TypeError, ValueError):
+                continue
+            if value <= 0 or not out.get("destination"):
+                continue
+            result.append(OutTransfer(
+                tx_hash=tx.get("transaction_id", {}).get("hash", ""),
+                utime=int(tx.get("utime") or 0),
+                destination=out["destination"],
+                value_nano=value,
+                comment=(out.get("message") or "").strip(),
+            ))
+    return result
+
+
+async def fetch_wallet_balance() -> int:
+    """Сколько сейчас лежит на кошельке площадки, в нанотонах."""
+    payload = await _get("getAddressBalance", {"address": require_receiving_address()})
+    try:
+        return int(payload.get("result") or 0)
+    except (TypeError, ValueError) as e:
+        raise TonError(f"Индексер вернул странный баланс: {payload.get('result')!r}") from e
+
+
+@dataclass
 class MatchResult:
     matched: bool
     tx: OnChainTx | None = None

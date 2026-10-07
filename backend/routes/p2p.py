@@ -51,7 +51,9 @@ MAX_IMAGES_PER_LISTING = 8
 
 class SellerRegister(BaseModel):
     display_name: str = Field(..., min_length=2, max_length=100)
-    payout_wallet: str = Field(..., min_length=10, max_length=80)
+    # Больше не нужен: выплаты идут на кошелёк, подключённый в приложении
+    # через TonConnect, в момент вывода. Поле принимается ради старых клиентов
+    payout_wallet: Optional[str] = Field(None, max_length=80)
     accept_terms: bool
 
 
@@ -358,7 +360,7 @@ async def register_seller(
         display_name=name,
         # Имя выбрано владельцем — дальше оно не меняется
         name_locked=True,
-        payout_wallet=payload.payout_wallet.strip(),
+        payout_wallet=(payload.payout_wallet or "").strip(),
         terms_version=version,
         terms_accepted_at=datetime.utcnow(),
     )

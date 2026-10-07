@@ -9,4 +9,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  define: {
+    // @ton/core рассчитан на Node и местами ссылается на голый `global`
+    global: 'globalThis',
+  },
 })
