@@ -10,6 +10,7 @@ import { useTelegram } from '@/hooks/useTelegram';
 import { useBarHeight } from '@/hooks/useBarHeight';
 import { usePublicSettings } from '@/hooks/usePublicSettings';
 import { CommissionNote } from '@/components/CommissionNote/CommissionNote';
+import { AutoTextarea } from '@/components/AutoTextarea/AutoTextarea';
 import { listingBadge } from '@/components/SellerCabinet/ListingsList';
 import type { Category, Listing, SellerProfile } from '@/types';
 import '@/pages/DealPage/DealPage.css';
@@ -428,8 +429,7 @@ export const ListingEditor: React.FC = () => {
 
                     <label className="led-field">
                         {t('Описание', 'Description')}
-                        <textarea
-                            rows={4}
+                        <AutoTextarea
                             value={form.description}
                             onChange={(e) => set('description', e.target.value)}
                             maxLength={5000}
@@ -492,7 +492,7 @@ export const ListingEditor: React.FC = () => {
                                 </label>
                                 <label className="led-field">
                                     {t('Описание по-английски', 'Description in English')}
-                                    <textarea rows={4} value={form.description_en} onChange={(e) => set('description_en', e.target.value)} maxLength={5000} />
+                                    <AutoTextarea value={form.description_en} onChange={(e) => set('description_en', e.target.value)} maxLength={5000} />
                                 </label>
                             </div>
                         )}

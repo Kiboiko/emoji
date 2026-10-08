@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatTon } from '@/lib/ton';
 import { GramIcon } from '@/components/Gram/Gram';
+import { AutoTextarea } from '@/components/AutoTextarea/AutoTextarea';
 import {
     Radio, Plus, Send, ShieldCheck, ShieldAlert, RefreshCw, Image as ImageIcon,
     ChevronDown, ChevronUp, Check, Wallet, Pencil, Trash2, EyeOff, BadgeCheck, X,
@@ -256,7 +257,7 @@ const ConnectForm: React.FC<{
 
             <label className="channel-label">
                 {t('Описание по-русски', 'Description in Russian')}
-                <textarea
+                <AutoTextarea
                     className="channel-input channel-textarea"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -269,7 +270,7 @@ const ConnectForm: React.FC<{
                 английским языком читал русский */}
             <label className="channel-label">
                 {t('Описание по-английски', 'Description in English')}
-                <textarea
+                <AutoTextarea
                     className="channel-input channel-textarea"
                     value={descriptionEn}
                     onChange={(e) => setDescriptionEn(e.target.value)}
@@ -755,7 +756,7 @@ const ChannelEditForm: React.FC<{
 
             <label className="channel-label">
                 {t('Описание по-русски', 'Description in Russian')}
-                <textarea
+                <AutoTextarea
                     className="channel-input channel-textarea"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -765,7 +766,7 @@ const ChannelEditForm: React.FC<{
 
             <label className="channel-label">
                 {t('Описание по-английски', 'Description in English')}
-                <textarea
+                <AutoTextarea
                     className="channel-input channel-textarea"
                     value={descriptionEn}
                     onChange={(e) => setDescriptionEn(e.target.value)}

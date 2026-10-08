@@ -195,8 +195,9 @@
     outline: none;
 }
 
+/* Высоту ведёт AutoTextarea — растёт по тексту, ручка растягивания не нужна */
 .led-field textarea {
-    resize: vertical;
+    resize: none;
     line-height: 1.5;
 }
 

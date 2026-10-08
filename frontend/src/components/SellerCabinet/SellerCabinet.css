@@ -67,9 +67,9 @@
     border-color: var(--accent-primary);
 }
 
+/* Высоту ведёт AutoTextarea: две строки и растёт по тексту */
 .seller-textarea {
-    min-height: 80px;
-    resize: vertical;
+    resize: none;
 }
 
 .seller-row {

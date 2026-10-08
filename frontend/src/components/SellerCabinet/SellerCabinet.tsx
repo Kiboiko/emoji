@@ -9,6 +9,7 @@ import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { formatTon } from '@/lib/ton';
 import { GramIcon } from '@/components/Gram/Gram';
+import { AutoTextarea } from '@/components/AutoTextarea/AutoTextarea';
 import type { Listing, SellerProfile } from '@/types';
 import { ListingsList } from './ListingsList';
 import './SellerCabinet.css';
@@ -421,7 +422,7 @@ const SellerSummary: React.FC<{
                             </p>
                         </>
                     )}
-                    <textarea
+                    <AutoTextarea
                         className="seller-input seller-textarea"
                         value={about}
                         onChange={(e) => setAbout(e.target.value)}
