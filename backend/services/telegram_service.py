@@ -1,3 +1,4 @@
+import html
 import httpx
 import logging
 import time
@@ -5,6 +6,42 @@ from typing import List, Union
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def review_post_text(
+    *,
+    product_name: str,
+    price_usdt: float,
+    review_text: str,
+    rating: int | None = None,
+    username: str | None = None,
+    quantity: int | None = None,
+) -> str:
+    """
+    Пост с отзывом для канала.
+
+    Всё, что написал человек, экранируется: сообщение размечено HTML, и
+    отзыв вроде «Отлично <3» или «цена & качество» Telegram отклонял целиком —
+    отзыв молча не появлялся в канале.
+
+    Цена — в долларах без «USDT»: оплата давно идёт в Gram, а цена товара
+    задаётся в долларах.
+    """
+    message = "⭐️ <b>Отзыв о товаре</b>\n\n"
+    if username:
+        message += f"<b>Покупатель:</b> {html.escape(username)}\n"
+    message += f"<b>Товар:</b> {html.escape(product_name)}\n"
+    message += f"<b>Цена:</b> ${price_usdt:.2f}\n"
+    if quantity:
+        message += f"<b>Количество:</b> {quantity}\n"
+    message += "\n"
+
+    if rating:
+        stars = "⭐️" * rating
+        message += f"<b>Оценка:</b> {stars} ({rating}/5)\n\n"
+
+    message += f"<b>Отзыв:</b>\n{html.escape(review_text)}\n\n"
+    return message
 
 class TelegramService:
     """Service for Telegram Bot operations"""
@@ -138,21 +175,11 @@ class TelegramService:
         Publish review to Telegram channel
         Returns message_id
         """
-        message = f"⭐️ <b>Отзыв о товаре</b>\n\n"
-        if username:
-            message += f"<b>Покупатель:</b> {username}\n"
-        message += f"<b>Товар:</b> {product_name}\n"
-        message += f"<b>Цена:</b> ${price_usdt:.2f} USDT\n"
-        if quantity:
-            message += f"<b>Количество:</b> {quantity}\n"
-        message += "\n"
+        message = review_post_text(
+            product_name=product_name, price_usdt=price_usdt, review_text=review_text,
+            rating=rating, username=username, quantity=quantity,
+        )
 
-        if rating:
-            stars = "⭐️" * rating
-            message += f"<b>Оценка:</b> {stars} ({rating}/5)\n\n"
-
-        message += f"<b>Отзыв:</b>\n{review_text}\n\n"
-        
         last_message_id = 0
         async with httpx.AsyncClient() as client:
             for channel in self.channel_ids:

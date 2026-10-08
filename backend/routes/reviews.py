@@ -15,6 +15,13 @@ from services.telegram_service import telegram_service
 router = APIRouter(prefix="/api/reviews", tags=["Reviews"])
 
 
+def reviewer_name(user: User) -> str:
+    """Подпись покупателя в канале: @ник, а у кого ника нет — имя из Telegram."""
+    if user.username:
+        return f"@{user.username}"
+    return user.first_name or ""
+
+
 from sqlalchemy.orm import joinedload
 
 @router.get("", response_model=list[ReviewResponse])
@@ -137,12 +144,20 @@ async def create_review(
     
     # Publish to Telegram channel
     try:
+        quantity = next(
+            (item.quantity for item in order.items if item.product_id == review_data.product_id),
+            None,
+        )
         message_id = await telegram_service.publish_review_to_channel(
             product_name=product.name_ru,
             price_usdt=float(product.price_usdt),
-            review_text=review_data.text,
+            review_text=sanitized_text,
             rating=review_data.rating,
-            product_id=str(product.id)
+            product_id=str(product.id),
+            # Раньше ник передавался только у отзывов из админки, и в канале
+            # у настоящих покупателей подписи не было вовсе
+            username=reviewer_name(user),
+            quantity=quantity,
         )
         
         review.telegram_message_id = message_id

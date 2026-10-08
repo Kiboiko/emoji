@@ -124,3 +124,71 @@ class TestOrderSettlement:
 
         assert await deal_service.complete_order_if_settled(db, order.id) is False
         assert order.status == OrderStatus.PAID
+
+
+class TestReviewInChannel:
+    """Отзыв уходит в канал отзывов — с подписью покупателя."""
+
+    async def _completed_purchase(self, db, buyer, order_factory, quantity=2):
+        from models.category import Category
+        from models.product import Product
+
+        category = Category(id=uuid.uuid4(), name_ru="Отзывы", name_en="Reviews")
+        db.add(category)
+        await db.flush()
+        product = Product(
+            id=uuid.uuid4(), name_ru="Spotify Premium", name_en="Spotify Premium",
+            description_ru="Описание", description_en="Description",
+            price_usdt=Decimal("2.99"), image_url="/uploads/x.jpg",
+            category_id=category.id, stock=5, type="digital", content_data={},
+        )
+        db.add(product)
+        order = await order_factory(buyer, status=OrderStatus.COMPLETED)
+        db.add(OrderItem(
+            id=uuid.uuid4(), order_id=order.id, product_id=product.id, quantity=quantity,
+            price_usdt=Decimal("2.99"), product_snapshot={"name_ru": "Spotify Premium", "type": "digital"},
+        ))
+        await db.flush()
+        return product, order
+
+    async def test_buyer_nick_goes_to_channel(self, db, user_factory, order_factory, monkeypatch):
+        """
+        Раньше ник передавался только у отзывов, созданных в админке, и у
+        настоящих покупателей в канале подписи не было.
+        """
+        from unittest.mock import AsyncMock
+        from routes import reviews
+        from schemas.review import ReviewCreate
+
+        buyer = await user_factory(username="real_buyer")
+        product, order = await self._completed_purchase(db, buyer, order_factory)
+        publish = AsyncMock(return_value=42)
+        monkeypatch.setattr(reviews.telegram_service, "publish_review_to_channel", publish)
+
+        await reviews.create_review(
+            ReviewCreate(product_id=product.id, order_id=order.id, text="Всё пришло", rating=5),
+            user=buyer, db=db,
+        )
+
+        kwargs = publish.await_args.kwargs
+        assert kwargs["username"] == "@real_buyer"
+        assert kwargs["quantity"] == 2
+
+    async def test_without_nick_signed_by_name(self, user_factory):
+        from routes.reviews import reviewer_name
+
+        buyer = await user_factory(username=None, first_name="Ира")
+        assert reviewer_name(buyer) == "Ира"
+
+    async def test_post_survives_html_characters(self):
+        """«<3» и «&» в отзыве ломали разметку — Telegram отклонял пост целиком."""
+        from services.telegram_service import review_post_text
+
+        text = review_post_text(
+            product_name="Игра <Deluxe>", price_usdt=2.99,
+            review_text="Отлично <3 цена & качество", rating=5, username="@real_buyer",
+        )
+        assert "<b>Покупатель:</b> @real_buyer" in text
+        assert "Отлично &lt;3 цена &amp; качество" in text
+        assert "Игра &lt;Deluxe&gt;" in text
+        assert "USDT" not in text
