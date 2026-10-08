@@ -17,6 +17,18 @@ export const fmtTime = (iso: string, language: string) =>
 export const fmtDate = (iso: string, language: string) =>
     new Date(iso).toLocaleDateString(locale(language), { day: 'numeric', month: 'long' });
 
+/** «7 окт., 14:02» — когда важна и минута: время оплаты */
+export const fmtDateTime = (iso: string, language: string) =>
+    new Date(iso).toLocaleString(locale(language), {
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+
+/** Комиссия площадки в процентах с одним знаком: 3, 2.5 */
+export const commissionPercent = (deal: Pick<Deal, 'amount_ton' | 'commission_ton'>) =>
+    Number(deal.amount_ton) > 0
+        ? Math.round((Number(deal.commission_ton) / Number(deal.amount_ton)) * 1000) / 10
+        : 0;
+
 const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 
 /** Разделитель дней в переписке: «Сегодня», «Вчера», «12 сентября» */

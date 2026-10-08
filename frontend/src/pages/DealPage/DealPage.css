@@ -12,8 +12,18 @@
 .dpage-body {
     display: grid;
     gap: var(--space-4);
-    /* Место под панель действий, чтобы она не закрывала последний блок */
-    padding-bottom: calc(150px + var(--safe-area-bottom));
+}
+
+/* Место под панель действий, чтобы она не закрывала последний блок.
+   --dpage-bar — её настоящая высота (useBarHeight), отступ под системные
+   кнопки в ней уже учтён; 150px — пока панель не измерена.
+
+   Двойной класс обязателен: у того же блока есть .container с
+   padding: 0 16px, а в собранном CSS он идёт позже. С одним классом запас
+   обнулялся, и последний блок страницы навсегда оставался под панелью —
+   у неподтверждённой сделки из-под неё торчали пустые края карточек */
+.container.dpage-body.with-bar {
+    padding-bottom: calc(var(--dpage-bar, calc(150px + var(--safe-area-bottom))) + var(--space-5, 20px));
 }
 
 .dpage-top {
@@ -245,6 +255,30 @@
     color: var(--text-secondary);
     white-space: pre-line;
     overflow-wrap: anywhere;
+}
+
+.dpage-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+
+.dpage-facts > div {
+    display: grid;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    font-size: 13px;
+}
+
+.dpage-facts span {
+    color: var(--text-tertiary);
+}
+
+.dpage-facts strong {
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
 }
 
 /* --- Панель действий ----------------------------------------------------- */

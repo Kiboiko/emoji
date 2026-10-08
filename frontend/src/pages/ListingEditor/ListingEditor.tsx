@@ -7,6 +7,7 @@ import { categoriesApi, p2pApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
+import { useBarHeight } from '@/hooks/useBarHeight';
 import { usePublicSettings } from '@/hooks/usePublicSettings';
 import { CommissionNote } from '@/components/CommissionNote/CommissionNote';
 import { listingBadge } from '@/components/SellerCabinet/ListingsList';
@@ -82,6 +83,7 @@ export const ListingEditor: React.FC = () => {
     const [cover, setCover] = useState(0);
     const [pending, setPending] = useState<File[]>([]);
     const fileInput = useRef<HTMLInputElement>(null);
+    const [barRef, barStyle] = useBarHeight();
 
     const previews = useMemo(() => pending.map((f) => URL.createObjectURL(f)), [pending]);
     useEffect(() => () => { previews.forEach(URL.revokeObjectURL); }, [previews]);
@@ -317,8 +319,10 @@ export const ListingEditor: React.FC = () => {
         );
     }
 
+    const hasBar = Boolean(primary || secondary);
+
     return (
-        <div className="dpage">
+        <div className="dpage" style={hasBar ? barStyle : undefined}>
             <input
                 ref={fileInput}
                 type="file"
@@ -327,7 +331,7 @@ export const ListingEditor: React.FC = () => {
                 hidden
                 onChange={onFiles}
             />
-            <div className="container dpage-body">
+            <div className={`container dpage-body${hasBar ? ' with-bar' : ''}`}>
                 <div className="dpage-top">
                     <button className="btn-back" onClick={goBack}>
                         <ArrowLeft size={20} />
@@ -518,8 +522,8 @@ export const ListingEditor: React.FC = () => {
                 )}
             </div>
 
-            {(primary || secondary) && (
-                <div className={`dpage-bar led-bar${primary && secondary ? '' : ' single'}`}>
+            {hasBar && (
+                <div ref={barRef} className={`dpage-bar led-bar${primary && secondary ? '' : ' single'}`}>
                     {secondary}
                     {primary && (
                         <button type="button" className="dchat-btn primary" onClick={primary.onClick} disabled={busy || primary.disabled}>

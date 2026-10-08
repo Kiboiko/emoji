@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, Clock, Package, RotateCcw, ShieldCheck } from 'lucide-react';
 import type { Deal } from '@/types';
-import { dealSteps, fmtDate, isFinished, statusLabel, statusTone, ton } from './dealFormat';
+import {
+    commissionPercent, dealSteps, fmtDate, isFinished, statusLabel, statusTone, ton,
+} from './dealFormat';
 import { withGram } from '@/components/Gram/Gram';
 
 type T = (ru: string, en: string) => string;
@@ -48,9 +50,7 @@ export const DealCard: React.FC<{
     const finished = isFinished(deal);
     const { steps, current } = dealSteps(deal, language, t);
 
-    const commissionPercent = Number(deal.amount_ton) > 0
-        ? Math.round((Number(deal.commission_ton) / Number(deal.amount_ton)) * 1000) / 10
-        : 0;
+    const percent = commissionPercent(deal);
 
     let note: string;
     if (deal.status === 'disputed') {
@@ -71,8 +71,8 @@ export const DealCard: React.FC<{
                 'The platform holds the money. The seller gets it once you confirm receipt. If you do not confirm, the deal closes itself after the deadline.',
             )
             : t(
-                `Покупатель оплатил ${amount} Gram, деньги у площадки. После подтверждения вам начислят ${sellerAmount} Gram, комиссия площадки ${commissionPercent}%.`,
-                `The buyer paid ${amount} Gram, held by the platform. After confirmation you get ${sellerAmount} Gram, platform fee ${commissionPercent}%.`,
+                `Покупатель оплатил ${amount} Gram, деньги у площадки. После подтверждения вам начислят ${sellerAmount} Gram, комиссия площадки ${percent}%.`,
+                `The buyer paid ${amount} Gram, held by the platform. After confirmation you get ${sellerAmount} Gram, platform fee ${percent}%.`,
             );
     }
 

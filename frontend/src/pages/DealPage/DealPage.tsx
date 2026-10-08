@@ -8,13 +8,14 @@ import { useAuthStore } from '@/store/authStore';
 import { useDealsStore } from '@/store/dealsStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
+import { useBarHeight } from '@/hooks/useBarHeight';
 import { formatTon } from '@/lib/ton';
 import { GramIcon, withGram } from '@/components/Gram/Gram';
 import type { Deal } from '@/types';
 import { DealReview } from '@/components/DealChat/DealReview';
 import { DealSheet, type SheetKind } from '@/components/DealChat/DealSheet';
 import {
-    counterpartName, dealSteps, isFinished, statusLabel, statusTone,
+    commissionPercent, counterpartName, dealSteps, fmtDateTime, isFinished, statusLabel, statusTone,
 } from '@/components/DealChat/dealFormat';
 import './DealPage.css';
 
@@ -41,6 +42,7 @@ export const DealPage: React.FC = () => {
     const [busy, setBusy] = useState(false);
     const [photo, setPhoto] = useState(0);
     const gallery = useRef<HTMLDivElement>(null);
+    const [barRef, barStyle] = useBarHeight();
 
     const load = useCallback(async () => {
         try {
@@ -149,9 +151,11 @@ export const DealPage: React.FC = () => {
         }
     }
 
+    const percent = commissionPercent(deal);
+
     return (
-        <div className="dpage">
-            <div className="container dpage-body">
+        <div className="dpage" style={barStyle}>
+            <div className="container dpage-body with-bar">
                 <div className="dpage-top">
                     <button className="btn-back" onClick={goBack}>
                         <ArrowLeft size={20} />
@@ -187,8 +191,37 @@ export const DealPage: React.FC = () => {
                     <h1>{name}</h1>
                     <div className={`dpage-price${deal.status === 'refunded' ? ' struck' : ''}`}>
                         {formatTon(amount)} <GramIcon title="Gram" />
-                        {details && details.quantity > 1 && <span> · {details.quantity} {t('шт.', 'pcs')}</span>}
                     </div>
+                </div>
+
+                {/* Сразу под ценой, а не в конце страницы: внизу блоки уходили
+                    под панель действий и из-под неё торчали пустыми краями.
+                    Здесь они видны без прокрутки. Продавцу — откуда его сумма:
+                    цена и комиссия; покупателю — когда оплатил и сколько */}
+                <div className="dpage-facts">
+                    {buyer ? (
+                        <>
+                            <div>
+                                <span>{t('Оплачено', 'Paid')}</span>
+                                <strong>{fmtDateTime(deal.paid_at, language)}</strong>
+                            </div>
+                            <div>
+                                <span>{t('Количество', 'Quantity')}</span>
+                                <strong>{details?.quantity ?? 1} {t('шт.', 'pcs')}</strong>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div>
+                                <span>{t('Цена товара', 'Item price')}</span>
+                                <strong>{formatTon(deal.amount_ton)} <GramIcon title="Gram" /></strong>
+                            </div>
+                            <div>
+                                <span>{t(`Комиссия ${percent}%`, `Fee ${percent}%`)}</span>
+                                <strong>{formatTon(deal.commission_ton)} <GramIcon title="Gram" /></strong>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {buyer && details?.store && (
@@ -247,7 +280,7 @@ export const DealPage: React.FC = () => {
                 )}
             </div>
 
-            <div className="dpage-bar">
+            <div className="dpage-bar" ref={barRef}>
                 <div className={`dpage-bar-main${primary ? '' : ' single'}`}>
                     {!deal.chat_expired && (
                         <Link className="dpage-chat" to={`/my/deals/${deal.id}`}>
