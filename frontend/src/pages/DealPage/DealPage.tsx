@@ -14,7 +14,7 @@ import type { Deal } from '@/types';
 import { DealReview } from '@/components/DealChat/DealReview';
 import { DealSheet, type SheetKind } from '@/components/DealChat/DealSheet';
 import {
-    counterpartName, dealSteps, fmtDate, isFinished, statusLabel, statusTone,
+    counterpartName, dealSteps, isFinished, statusLabel, statusTone,
 } from '@/components/DealChat/dealFormat';
 import './DealPage.css';
 
@@ -241,17 +241,6 @@ export const DealPage: React.FC = () => {
                         <p>{description}</p>
                     </section>
                 )}
-
-                <div className="dpage-facts">
-                    <div>
-                        <span>{t('Оплачено', 'Paid')}</span>
-                        <strong>{fmtDate(deal.paid_at, language)}</strong>
-                    </div>
-                    <div>
-                        <span>{buyer ? t('Вы заплатили', 'You paid') : t('Вы получите', 'You get')}</span>
-                        <strong>{formatTon(amount)} <GramIcon title="Gram" /></strong>
-                    </div>
-                </div>
 
                 {buyer && deal.status === 'released' && (
                     <DealReview deal={deal} t={t} onDone={load} />

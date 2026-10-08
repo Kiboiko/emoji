@@ -673,20 +673,16 @@ html[data-platform="android"] .refwallet-card {
 
 .balance-amount {
     align-items: center;
-    gap: var(--space-2-5);
+    gap: var(--space-2);
 }
 
-/* Знак TON перед суммой — сразу видно, в чём баланс */
+/* Знак валюты перед суммой — сразу видно, в чём баланс. Сам кристалл, без
+   подложки: в фиолетовом круге он читался как значок приложения, а не как
+   знак валюты, и заказчику не понравился */
 .balance-ton-mark {
     flex: none;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: var(--accent-primary);
-    color: var(--accent-contrast);
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    color: var(--accent-primary);
 }
 
 .balance-min {

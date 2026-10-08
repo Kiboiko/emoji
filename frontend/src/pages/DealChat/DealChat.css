@@ -1,7 +1,12 @@
 /* --- Переписка по сделке ---------------------------------------------------
-   Экран во весь рост: шапка, карточка сделки, лента, поле ввода. Высота —
-   --tg-viewport-height от Telegram, а не 100vh: при открытой клавиатуре
-   Telegram уменьшает её, и поле ввода остаётся над клавиатурой, а не под ней. */
+   Экран во весь рост: шапка, карточка сделки, лента, поле ввода.
+
+   Низ прижат к низу экрана (bottom: 0), как у нижнего меню, а высота от
+   Telegram (--tg-viewport-height) только ограничивает его сверху. Раньше
+   высота бралась из неё целиком, но на Android в полноэкранном режиме
+   Telegram сообщает число больше видимой области — поле ввода уходило за
+   нижний край наполовину. Ограничение сверху нужно для клавиатуры: при ней
+   Telegram уменьшает высоту, и поле остаётся над клавиатурой. */
 
 .dchat {
     --chat-bg: #f4f3f8;
@@ -15,8 +20,9 @@
     top: 0;
     left: 0;
     right: 0;
+    bottom: 0;
     z-index: var(--z-overlay);
-    height: var(--tg-viewport-height, 100dvh);
+    max-height: var(--tg-viewport-height, none);
     display: flex;
     flex-direction: column;
     /* Точная высота кнопок Telegram («Закрыть», «⌄ ⋮») вместе со строкой
@@ -777,14 +783,19 @@
     gap: 6px;
 }
 
+/* Высота строки 20px + поля 8+8 + рамка 2 = ровно 38px. С полями по 9px
+   текст не помещался на 2px, и Android рисовал у правого края поля серую
+   полосу прокрутки. Прокрутка включается из кода, только когда текст
+   упёрся в 120px, и полоса прячется и тогда */
 .dchat-field {
     flex: 1;
     min-width: 0;
     height: 38px;
     max-height: 120px;
     resize: none;
-    overflow-y: auto;
-    padding: 9px 14px;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    padding: 8px 14px;
     border: 1px solid var(--border-color);
     border-radius: 19px;
     background: var(--bg-secondary);
@@ -794,6 +805,10 @@
     font-size: 16px;
     line-height: 1.25;
     outline: none;
+}
+
+.dchat-field::-webkit-scrollbar {
+    display: none;
 }
 
 .dchat-field:focus {

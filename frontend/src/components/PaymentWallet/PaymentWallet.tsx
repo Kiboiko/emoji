@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { TonConnectButton, useTonAddress, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
-import { AlertTriangle, Check, Copy, Wallet } from 'lucide-react';
+import { AlertTriangle, Check, Wallet } from 'lucide-react';
 import { paymentsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
@@ -17,12 +17,6 @@ import './PaymentWallet.css';
  */
 const CHAIN_MAINNET = '-239';
 const CHAIN_TESTNET = '-3';
-
-/** Адрес в 48 символов целиком не читается и ломает узкие экраны */
-function shortAddress(address: string): string {
-    if (address.length <= 16) return address;
-    return `${address.slice(0, 6)}…${address.slice(-6)}`;
-}
 
 /**
  * Кошелёк для оплаты.
@@ -84,16 +78,7 @@ export const PaymentWallet: React.FC = () => {
               (network === 'mainnet' && chain === CHAIN_TESTNET)
             : false;
 
-    const copyAddress = async () => {
-        if (!address) return;
-        try {
-            await navigator.clipboard.writeText(address);
-            haptic.impact('light');
-            showToast(t('Адрес скопирован', 'Address copied'), 'success');
-        } catch {
-            showToast(t('Не удалось скопировать', 'Copy failed'), 'error');
-        }
-    };
+    const showChain = chain !== null && (chain === CHAIN_TESTNET || mismatch);
 
     const disconnect = async () => {
         try {
@@ -127,22 +112,20 @@ export const PaymentWallet: React.FC = () => {
 
             {address ? (
                 <>
-                    <div className="paywallet-row">
-                        <span className="paywallet-address">{shortAddress(address)}</span>
-                        <button className="paywallet-copy" onClick={copyAddress}>
-                            <Copy size={14} />
-                            {t('Копировать', 'Copy')}
-                        </button>
-                    </div>
-
-                    <div className="paywallet-meta">
-                        {walletName && <span>{walletName}</span>}
-                        {chain && (
-                            <span className={mismatch ? 'paywallet-chain bad' : 'paywallet-chain'}>
-                                {chain === CHAIN_TESTNET ? 'testnet' : 'mainnet'}
-                            </span>
-                        )}
-                    </div>
+                    {/* Адрес отдельной строкой с «Копировать» не показываем:
+                        его и так видно на кнопке ниже, а скопировать можно из
+                        её меню. Пометка сети — только когда она что-то
+                        значит: тестовая или не та, что у площадки */}
+                    {(walletName || showChain) && (
+                        <div className="paywallet-meta">
+                            {walletName && <span>{walletName}</span>}
+                            {showChain && (
+                                <span className={mismatch ? 'paywallet-chain bad' : 'paywallet-chain'}>
+                                    {chain === CHAIN_TESTNET ? 'testnet' : 'mainnet'}
+                                </span>
+                            )}
+                        </div>
+                    )}
 
                     {mismatch && (
                         <div className="paywallet-warn">

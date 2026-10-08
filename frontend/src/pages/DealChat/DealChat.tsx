@@ -288,13 +288,20 @@ export const DealChat: React.FC = () => {
         deliver({ ...message, pending: 'sending' }, message.retryFile);
     };
 
+    // Поле растёт по тексту до 120px, дальше прокручивается. По черновику, а не
+    // в обработчике ввода: после отправки поле должно снова стать в строку,
+    // и черновик, восстановленный при возврате в чат, — сразу своей высоты
+    useLayoutEffect(() => {
+        const field = fieldRef.current;
+        if (!field) return;
+        field.style.height = 'auto';
+        const needed = field.scrollHeight + 2;     // + рамка: scrollHeight её не считает
+        field.style.height = `${Math.min(needed, 120)}px`;
+        field.style.overflowY = needed > 120 ? 'auto' : 'hidden';
+    }, [draft]);
+
     const onInput = (value: string) => {
         setDraft(value);
-        const field = fieldRef.current;
-        if (field) {
-            field.style.height = 'auto';
-            field.style.height = `${Math.min(field.scrollHeight + 2, 120)}px`;
-        }
         if (value.trim() && Date.now() - lastTypingSent.current > TYPING_EVERY) {
             lastTypingSent.current = Date.now();
             realtime.send({ type: 'typing', deal_id: dealId });

@@ -147,7 +147,7 @@ export const BalanceCard: React.FC = () => {
                 // неё заказчик попросил убрать
                 <div className="refwallet-amount balance-amount">
                     <span className="balance-ton-mark">
-                        <GramIcon size={24} title="Gram" />
+                        <GramIcon size="0.78em" title="Gram" />
                     </span>
                     {ton(available)}
                 </div>
