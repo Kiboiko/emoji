@@ -109,7 +109,7 @@ export const DealPage: React.FC = () => {
     const name = (language === 'en' && details?.name_en) || deal.product_name;
     const description = (language === 'en' && details?.description_en) || details?.description;
     const { steps, current } = dealSteps(deal, language, t);
-    const amount = buyer ? deal.amount_ton : deal.seller_amount_ton;
+    const refunded = deal.status === 'refunded';
 
     const onGalleryScroll = () => {
         const box = gallery.current;
@@ -118,12 +118,13 @@ export const DealPage: React.FC = () => {
 
     const note = deal.status === 'disputed'
         ? t('Деньги заморожены, пока модератор разбирает спор. Он видит всю переписку.', 'The money is frozen while a moderator reviews the dispute.')
-        : deal.status === 'refunded'
+        : refunded
             ? t('Сделка закрыта возвратом: деньги вернулись покупателю.', 'Closed with a refund: the money went back to the buyer.')
             : finished
                 ? (buyer
                     ? t('Сделка завершена, деньги переведены продавцу.', 'The deal is complete, the seller has been paid.')
-                    : t(`${formatTon(deal.seller_amount_ton)} Gram начислены на ваш баланс.`, `${formatTon(deal.seller_amount_ton)} Gram added to your balance.`))
+                    // Без суммы: она подписана в блоке «Начислено» выше
+                    : t('Деньги начислены на ваш баланс. Вывести их можно в профиле.', 'The money is on your balance. Withdraw it in your profile.'))
                 : (buyer
                     ? t('Деньги у площадки. Продавец получит их, когда вы подтвердите получение.', 'The platform holds the money until you confirm receipt.')
                     : t('Деньги у площадки. Вы получите их, когда покупатель подтвердит получение.', 'The platform holds the money until the buyer confirms receipt.'));
@@ -189,15 +190,20 @@ export const DealPage: React.FC = () => {
                         <span className={`dchat-chip ${statusTone(deal.status)}`}>{statusLabel(deal.status, t)}</span>
                     </div>
                     <h1>{name}</h1>
-                    <div className={`dpage-price${deal.status === 'refunded' ? ' struck' : ''}`}>
-                        {formatTon(amount)} <GramIcon title="Gram" />
-                    </div>
+                    {/* Крупная цена — только покупателю: это цена покупки. У
+                        продавца число без подписи читалось как вторая цена
+                        рядом с «Ценой товара» — его сумма подписана в блоках */}
+                    {buyer && (
+                        <div className={`dpage-price${refunded ? ' struck' : ''}`}>
+                            {formatTon(deal.amount_ton)} <GramIcon title="Gram" />
+                        </div>
+                    )}
                 </div>
 
                 {/* Сразу под ценой, а не в конце страницы: внизу блоки уходили
                     под панель действий и из-под неё торчали пустыми краями.
-                    Здесь они видны без прокрутки. Продавцу — откуда его сумма:
-                    цена и комиссия; покупателю — когда оплатил и сколько */}
+                    Здесь они видны без прокрутки. Продавцу — цепочка «цена −
+                    комиссия = ваша сумма»; покупателю — когда оплатил и сколько */}
                 <div className="dpage-facts">
                     {buyer ? (
                         <>
@@ -219,6 +225,14 @@ export const DealPage: React.FC = () => {
                             <div>
                                 <span>{t(`Комиссия ${percent}%`, `Fee ${percent}%`)}</span>
                                 <strong>{formatTon(deal.commission_ton)} <GramIcon title="Gram" /></strong>
+                            </div>
+                            <div className={`dpage-fact-total${refunded ? ' struck' : ''}`}>
+                                <span>
+                                    {finished && !refunded
+                                        ? t('Начислено на баланс', 'Added to your balance')
+                                        : t('Вы получите', 'You get')}
+                                </span>
+                                <strong>{formatTon(deal.seller_amount_ton)} <GramIcon title="Gram" /></strong>
                             </div>
                         </>
                     )}
