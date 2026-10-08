@@ -8,7 +8,7 @@ ARG VITE_BOT_USERNAME
 ARG SITE_URL=http://localhost:8080
 ARG VITE_DEV_AUTH=false
 ENV VITE_DEV_AUTH=$VITE_DEV_AUTH
-ARG APP_NAME=Marketplace
+ARG APP_NAME="Gram Market"
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_BOT_USERNAME=$VITE_BOT_USERNAME
 
@@ -22,7 +22,9 @@ COPY . .
 # Манифест TON Connect должен указывать на реальный домен приложения:
 # кошелёк скачивает его сам и сверяет origin. Зашивать localhost в образ
 # нельзя, поэтому подставляем домен на сборке.
-RUN echo "{\"url\":\"$SITE_URL\",\"name\":\"$APP_NAME\",\"iconUrl\":\"$SITE_URL/vite.svg\"}" > public/tonconnect-manifest.json
+# Иконка — PNG 180×180: SVG кошельки не показывают, а прежний vite.svg в
+# сборке и не существовал — при подключении кошелёк видел пустое место.
+RUN echo "{\"url\":\"$SITE_URL\",\"name\":\"$APP_NAME\",\"iconUrl\":\"$SITE_URL/icon-180.png\"}" > public/tonconnect-manifest.json
 
 # Build app
 RUN npm run build

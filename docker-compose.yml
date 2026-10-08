@@ -51,7 +51,7 @@ services:
         - VITE_API_URL=${VITE_API_URL}
         - VITE_BOT_USERNAME=${VITE_BOT_USERNAME:-Marketplace1337bot}
         - SITE_URL=${SITE_URL:-http://localhost:8080}
-        - APP_NAME=${APP_NAME:-Marketplace}
+        - APP_NAME=${APP_NAME:-Gram Market}
         - VITE_DEV_AUTH=${VITE_DEV_AUTH:-false}
     container_name: marketplace_frontend
     volumes:
