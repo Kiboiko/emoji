@@ -97,6 +97,7 @@ export const Profile: React.FC = () => {
             to: '/my/subscriptions',
             icon: <Ticket size={18} />,
             label: t('Мои подписки', 'My subscriptions'),
+            hint: t('Доступ в закрытые каналы', 'Access to private channels'),
             count: summary?.subscriptions ?? null,
         },
     ];
