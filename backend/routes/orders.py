@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import delete, select, or_
 from sqlalchemy.orm import selectinload
 import json
 import logging
@@ -653,7 +653,19 @@ async def complete_order(order: Order, db: AsyncSession, received_nano: int = 0)
     stmt = select(OrderItem).where(OrderItem.order_id == order.id)
     result = await db.execute(stmt)
     items = result.scalars().all()
-    
+
+    # Оплаченное уходит из корзины. Раньше приложение очищало только свою
+    # копию, а строки на сервере оставались: после перезапуска купленный
+    # товар (в том числе единственный, которого уже нет) возвращался в
+    # корзину. Чистим здесь, а не при создании заказа: отмена неоплаченного
+    # заказа возвращает человека в корзину с теми же позициями.
+    await db.execute(
+        delete(CartItem).where(
+            CartItem.user_id == order.user_id,
+            CartItem.product_id.in_([item.product_id for item in items]),
+        )
+    )
+
     # Заказ считается завершённым только когда по нему нечего доделывать.
     # Услуги ждут ручной обработки админом, P2P — подтверждения получения
     # покупателем. И то и другое оставляет заказ в статусе PAID.

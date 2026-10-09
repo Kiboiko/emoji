@@ -329,9 +329,18 @@
 
 .dpage-bar-main .dchat-btn,
 .dpage-chat {
-    height: 48px;
+    height: auto;
+    min-height: 48px;
     border-radius: 14px;
     font-size: 15px;
+}
+
+/* Надпись не должна вылезать за кнопку, когда две делят ширину пополам */
+.dpage-bar-main .dchat-btn {
+    padding: 8px 10px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
 }
 
 .dpage-chat {

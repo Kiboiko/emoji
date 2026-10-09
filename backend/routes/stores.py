@@ -16,7 +16,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -163,9 +163,14 @@ async def _seller_products(db: AsyncSession, seller: SellerProfile, lang: str) -
 
     У площадки товары опознаются пустым владельцем, у продавца — своим
     user_id. Снятые с продажи не показываем: витрина магазина — это то, что
-    можно купить сейчас.
+    можно купить сейчас. Проданное (остаток 0) тоже не показываем, как и в
+    каталоге: раньше единственный проданный товар продолжал висеть на витрине
+    продавца, а на его странице кнопка показывала цену $0.00.
     """
-    stmt = select(Product).where(Product.is_active.is_(True))
+    stmt = select(Product).where(
+        Product.is_active.is_(True),
+        or_(Product.stock.is_(None), Product.stock > 0),
+    )
 
     if seller.is_platform:
         # Товары подписок формально тоже без владельца, но принадлежат каналу
@@ -203,7 +208,11 @@ async def store_list(
     counted = (
         await db.execute(
             select(Product.owner_user_id, func.count(Product.id))
-            .where(Product.is_active.is_(True), Product.owner_user_id.is_not(None))
+            .where(
+                Product.is_active.is_(True),
+                Product.owner_user_id.is_not(None),
+                or_(Product.stock.is_(None), Product.stock > 0),
+            )
             .group_by(Product.owner_user_id)
         )
     ).all()
@@ -229,6 +238,7 @@ async def store_list(
                 Product.is_active.is_(True),
                 Product.owner_user_id.is_(None),
                 Product.type != "subscription",
+                or_(Product.stock.is_(None), Product.stock > 0),
             )
         )
     ).scalar() or 0

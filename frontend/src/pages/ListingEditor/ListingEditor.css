@@ -319,9 +319,17 @@
 }
 
 .led-bar .dchat-btn {
-    height: 48px;
+    height: auto;
+    min-height: 48px;
+    padding: 8px 10px;
     border-radius: 14px;
     font-size: 15px;
+    /* Две кнопки делят ширину пополам, и «Отправить на модерацию» в одну
+       строку не помещается: общий .dchat-btn запрещает перенос, и надпись
+       вылезала за кнопку. Здесь она переносится, кнопка растёт по высоте. */
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
 }
 
 :is(.dpage) .led-delete {

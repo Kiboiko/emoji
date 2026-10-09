@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import uuid
+from datetime import datetime
 
 from database import get_db
 from models.user import User
 from models.cart import CartItem
+from models.order import Order, OrderItem, OrderStatus
 from models.product import Product
 from schemas.cart import CartItemCreate, CartItemUpdate, CartResponse
 from utils.auth import get_current_user
@@ -55,7 +57,33 @@ async def get_cart(
     stmt = select(CartItem).where(CartItem.user_id == user.id)
     result = await db.execute(stmt)
     cart_items = result.scalars().all()
-    
+
+    # Позиции, которые человек уже оплатил, из корзины уходят при оплате
+    # (routes/orders.complete_order). Здесь подчищаются остатки от заказов,
+    # оплаченных до этого исправления: купленный товар возвращался в корзину
+    # с «макс. 0» и ценой 0 на кнопке.
+    paid = (await db.execute(
+        select(OrderItem.product_id, Order.paid_at)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(
+            Order.user_id == user.id,
+            Order.status.in_([OrderStatus.PAID, OrderStatus.COMPLETED]),
+            Order.paid_at.is_not(None),
+        )
+    )).all()
+    last_paid: dict[uuid.UUID, datetime] = {}
+    for product_id, paid_at in paid:
+        if product_id not in last_paid or paid_at > last_paid[product_id]:
+            last_paid[product_id] = paid_at
+    stale = [c for c in cart_items
+             if c.product_id in last_paid and c.created_at <= last_paid[c.product_id]]
+    if stale:
+        for c in stale:
+            await db.delete(c)
+        await db.commit()
+        stale_ids = {c.id for c in stale}
+        cart_items = [c for c in cart_items if c.id not in stale_ids]
+
     items_with_products = []
     total_usdt = 0.0
     total_ton = 0.0

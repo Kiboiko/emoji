@@ -267,11 +267,16 @@ export const ProductDetails: React.FC = () => {
 
     // Столько же, сколько уйдёт в корзину: handleAddToCart зажимает
     // количество теми же границами
-    const chargedQuantity = Math.min(
+    // Не меньше единицы: у распроданного товара потолок равен нулю, и цена
+    // на кнопке превращалась в $0.00
+    const chargedQuantity = Math.max(1, Math.min(
         Math.max(quantity, product.min_quantity || 1),
         maxUnits(product),
-    );
+    ));
     const total = (product.price_usdt * chargedQuantity).toFixed(2);
+
+    // Товара больше нет (продан или ждёт оплаты у другого покупателя)
+    const soldOut = product.stock != null && product.stock <= 0;
 
     // Фотографии товара. У товаров площадки она по-прежнему одна, у товара
     // продавца их может быть до восьми — раньше доезжала только первая.
@@ -572,10 +577,16 @@ export const ProductDetails: React.FC = () => {
                     /* Снятый с продажи товар открывается по старой ссылке, но
                        корзина его всё равно не примет — кнопку гасим здесь,
                        чтобы человек не упирался в ошибку после нажатия */
-                    disabled={product.is_active === false}
+                    disabled={product.is_active === false || soldOut}
                 >
-                    <ShoppingCart size={20} />
-                    {language === 'ru' ? 'В корзину' : 'Add to cart'} · ${total}
+                    {soldOut ? (
+                        language === 'ru' ? 'Нет в наличии' : 'Out of stock'
+                    ) : (
+                        <>
+                            <ShoppingCart size={20} />
+                            {language === 'ru' ? 'В корзину' : 'Add to cart'} · ${total}
+                        </>
+                    )}
                 </motion.button>
             </div>
         </motion.div>
