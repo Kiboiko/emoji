@@ -24,7 +24,7 @@ COPY . .
 # нельзя, поэтому подставляем домен на сборке.
 # Иконка — PNG 180×180: SVG кошельки не показывают, а прежний vite.svg в
 # сборке и не существовал — при подключении кошелёк видел пустое место.
-RUN echo "{\"url\":\"$SITE_URL\",\"name\":\"$APP_NAME\",\"iconUrl\":\"$SITE_URL/icon-180.png\"}" > public/tonconnect-manifest.json
+RUN echo "{\"url\":\"$SITE_URL\",\"name\":\"$APP_NAME\",\"iconUrl\":\"$SITE_URL/wallet-icon.png\"}" > public/tonconnect-manifest.json
 
 # Build app
 RUN npm run build
