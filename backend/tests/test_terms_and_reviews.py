@@ -160,7 +160,7 @@ class TestReviewInChannel:
         from routes import reviews
         from schemas.review import ReviewCreate
 
-        buyer = await user_factory(username="real_buyer")
+        buyer = await user_factory(username="real_buyer", first_name="FS | CEO")
         product, order = await self._completed_purchase(db, buyer, order_factory)
         publish = AsyncMock(return_value=42)
         monkeypatch.setattr(reviews.telegram_service, "publish_review_to_channel", publish)
@@ -171,13 +171,15 @@ class TestReviewInChannel:
         )
 
         kwargs = publish.await_args.kwargs
-        assert kwargs["username"] == "@real_buyer"
+        # Имя профиля, а не @username: тот же ник, что виден под отзывом в
+        # приложении
+        assert kwargs["username"] == "FS | CEO"
         assert kwargs["quantity"] == 2
 
-    async def test_without_nick_signed_by_name(self, user_factory):
+    async def test_signed_by_profile_name_not_username(self, user_factory):
         from routes.reviews import reviewer_name
 
-        buyer = await user_factory(username=None, first_name="Ира")
+        buyer = await user_factory(username="real_buyer", first_name="Ира")
         assert reviewer_name(buyer) == "Ира"
 
     async def test_post_survives_html_characters(self):
@@ -186,9 +188,9 @@ class TestReviewInChannel:
 
         text = review_post_text(
             product_name="Игра <Deluxe>", price_usdt=2.99,
-            review_text="Отлично <3 цена & качество", rating=5, username="@real_buyer",
+            review_text="Отлично <3 цена & качество", rating=5, username="Ира <b>",
         )
-        assert "<b>Покупатель:</b> @real_buyer" in text
+        assert "<b>Покупатель:</b> Ира &lt;b&gt;" in text
         assert "Отлично &lt;3 цена &amp; качество" in text
         assert "Игра &lt;Deluxe&gt;" in text
         assert "USDT" not in text

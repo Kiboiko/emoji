@@ -16,10 +16,17 @@ router = APIRouter(prefix="/api/reviews", tags=["Reviews"])
 
 
 def reviewer_name(user: User) -> str:
-    """Подпись покупателя в канале: @ник, а у кого ника нет — имя из Telegram."""
-    if user.username:
-        return f"@{user.username}"
-    return user.first_name or ""
+    """
+    Подпись покупателя в канале — имя профиля Telegram, как и в самом
+    приложении под отзывом. @username не показываем: человек пишет отзыв,
+    а не оставляет ссылку на свой аккаунт, и не каждый хочет, чтобы по
+    отзыву в канале его находили. Нет имени — тогда @ник, чтобы подпись
+    не была пустой.
+    """
+    name = (user.first_name or "").strip()
+    if name:
+        return name
+    return f"@{user.username}" if user.username else ""
 
 
 from sqlalchemy.orm import joinedload
