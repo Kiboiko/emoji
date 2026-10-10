@@ -17,7 +17,7 @@ import '@/pages/DealPage/DealPage.css';
 import './ListingEditor.css';
 
 /** Столько фото принимает одно объявление — зеркало MAX_IMAGES_PER_LISTING */
-const MAX_PHOTOS = 8;
+const MAX_PHOTOS = 3;
 
 /**
  * В каких статусах объявление ещё правится — зеркало EDITABLE_STATUSES на

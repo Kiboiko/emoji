@@ -18,7 +18,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -175,7 +175,23 @@ async def get_my_withdrawals(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(Withdrawal).where(Withdrawal.user_id == user.id).order_by(Withdrawal.created_at.desc())
+    # Выплаченное показываем сутки после выплаты, дальше строка из списка
+    # уходит: история в профиле нужна, чтобы увидеть «деньги ушли», а не
+    # как архив. Сами записи остаются в базе и в админке; заявки в работе и
+    # отклонённые с причиной видны, пока их не закроют или не обработают.
+    day_ago = datetime.utcnow() - timedelta(days=1)
+    stmt = (
+        select(Withdrawal)
+        .where(
+            Withdrawal.user_id == user.id,
+            or_(
+                Withdrawal.status != WithdrawalStatus.COMPLETED,
+                Withdrawal.completed_at.is_(None),
+                Withdrawal.completed_at >= day_ago,
+            ),
+        )
+        .order_by(Withdrawal.created_at.desc())
+    )
     result = await db.execute(stmt)
     return result.scalars().all()
 

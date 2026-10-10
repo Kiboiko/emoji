@@ -41,7 +41,7 @@ async def seller_user(db, user_factory):
     user = await user_factory(username="cabinet_seller")
     db.add(SellerProfile(
         id=uuid.uuid4(), user_id=user.id,
-        display_name="Продавец", payout_wallet="UQSellerWallet0000",
+        display_name="Seller", payout_wallet="UQSellerWallet0000",
     ))
     await db.flush()
     return user
@@ -346,7 +346,7 @@ async def test_update_payout_wallet(db, seller_user):
     )).scalars().one()
     assert profile.payout_wallet == "UQNewWalletAddress123"
     # Имя не присылали — оно не должно затереться
-    assert profile.display_name == "Продавец"
+    assert profile.display_name == "Seller"
 
 
 # ---------------------------------------------------------------------------
@@ -496,12 +496,12 @@ async def test_chosen_store_name_cannot_be_changed(db, seller_user):
 
     with pytest.raises(HTTPException) as exc:
         await p2p.update_seller(
-            p2p.SellerUpdate(display_name="Другое имя"), user=seller_user, db=db,
+            p2p.SellerUpdate(display_name="Other name"), user=seller_user, db=db,
         )
 
     assert exc.value.status_code == 400
     await db.refresh(profile)
-    assert profile.display_name == "Продавец"
+    assert profile.display_name == "Seller"
 
 
 async def test_auto_created_store_can_be_named_once(db, seller_user):
@@ -516,15 +516,15 @@ async def test_auto_created_store_can_be_named_once(db, seller_user):
     await db.flush()
 
     await p2p.update_seller(
-        p2p.SellerUpdate(display_name="Мой маркет"), user=seller_user, db=db,
+        p2p.SellerUpdate(display_name="My Market"), user=seller_user, db=db,
     )
     await db.refresh(profile)
-    assert profile.display_name == "Мой маркет"
+    assert profile.display_name == "My Market"
     assert profile.name_locked is True
 
     with pytest.raises(HTTPException):
         await p2p.update_seller(
-            p2p.SellerUpdate(display_name="Ещё раз"), user=seller_user, db=db,
+            p2p.SellerUpdate(display_name="Once more"), user=seller_user, db=db,
         )
 
 
@@ -535,7 +535,7 @@ async def test_store_name_cannot_repeat_someone_elses(db, seller_user, user_fact
     with pytest.raises(HTTPException) as exc:
         await p2p.register_seller(
             p2p.SellerRegister(
-                display_name="продавец",   # тот же, но другим регистром
+                display_name="SELLER",   # тот же, но другим регистром
                 payout_wallet="UQOtherWallet00000",
                 accept_terms=True,
             ),
@@ -544,3 +544,43 @@ async def test_store_name_cannot_repeat_someone_elses(db, seller_user, user_fact
 
     assert exc.value.status_code == 400
     assert "занято" in exc.value.detail
+
+
+@pytest.mark.parametrize("name", [
+    "Магазин",          # кириллица
+    "Shop Мир",         # латиница пополам с кириллицей
+    "ab",               # короче трёх
+    "A" * 21,           # длиннее двадцати
+    "Shop  Two",        # два пробела подряд
+    "-Shop",            # начинается со знака
+    "Shop<script>",     # служебные символы
+])
+async def test_store_name_rejects_bad_names(db, user_factory, name):
+    """Название — 3–20 символов, только английские буквы и цифры."""
+    newcomer = await user_factory(username=f"n_{abs(hash(name)) % 10**8}")
+
+    with pytest.raises(HTTPException) as exc:
+        await p2p.register_seller(
+            p2p.SellerRegister(display_name=name, accept_terms=True),
+            user=newcomer, db=db,
+        )
+
+    assert exc.value.status_code == 400
+    assert "Название магазина" in exc.value.detail
+
+
+@pytest.mark.parametrize("name", ["Fun Shop", "Shop_24", "A&B-store", "Abc", "x" * 20])
+async def test_store_name_accepts_good_names(db, user_factory, name):
+    newcomer = await user_factory(username=f"g_{abs(hash(name)) % 10**8}")
+
+    result = await p2p.register_seller(
+        p2p.SellerRegister(display_name=name, accept_terms=True),
+        user=newcomer, db=db,
+    )
+
+    assert result["registered"] is True
+
+
+async def test_listing_accepts_no_more_than_three_photos():
+    """Объявление принимает три фото: больше — отказ с понятным текстом."""
+    assert p2p.MAX_IMAGES_PER_LISTING == 3

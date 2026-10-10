@@ -7,6 +7,7 @@ P2P: кабинет продавца и заявки на размещение.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -42,7 +43,7 @@ router = APIRouter(prefix="/api/p2p", tags=["P2P"])
 
 # Допустимые форматы — в services/image_upload.py: только растровые, SVG
 # исключён намеренно, он может содержать скрипты
-MAX_IMAGES_PER_LISTING = 8
+MAX_IMAGES_PER_LISTING = 3
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +93,37 @@ class ListingUpdate(BaseModel):
 # ---------------------------------------------------------------------------
 # Вспомогательное
 # ---------------------------------------------------------------------------
+
+STORE_NAME_MIN = 3
+STORE_NAME_MAX = 20
+# Латиница, цифры, пробел и несколько знаков. Русские буквы не принимаются:
+# заказчик просил единый вид названий, а кириллицу с латиницей легко
+# перепутать — «Marke7» и «Магазин» неразличимы с подменой похожих букв
+_STORE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._&-]*$")
+
+
+def _assert_name_is_valid(name: str) -> None:
+    """
+    Название магазина: 3–20 символов, латиница, цифры, пробел и . _ & -.
+
+    Проверяется только при выборе названия (регистрация, единственная правка).
+    Уже существующие названия не трогаем: магазины с кириллицей остаются как
+    были, на них висят отзывы.
+    """
+    if not STORE_NAME_MIN <= len(name) <= STORE_NAME_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Название магазина — от {STORE_NAME_MIN} до {STORE_NAME_MAX} символов",
+        )
+    if not _STORE_NAME_RE.fullmatch(name) or "  " in name:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Название магазина — только английские буквы, цифры, пробел "
+                "и знаки . _ & -"
+            ),
+        )
+
 
 async def _assert_name_is_free(
     db: AsyncSession, name: str, *, exclude_id: uuid.UUID | None = None
@@ -298,6 +330,7 @@ async def update_seller(
                     status_code=400,
                     detail="Название магазина менять нельзя — оно выбирается один раз",
                 )
+            _assert_name_is_valid(name)
             await _assert_name_is_free(db, name, exclude_id=profile.id)
             profile.display_name = name
             profile.name_locked = True
@@ -351,6 +384,7 @@ async def register_seller(
         raise HTTPException(status_code=400, detail="Вы уже зарегистрированы как продавец")
 
     name = payload.display_name.strip()
+    _assert_name_is_valid(name)
     await _assert_name_is_free(db, name)
 
     version = await terms_service.record(db, user, context="listing")

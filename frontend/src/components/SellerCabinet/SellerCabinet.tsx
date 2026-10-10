@@ -20,6 +20,12 @@ import './SellerCabinet.css';
  * Свёрнут по умолчанию: большинству пользователей продавать нечего, и
  * разворачивать форму на пол-экрана всем подряд незачем.
  */
+/** Название магазина: зеркало проверки на сервере (routes/p2p.py) */
+const STORE_NAME_MAX = 20;
+const cleanStoreName = (value: string) => value
+    .replace(/[^A-Za-z0-9 ._&-]/g, '')
+    .slice(0, STORE_NAME_MAX);
+
 export const SellerCabinet: React.FC<{ standalone?: boolean }> = ({ standalone = false }) => {
     const { language } = useAuthStore();
     const { haptic } = useTelegram();
@@ -175,13 +181,20 @@ const SellerRegistration: React.FC<{
                 <input
                     className="seller-input"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => setName(cleanStoreName(e.target.value))}
                     placeholder={t('Видно покупателям', 'Visible to buyers')}
-                    minLength={2}
-                    maxLength={100}
+                    minLength={3}
+                    maxLength={STORE_NAME_MAX}
+                    autoCapitalize="words"
                     required
                 />
             </label>
+            <p className="seller-hint">
+                {t(
+                    'От 3 до 20 символов: английские буквы, цифры, пробел и знаки . _ & -',
+                    '3 to 20 characters: English letters, digits, space and . _ & -',
+                )}
+            </p>
 
             {/* Предупреждение до кнопки, а не после: сказать «имя навсегда»
                 нужно до того, как человек его отправит */}
@@ -407,12 +420,18 @@ const SellerSummary: React.FC<{
                             <input
                                 className="seller-input"
                                 value={name}
-                                onChange={(e) => setName(e.target.value)}
+                                onChange={(e) => setName(cleanStoreName(e.target.value))}
                                 placeholder={t('Название маркета', 'Store name')}
-                                minLength={2}
-                                maxLength={100}
+                                minLength={3}
+                                maxLength={STORE_NAME_MAX}
                                 required
                             />
+                            <p className="seller-hint">
+                                {t(
+                                    'От 3 до 20 символов: английские буквы, цифры, пробел и знаки . _ & -',
+                                    '3 to 20 characters: English letters, digits, space and . _ & -',
+                                )}
+                            </p>
                             <p className="seller-hint seller-hint--warn">
                                 <AlertTriangle size={13} />
                                 {t(
