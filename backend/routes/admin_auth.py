@@ -24,7 +24,26 @@ router = APIRouter(prefix="/api/admin/auth", tags=["Admin Auth"])
 _login_attempts: dict[str, list[float]] = defaultdict(list)
 
 
+def _client_ip(request: Request) -> str:
+    """
+    Адрес человека, а не соседнего контейнера.
+
+    Перед бэкендом стоят Caddy и nginx, и request.client.host — это адрес
+    nginx: один на всех. Лимит попыток тогда был общим на всех админов, и
+    несколько человек вместе упирались в «слишком много попыток» с верным
+    паролем. Первая запись X-Forwarded-For ставится Caddy из реального
+    соединения; наружу бэкенд и nginx напрямую не открыты, подделать её
+    с улицы нельзя.
+    """
+    forwarded = request.headers.get("x-forwarded-for", "")
+    first = forwarded.split(",")[0].strip()
+    if first:
+        return first
+    return request.client.host if request.client else "unknown"
+
+
 def _check_login_rate_limit(client_ip: str) -> None:
+    """Отказывает, если с адреса уже было слишком много НЕУДАЧНЫХ попыток."""
     now = time.time()
     window = settings.LOGIN_ATTEMPT_WINDOW_SECONDS
     attempts = [t for t in _login_attempts[client_ip] if now - t < window]
@@ -35,7 +54,12 @@ def _check_login_rate_limit(client_ip: str) -> None:
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many login attempts, try again later",
         )
-    _login_attempts[client_ip].append(now)
+
+
+def _register_failed_attempt(client_ip: str) -> None:
+    # Успешный вход попытку не тратит: иначе несколько нормальных входов
+    # подряд (вышел, зашёл) блокировали бы правильный пароль
+    _login_attempts[client_ip].append(time.time())
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -45,7 +69,8 @@ async def login(
     response: Response,
     db: AsyncSession = Depends(get_db)
 ):
-    _check_login_rate_limit(request.client.host if request.client else "unknown")
+    client_ip = _client_ip(request)
+    _check_login_rate_limit(client_ip)
 
     # Find user by username
     result = await db.execute(select(User).where(User.username == login_data.username))
@@ -98,6 +123,7 @@ async def login(
         
     else:
         # Auth failed
+        _register_failed_attempt(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
