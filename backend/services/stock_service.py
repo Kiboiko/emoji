@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,26 @@ from models.payment import Payment, PaymentStatus
 from models.product import Product
 
 logger = logging.getLogger(__name__)
+
+# Сколько ещё держим бронь после истечения счёта. Перевод, подписанный в
+# последние секунды (кошелёк сам не даст отправить позже срока счёта),
+# успевает за это время попасть в блок и в индексер, и заказ закрывается как
+# обычно. Перевод, пришедший ещё позже, не теряется — его сумма зачисляется
+# покупателю на баланс.
+#
+# Раньше запас был равен окну поиска транзакций, 30 минут: вместе со сроком
+# счёта неоплаченный заказ держал товар час. Всё это время вещь пропадала из
+# каталога, на её странице было «Нет в наличии», а продавец видел «Ждёт
+# оплаты» — хотя её никто не покупал.
+RESERVATION_GRACE = timedelta(seconds=60)
+
+
+async def reservation_ttl(db: AsyncSession) -> timedelta:
+    """Сколько неоплаченный заказ держит товар: срок счёта плюс запас."""
+    from services import settings_service
+
+    minutes = await settings_service.get_int(db, "order_payment_ttl_min")
+    return timedelta(minutes=minutes) + RESERVATION_GRACE
 
 
 async def units_sold(db: AsyncSession, product_id: uuid.UUID | None) -> int:

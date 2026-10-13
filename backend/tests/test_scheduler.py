@@ -148,7 +148,9 @@ class TestJobRegistration:
             assert intervals["notify_deal_messages"] <= 60
             # Выплата закрывается за минуту после того, как дошла
             assert intervals["confirm_payouts"] <= 60
-            assert intervals["cleanup_reservations"] >= 60
+            # Бронь живёт минуты: проверка раз в пять минут держала бы товар
+            # почти вдвое дольше срока
+            assert intervals["cleanup_reservations"] <= 60
             assert intervals["auto_confirm_deals"] >= 3600
             assert intervals["process_subscriptions"] >= 3600
             assert intervals["reconcile_finances"] >= 3600
@@ -320,6 +322,27 @@ class TestCleanupReservations:
         assert order.status == OrderStatus.PENDING
         assert p2p_product.stock == 0
 
+    async def test_unpaid_order_releases_item_within_minutes(
+        self, use_test_session, db, user_factory, p2p_product
+    ):
+        """
+        Неоплаченный заказ держит вещь минуты, а не час.
+
+        Срок счёта по умолчанию 3 минуты, запас — минута. Раньше запас был
+        30 минут сверху к 30-минутному счёту: вещь час не показывалась в
+        каталоге и выглядела проданной, хотя её никто не купил.
+        """
+        order = await _order_with_p2p_item(
+            db, user_factory, p2p_product, age=timedelta(minutes=5)
+        )
+
+        await sched.cleanup_reservations()
+        await db.refresh(order)
+        await db.refresh(p2p_product)
+
+        assert order.status == OrderStatus.CANCELLED
+        assert p2p_product.stock == 1
+
     async def test_paid_order_is_never_cancelled(
         self, use_test_session, db, user_factory, p2p_product
     ):
@@ -342,5 +365,5 @@ class TestCleanupReservations:
         assert p2p_product.stock == 0
 
     async def test_nothing_to_do_is_harmless(self, use_test_session):
-        """Пустой прогон — обычное состояние: задача крутится каждые пять минут."""
+        """Пустой прогон — обычное состояние: задача крутится каждые полминуты."""
         await sched.cleanup_reservations()

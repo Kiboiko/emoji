@@ -435,7 +435,8 @@ async def my_listings(
     if repaired:
         await db.commit()
 
-    ttl = await settings_service.get_int(db, "order_payment_ttl_min")
+    # Тот же срок, по которому бронь снимается на самом деле
+    hold = await stock_service.reservation_ttl(db)
 
     async def sale_state(l: ProductListing) -> dict:
         """
@@ -456,7 +457,7 @@ async def my_listings(
             "reserved": await stock_service.units_reserved(db, l.product_id),
             # В UTC с явной «Z»: без неё браузер прочёл бы время как местное
             "reserved_until": (
-                (oldest + timedelta(minutes=ttl)).replace(microsecond=0).isoformat() + "Z"
+                (oldest + hold).replace(microsecond=0).isoformat() + "Z"
                 if oldest is not None else None
             ),
         }

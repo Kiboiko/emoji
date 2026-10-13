@@ -599,14 +599,17 @@ const DescriptionText: React.FC<{ text: string | undefined; language: string }> 
 
     if (!text) return null;
 
-    if (text.length <= maxLength) {
+    // По символам, а не по UTF-16: slice резал эмодзи пополам, и на месте
+    // обрыва появлялся квадратик
+    const chars = Array.from(text);
+    if (chars.length <= maxLength) {
         return <p>{text}</p>;
     }
 
     return (
         <div className="description-text">
             <p>
-                {isExpanded ? text : `${text.slice(0, maxLength)}...`}
+                {isExpanded ? text : `${chars.slice(0, maxLength).join('').trimEnd()}…`}
             </p>
             <button
                 className="btn-toggle-description"

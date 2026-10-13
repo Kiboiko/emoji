@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { formatTon } from '@/lib/ton';
+import { pluralRu } from '@/lib/format';
 import { GramIcon } from '@/components/Gram/Gram';
 import { AutoTextarea } from '@/components/AutoTextarea/AutoTextarea';
 import type { Listing, SellerProfile } from '@/types';
@@ -356,9 +357,15 @@ const SellerSummary: React.FC<{
                             </>
                         ) : '—'}
                     </span>
+                    {/* Число отзывов словами: «Рейтинг (3)» читалось как
+                        загадочная цифра, непонятно к чему */}
                     <span className="seller-stat-label">
-                        {t('Рейтинг', 'Rating')}
-                        {profile.rating_count ? ` (${profile.rating_count})` : ''}
+                        {profile.rating_count
+                            ? t(
+                                `${profile.rating_count} ${pluralRu(profile.rating_count, ['отзыв', 'отзыва', 'отзывов'])}`,
+                                `${profile.rating_count} ${profile.rating_count === 1 ? 'review' : 'reviews'}`,
+                            )
+                            : t('Рейтинг', 'Rating')}
                     </span>
                 </div>
                 <div className="seller-stat">

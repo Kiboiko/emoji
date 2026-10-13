@@ -123,6 +123,8 @@
     line-height: 1.55;
     color: var(--text-secondary);
     overflow-wrap: anywhere;
+    /* Описание магазина пишется с переносами — как и описание товара */
+    white-space: pre-wrap;
 }
 
 .store-section-title {

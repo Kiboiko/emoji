@@ -30,6 +30,7 @@ P2P-сделки: escrow, конечный автомат, разрешение 
 from __future__ import annotations
 
 import logging
+import secrets
 import uuid
 from datetime import datetime, timedelta
 
@@ -69,6 +70,31 @@ REFUNDABLE_BY_SELLER = (
     DealStatus.DELIVERED_CLAIMED,
     DealStatus.DISPUTED,
 )
+
+
+DEAL_NUMBER_MIN = 100_000
+DEAL_NUMBER_MAX = 999_999
+
+
+async def _random_deal_number(db: AsyncSession) -> int:
+    """
+    Номер сделки — случайное шестизначное число, а не 1, 2, 3.
+
+    По сквозному номеру любой покупатель видел, сколько сделок прошло на
+    площадке, и мог угадать номер чужой. Номер по-прежнему короткий: его
+    называют в споре и пишут в поддержку. Уникальность держит индекс в базе;
+    здесь просто не предлагаем уже занятый.
+    """
+    for _ in range(20):
+        number = DEAL_NUMBER_MIN + secrets.randbelow(DEAL_NUMBER_MAX - DEAL_NUMBER_MIN + 1)
+        taken = (
+            await db.execute(select(Deal.id).where(Deal.number == number).limit(1))
+        ).first()
+        if taken is None:
+            return number
+    # Шестизначных номеров девятьсот тысяч; двадцать промахов подряд значат,
+    # что они почти кончились — тогда семизначный
+    return DEAL_NUMBER_MAX + 1 + secrets.randbelow(9_000_000)
 
 
 def _close_chat(deal: Deal) -> None:
@@ -137,6 +163,7 @@ async def create_deals_for_order(
 
         deal = Deal(
             id=uuid.uuid4(),
+            number=await _random_deal_number(db),
             order_id=order.id,
             order_item_id=item.id,
             buyer_id=buyer.id,

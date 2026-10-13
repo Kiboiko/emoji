@@ -280,8 +280,31 @@ async def moderate_listing_from_bot(
     admin = (
         await db.execute(select(User).where(User.telegram_id == payload.telegram_user_id))
     ).scalars().first()
-    if admin is None or not admin.is_admin:
+
+    # Администратор — либо отмеченный в базе, либо тот, чей Telegram ID
+    # указан в ADMIN_CHAT_ID: именно ему бот и присылает заявки с этими
+    # кнопками. Раньше признавался только флаг в базе, и на новом сервере с
+    # чистой базой кнопка «Одобрить» отвечала «Недостаточно прав» людям,
+    # которым приходят уведомления.
+    listed = str(payload.telegram_user_id) in {
+        c.strip() for c in settings.ADMIN_CHAT_ID.split(",") if c.strip()
+    }
+    if not ((admin is not None and admin.is_admin) or listed):
         return {"reply": "Недостаточно прав"}
+
+    if admin is None:
+        # Из списка администраторов, но приложение ни разу не открывал —
+        # записи в базе нет, и решение не на кого записать. Пишем на
+        # служебную учётку админки (её заводит вход по паролю).
+        admin = (
+            await db.execute(
+                select(User).where(
+                    User.username == settings.ADMIN_USERNAME, User.is_admin.is_(True),
+                )
+            )
+        ).scalars().first()
+        if admin is None:
+            return {"reply": "Откройте приложение один раз и нажмите кнопку снова"}
 
     if not payload.approve:
         # open_admin — явный флаг для бота, а не разбор текста reply: строка

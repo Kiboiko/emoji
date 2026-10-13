@@ -253,7 +253,9 @@
     font-size: 14px;
     line-height: 1.55;
     color: var(--text-secondary);
-    white-space: pre-line;
+    /* pre-wrap, как в редакторе объявления: pre-line съедал отступы в
+       начале строк и описание выглядело не так, как его написали */
+    white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 

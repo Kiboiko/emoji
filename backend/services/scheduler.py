@@ -30,15 +30,13 @@ async def cleanup_reservations():
     заказе, и товар мог уйти другому покупателю.
 
     Небольшой запас сверх срока даётся намеренно: платёж мог уйти в сеть
-    в последнюю секунду и подтвердиться чуть позже.
+    в последнюю секунду и подтвердиться чуть позже (stock_service.RESERVATION_GRACE).
     """
-    from services import settings_service
+    from services import stock_service
 
     async with AsyncSessionLocal() as db:
         try:
-            ttl_minutes = await settings_service.get_int(db, "order_payment_ttl_min")
-            grace = timedelta(seconds=settings.TON_LOOKAHEAD_SECONDS)
-            expiration_time = datetime.utcnow() - timedelta(minutes=ttl_minutes) - grace
+            expiration_time = datetime.utcnow() - await stock_service.reservation_ttl(db)
 
             stmt = select(Order).where(
                 Order.status == OrderStatus.PENDING,
@@ -51,8 +49,6 @@ async def cleanup_reservations():
                 return
 
             logger.info(f"[SCHEDULER] Found {len(expired_orders)} expired orders")
-
-            from services import stock_service
 
             changed: set = set()
             for order in expired_orders:
@@ -210,7 +206,9 @@ def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(
             cleanup_reservations,
-            trigger=IntervalTrigger(seconds=300), # Run every 5 minutes
+            # Раз в полминуты: бронь живёт минуты, и проверка раз в пять
+            # минут держала бы товар почти вдвое дольше срока
+            trigger=IntervalTrigger(seconds=30),
             id="cleanup_reservations",
             replace_existing=True
         )

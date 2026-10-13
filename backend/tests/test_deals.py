@@ -73,6 +73,30 @@ async def funded_deal(db, buyer, seller, order_factory):
     return deal
 
 
+class TestDealNumber:
+    async def test_number_is_random_six_digits_and_free(self, db, funded_deal):
+        """
+        Номер сделки — случайное шестизначное число, а не 1, 2, 3.
+
+        По сквозному номеру было видно, сколько сделок на площадке, и легко
+        угадать номер чужой.
+        """
+        numbers = {await deals._random_deal_number(db) for _ in range(30)}
+
+        assert all(deals.DEAL_NUMBER_MIN <= n <= deals.DEAL_NUMBER_MAX for n in numbers)
+        # Совпадение тридцати подряд у честного генератора невозможно
+        assert len(numbers) > 1
+
+    async def test_taken_number_is_not_offered(self, db, funded_deal, monkeypatch):
+        funded_deal.number = 123_456
+        await db.flush()
+
+        offered = iter([123_456 - deals.DEAL_NUMBER_MIN, 654_321 - deals.DEAL_NUMBER_MIN])
+        monkeypatch.setattr(deals.secrets, "randbelow", lambda _: next(offered))
+
+        assert await deals._random_deal_number(db) == 654_321
+
+
 class TestEscrow:
     async def test_money_is_held_not_spendable(self, db, funded_deal):
         """

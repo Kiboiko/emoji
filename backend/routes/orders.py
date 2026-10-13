@@ -215,8 +215,10 @@ async def _broadcast_products(db: AsyncSession, product_ids: list[uuid.UUID]) ->
 
 
 # Меньше этого времени на счёте — переиспользовать заказ бессмысленно:
-# покупатель не успеет подтвердить перевод, и счёт истечёт на полпути
-REUSE_MIN_LEFT = timedelta(minutes=2)
+# покупатель не успеет подтвердить перевод, и счёт истечёт на полпути.
+# Счёт живёт три минуты, поэтому запас — меньше минуты: при двух минутах
+# повторное «Оплатить» уже через минуту после первого заводило новый заказ.
+REUSE_MIN_LEFT = timedelta(seconds=45)
 
 
 def _contents(pairs) -> Counter:
@@ -338,8 +340,8 @@ async def _shortage_reason(db: AsyncSession, product: Product, quantity: int) ->
 
     oldest = await stock_service.oldest_reservation(db, product.id)
     if oldest is not None:
-        ttl = await settings_service.get_int(db, "order_payment_ttl_min")
-        left = (oldest + timedelta(minutes=ttl) - datetime.utcnow()).total_seconds()
+        hold = await stock_service.reservation_ttl(db)
+        left = (oldest + hold - datetime.utcnow()).total_seconds()
         minutes = max(1, math.ceil(left / 60))
         return (
             f"«{name}» сейчас оформляет другой покупатель. Если он не оплатит, "

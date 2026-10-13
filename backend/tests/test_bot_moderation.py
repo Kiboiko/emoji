@@ -95,6 +95,41 @@ async def test_non_admin_is_refused(db, user_factory, pending_listing):
     assert pending_listing.status == ListingStatus.PENDING
 
 
+async def test_admin_from_admin_chat_list_can_approve(
+    db, user_factory, pending_listing, monkeypatch,
+):
+    """
+    Тот, чей Telegram ID указан в ADMIN_CHAT_ID, одобряет без флага в базе.
+
+    Ему бот и присылает заявки с кнопками. На новом сервере с чистой базой
+    флага ни у кого нет, и кнопка отвечала «Недостаточно прав».
+    """
+    owner = await user_factory(username="listed_owner")
+    monkeypatch.setattr(internal.settings, "ADMIN_CHAT_ID", f"123, {owner.telegram_id}")
+
+    result = await _moderate(db, owner.telegram_id, pending_listing.id)
+
+    assert result["status"] == "approved"
+    # Права в приложении это не даёт: флаг в базе остаётся как был
+    await db.refresh(owner)
+    assert owner.is_admin is False
+
+
+async def test_listed_admin_without_app_account_uses_panel_account(
+    db, user_factory, pending_listing, monkeypatch,
+):
+    """Приложение не открывал — решение записывается на учётку админки."""
+    panel = await user_factory(username="panel_admin", is_admin=True)
+    monkeypatch.setattr(internal.settings, "ADMIN_USERNAME", "panel_admin")
+    monkeypatch.setattr(internal.settings, "ADMIN_CHAT_ID", "555000111")
+
+    result = await _moderate(db, 555_000_111, pending_listing.id)
+
+    assert result["status"] == "approved"
+    await db.refresh(pending_listing)
+    assert pending_listing.moderator_id == panel.id
+
+
 async def test_unknown_user_is_refused(db, pending_listing):
     result = await _moderate(db, 999_999_999, pending_listing.id)
 
