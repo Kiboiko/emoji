@@ -33,6 +33,16 @@
     transition: all 0.2s ease;
     position: relative;
     border-radius: 12px;
+    /* Пункт — кнопка: снимаем её собственное оформление */
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+    /* Долгое нажатие не выделяет подпись и не вызывает меню телефона */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .nav-item:active {
