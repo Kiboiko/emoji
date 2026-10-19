@@ -27,6 +27,11 @@
     font-family: inherit;
     text-align: left;
     cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.product-open:active {
+    transform: scale(0.98);
 }
 
 .product-image {
@@ -143,6 +148,11 @@
     font-size: 15px;
     font-weight: 700;
     cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.product-buy:active {
+    transform: scale(0.97);
 }
 
 /* --- Скелетон карточки ------------------------------------------------

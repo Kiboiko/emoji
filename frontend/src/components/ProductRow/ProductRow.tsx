@@ -1,8 +1,8 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { BadgeCheck, ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
 import { Stars } from '@/components/Stars/Stars';
+import { thumb } from '@/lib/image';
 import './ProductRow.css';
 
 interface ProductRowProps {
@@ -35,14 +35,14 @@ export const ProductRow: React.FC<ProductRowProps> = ({
 
     return (
         <div className="product-row">
-            <motion.button
+            {/* Отклик на нажатие — в CSS (:active), как в карточке сетки */}
+            <button
                 type="button"
                 className="product-row-open"
                 onClick={onClick}
-                whileTap={{ scale: 0.99 }}
             >
                 <span className="product-row-image">
-                    <img src={product.image_url} alt="" loading="lazy" />
+                    <img src={thumb(product.image_url)} alt="" loading="lazy" decoding="async" />
                     {product.is_top && <span className="product-row-tag">Хит</span>}
                 </span>
 
@@ -66,19 +66,18 @@ export const ProductRow: React.FC<ProductRowProps> = ({
                         </span>
                     )}
                 </span>
-            </motion.button>
+            </button>
 
             <div className="product-row-side">
                 <span className="product-row-price">${product.price_usdt}</span>
-                <motion.button
+                <button
                     type="button"
                     className="product-row-cart"
                     onClick={handleBuy}
-                    whileTap={{ scale: 0.95 }}
                     aria-label={`Добавить «${product.name}» в корзину за $${product.price_usdt}`}
                 >
                     <ShoppingCart size={17} />
-                </motion.button>
+                </button>
             </div>
         </div>
     );

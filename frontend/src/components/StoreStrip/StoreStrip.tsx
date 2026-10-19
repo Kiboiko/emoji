@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import type { StoreCard } from '@/types';
+import { thumb } from '@/lib/image';
 import './StoreStrip.css';
 
 interface StoreStripProps {
@@ -38,7 +39,7 @@ export const StoreStrip: React.FC<StoreStripProps> = ({ stores }) => {
                 >
                     <span className="storestrip-avatar">
                         {store.avatar_url
-                            ? <img src={store.avatar_url} alt="" loading="lazy" />
+                            ? <img src={thumb(store.avatar_url)} alt="" loading="lazy" decoding="async" />
                             : <span aria-hidden="true">{store.name.trim().charAt(0).toUpperCase()}</span>}
 
                         {store.is_verified && (

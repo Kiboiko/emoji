@@ -10,6 +10,7 @@ import {
 } from '@/components/DealChat/dealFormat';
 import { systemText } from '@/components/DealChat/MessageList';
 import { withGram } from '@/components/Gram/Gram';
+import { thumb } from '@/lib/image';
 import './MyDeals.css';
 
 /**
@@ -108,7 +109,7 @@ export const MyDeals: React.FC<{
                     >
                         <span className="mydeals-thumb">
                             {deal.product_image
-                                ? <img src={deal.product_image} alt="" />
+                                ? <img src={thumb(deal.product_image)} alt="" loading="lazy" decoding="async" />
                                 : <Package size={22} />}
                         </span>
 

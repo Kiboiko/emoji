@@ -3,11 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
+import asyncio
 import json
 import logging
 
 from config import settings
 from database import engine
+from services import image_variants
 from utils.placeholder import ensure_placeholder
 
 # Импорт всех моделей: нужен, чтобы SQLAlchemy успела зарегистрировать мапперы
@@ -73,7 +75,12 @@ async def lifespan(app: FastAPI):
     # Заглушка для товаров без фото. Том uploads при первом запуске пуст, и
     # файл из образа туда не попадает, поэтому рисуем на месте.
     ensure_placeholder()
-    
+
+    # Облегчённые копии фото для каталога (services/image_variants.py) — для
+    # всего, что загружено раньше или не успело получить копию при загрузке.
+    # В фоне: фото может быть много, а отвечать приложение должно сразу
+    asyncio.get_running_loop().run_in_executor(None, image_variants.sweep, upload_dir)
+
     # Схема БД управляется ТОЛЬКО Alembic: `alembic upgrade head`.
     #
     # Здесь раньше вызывался Base.metadata.create_all(). Из-за него три таблицы

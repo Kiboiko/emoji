@@ -308,11 +308,25 @@ class TestNotifications:
         assert sent.await_count == 1
         chat_id, text = sent.await_args.args[:2]
         assert chat_id == seller.telegram_id
-        assert "Новые сообщения по сделке" in text and "(2)" in text
+        assert text.startswith(f"2 новых сообщения по сделке №{deal.number}\n")
+        assert "(2)" not in text
         assert "Покупатель: Ключ подойдёт?" in text
 
         again = await self._run(db)
         again.assert_not_called()
+
+    @pytest.mark.parametrize("count, en, title", [
+        (1, False, "Новое сообщение по сделке №482913"),
+        (2, False, "2 новых сообщения по сделке №482913"),
+        (5, False, "5 новых сообщений по сделке №482913"),
+        (11, False, "11 новых сообщений по сделке №482913"),
+        (21, False, "21 новое сообщение по сделке №482913"),
+        (1, True, "New message in deal #482913"),
+        (3, True, "3 new messages in deal #482913"),
+    ])
+    async def test_unread_count_is_written_in_words(self, count, en, title):
+        # «(2)» после номера сделки читалось как два купленных товара
+        assert chat._unread_title(count, 482913, en) == title
 
     async def test_buyer_sees_store_name_in_notification(self, db, deal, buyer, seller):
         message = await chat.post_message(db, deal, seller, text="Ваш ключ: `7KQ4M`")

@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
 import { errorText, useToastStore } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
+import { thumb } from '@/lib/image';
 import './Cart.css';
 
 export const Cart: React.FC = () => {
@@ -15,7 +16,11 @@ export const Cart: React.FC = () => {
     const { cart, setCart } = useCartStore();
     const showToast = useToastStore((s) => s.show);
     const { haptic } = useTelegram();
-    const [isLoading, setIsLoading] = useState(true);
+    // Корзина загружается при старте приложения и живёт в общем хранилище.
+    // Раньше экран на каждом заходе всё равно показывал заглушку и грузил
+    // её заново — вкладка мигала: заглушка, потом товары. Теперь заглушка
+    // только когда корзины ещё нет, а свежая версия подтягивается молча
+    const [isLoading, setIsLoading] = useState(!cart);
 
     useEffect(() => {
         loadCart();
@@ -23,7 +28,6 @@ export const Cart: React.FC = () => {
 
     const loadCart = async () => {
         try {
-            setIsLoading(true);
             const data = await cartApi.getCart(language);
             setCart(data);
         } catch (error) {
@@ -166,7 +170,9 @@ export const Cart: React.FC = () => {
                 <h1 className="cart-title">{language === 'ru' ? 'Корзина' : 'Cart'}</h1>
 
                 <div className="cart-items">
-                    <AnimatePresence>
+                    {/* initial={false}: при открытии корзины товары стоят на
+                        месте сразу, анимируется только удаление */}
+                    <AnimatePresence initial={false}>
                         {cart.items.map((item) => (
                             <motion.div
                                 key={item.id}
@@ -176,7 +182,7 @@ export const Cart: React.FC = () => {
                                 exit={{ opacity: 0, x: 20 }}
                                 layout
                             >
-                                <img src={item.image_url} alt="" className="item-image" />
+                                <img src={thumb(item.image_url)} alt="" className="item-image" decoding="async" />
 
                                 <h3 className="item-name">{item.name}</h3>
 

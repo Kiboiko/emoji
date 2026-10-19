@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { LayoutGrid, List, PackageOpen } from 'lucide-react';
 import { Header } from '@/components/Header/Header';
 import { ProductCard } from '@/components/ProductCard/ProductCard';
@@ -34,6 +33,23 @@ const readView = (): CatalogView => {
     }
 };
 
+/**
+ * Последний загруженный каталог — на время жизни приложения.
+ *
+ * Главная пересоздаётся при каждом возврате на неё из нижнего меню, и раньше
+ * каждый раз начинала с пустого места: заглушки, три запроса к серверу один
+ * за другим, потом товары. Теперь возврат сразу показывает то, что было, а
+ * свежая версия подтягивается молча и подменяет его, если что-то изменилось.
+ * Выбранная категория запоминается вместе с товарами: список под ней свой.
+ */
+let catalogCache: {
+    language: string;
+    category: string | null;
+    products: Product[];
+    categories: Category[];
+    stores: StoreCard[];
+} | null = null;
+
 export const Home: React.FC = () => {
     const navigate = useNavigate();
     const { language } = useAuthStore();
@@ -41,12 +57,13 @@ export const Home: React.FC = () => {
     const { haptic } = useTelegram();
     const showToast = useToastStore((s) => s.show);
 
-    const [products, setProducts] = useState<Product[]>([]);
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [stores, setStores] = useState<StoreCard[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const cached = catalogCache?.language === language ? catalogCache : null;
+    const [products, setProducts] = useState<Product[]>(cached?.products ?? []);
+    const [categories, setCategories] = useState<Category[]>(cached?.categories ?? []);
+    const [stores, setStores] = useState<StoreCard[]>(cached?.stores ?? []);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(cached?.category ?? null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(!cached);
     const [view, setView] = useState<CatalogView>(readView);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
@@ -81,51 +98,62 @@ export const Home: React.FC = () => {
     // и вторая обрезалась пополам. Хиты и так идут первыми в общей сетке —
     // их сортирует loadData, — и плашка «Хит» на картинке никуда не делась.
 
+    // Номер последней загрузки: при быстром переключении категорий ответ на
+    // прежнюю мог прийти позже и подменить список чужими товарами
+    const lastRequest = React.useRef(0);
+
     const loadData = async (silent = false) => {
-        try {
-            if (!silent) setIsLoading(true);
+        const request = ++lastRequest.current;
+        if (!silent) setIsLoading(true);
 
-            // Fetch categories independently
-            try {
-                const categoriesData = await categoriesApi.getCategories(language);
-                setCategories(categoriesData);
-            } catch (error) {
-                console.error('Failed to load categories:', error);
-                if (!categories.length) setCategories([]);
-            }
+        // Три запроса разом, а не по очереди: по очереди время ответа
+        // складывалось, и на мобильной сети каталог ждал втрое дольше.
+        // Каждый сам по себе: без категорий и магазинов каталог работает,
+        // и падение одного не должно оставлять человека без товаров
+        const [categoriesResult, storesResult, productsResult] = await Promise.allSettled([
+            categoriesApi.getCategories(language),
+            storesApi.getStores(),
+            // Поиск — на клиенте, поэтому без строки запроса
+            productsApi.getProducts({
+                category_id: selectedCategory || undefined,
+                lang: language,
+            }),
+        ]);
+        if (request !== lastRequest.current) return;
 
-            // Магазины независимо: без них каталог работает, и падение этого
-            // запроса не должно оставлять человека без товаров
-            try {
-                setStores(await storesApi.getStores());
-            } catch (error) {
-                console.error('Failed to load stores:', error);
-            }
-
-            // Fetch products independently (without search query - search is client-side now)
-            try {
-                const productsData = await productsApi.getProducts({
-                    category_id: selectedCategory || undefined,
-                    lang: language,
-                });
-
-                // Sort: TOP items first
-                const sortedProducts = productsData.sort((a: Product, b: Product) => {
-                    if (a.is_top === b.is_top) return 0;
-                    return a.is_top ? -1 : 1;
-                });
-
-                setProducts(sortedProducts);
-            } catch (error) {
-                console.error('Failed to load products:', error);
-                setProducts([]);
-            }
-
-        } catch (error) {
-            console.error('Global load error:', error);
-        } finally {
-            if (!silent) setIsLoading(false);
+        const nextCategories = categoriesResult.status === 'fulfilled' ? categoriesResult.value : categories;
+        if (categoriesResult.status === 'rejected') {
+            console.error('Failed to load categories:', categoriesResult.reason);
         }
+
+        const nextStores = storesResult.status === 'fulfilled' ? storesResult.value : stores;
+        if (storesResult.status === 'rejected') {
+            console.error('Failed to load stores:', storesResult.reason);
+        }
+
+        setCategories(nextCategories);
+        setStores(nextStores);
+
+        if (productsResult.status === 'fulfilled') {
+            // Хиты первыми
+            const nextProducts = [...productsResult.value].sort((a: Product, b: Product) => {
+                if (a.is_top === b.is_top) return 0;
+                return a.is_top ? -1 : 1;
+            });
+            setProducts(nextProducts);
+            catalogCache = {
+                language,
+                category: selectedCategory,
+                products: nextProducts,
+                categories: nextCategories,
+                stores: nextStores,
+            };
+        } else {
+            console.error('Failed to load products:', productsResult.reason);
+            // Сбой тихого обновления не стирает то, что уже на экране
+            if (!silent) setProducts([]);
+        }
+        if (!silent) setIsLoading(false);
     };
 
     // Listen for WebSocket updates
@@ -176,9 +204,12 @@ export const Home: React.FC = () => {
         }
     });
 
-    // Load data only on language or category change, NOT on search query change
+    // Загрузка — при смене языка или категории, не при вводе в поиск.
+    // Если этот же список уже есть в памяти, он на экране, и обновление
+    // идёт без заглушек
     useEffect(() => {
-        loadData();
+        const fresh = catalogCache?.language === language && catalogCache.category === selectedCategory;
+        loadData(fresh);
     }, [language, selectedCategory]);
 
     const handleAddToCart = async (productId: string) => {
@@ -345,19 +376,15 @@ export const Home: React.FC = () => {
                         {filteredProducts.map(renderProduct)}
                     </div>
                 ) : (
+                    // Карточки появляются сразу. Здесь был поочерёдный выезд
+                    // с задержкой до 0,4 с: при каждом возврате на главную
+                    // сетка заново «въезжала» — второе мерцание после смены
+                    // экрана, да ещё анимация на каждую карточку
                     <div className="products-grid">
-                        {filteredProducts.map((product, index) => (
-                            <motion.div
-                                key={product.id}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                // Задержку ограничиваем: при множителе без потолка
-                                // сотый товар появлялся бы через пять секунд, а
-                                // тысячный — почти через минуту
-                                transition={{ delay: Math.min(index * 0.05, 0.4) }}
-                            >
+                        {filteredProducts.map((product) => (
+                            <div key={product.id}>
                                 {renderProduct(product)}
-                            </motion.div>
+                            </div>
                         ))}
                     </div>
                 )}

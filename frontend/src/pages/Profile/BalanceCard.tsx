@@ -23,6 +23,18 @@ import type { MyWithdrawal } from '@/types';
  * платит. Адрес не вводится руками, поэтому и ошибиться в нём нельзя.
  * Комиссию сети платит площадка.
  */
+/**
+ * Последний известный баланс. Профиль пересоздаётся при каждом заходе из
+ * нижнего меню, и карточка каждый раз мигала заглушкой вместо суммы. Теперь
+ * сразу видна прошлая сумма, а свежая подменяет её, когда придёт.
+ */
+let lastBalance: {
+    available: string;
+    holdNano: number;
+    minimum: string;
+    history: MyWithdrawal[];
+} | null = null;
+
 export const BalanceCard: React.FC = () => {
     const { language } = useAuthStore();
     const showToast = useToastStore((s) => s.show);
@@ -30,11 +42,11 @@ export const BalanceCard: React.FC = () => {
     const address = useTonAddress();
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
-    const [available, setAvailable] = useState<string | null>(null);
-    const [holdNano, setHoldNano] = useState(0);
-    const [minimum, setMinimum] = useState('1');
+    const [available, setAvailable] = useState<string | null>(lastBalance?.available ?? null);
+    const [holdNano, setHoldNano] = useState(lastBalance?.holdNano ?? 0);
+    const [minimum, setMinimum] = useState(lastBalance?.minimum ?? '1');
     const [failed, setFailed] = useState(false);
-    const [history, setHistory] = useState<MyWithdrawal[]>([]);
+    const [history, setHistory] = useState<MyWithdrawal[]>(lastBalance?.history ?? []);
     const [open, setOpen] = useState(false);
     const [amount, setAmount] = useState('');
     const [sending, setSending] = useState(false);
@@ -47,10 +59,16 @@ export const BalanceCard: React.FC = () => {
                 withdrawalsApi.getBalances(),
                 withdrawalsApi.getMyWithdrawals(),
             ]);
-            setAvailable(balances.TON?.available ?? '0');
-            setHoldNano(balances.TON?.hold_minor ?? 0);
-            setMinimum(balances.TON?.min_withdrawal ?? '1');
-            setHistory(mine.filter((w) => w.currency === 'TON').slice(0, 5));
+            lastBalance = {
+                available: balances.TON?.available ?? '0',
+                holdNano: balances.TON?.hold_minor ?? 0,
+                minimum: balances.TON?.min_withdrawal ?? '1',
+                history: mine.filter((w) => w.currency === 'TON').slice(0, 5),
+            };
+            setAvailable(lastBalance.available);
+            setHoldNano(lastBalance.holdNano);
+            setMinimum(lastBalance.minimum);
+            setHistory(lastBalance.history);
         } catch {
             setFailed(true);
         }

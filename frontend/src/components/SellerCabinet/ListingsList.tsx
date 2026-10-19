@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, Pencil, Plus, Search } from 'lucide-react';
 import type { Listing } from '@/types';
+import { thumb } from '@/lib/image';
 import './ListingsList.css';
 
 type T = (ru: string, en: string) => string;
@@ -142,7 +143,7 @@ export const ListingsList: React.FC<{
                                 <Link className="llist-row-main" to={`/my/listings/${listing.id}`}>
                                     <span className="llist-thumb">
                                         {listing.images[0]
-                                            ? <img src={listing.images[0].url} alt="" loading="lazy" />
+                                            ? <img src={thumb(listing.images[0].url)} alt="" loading="lazy" decoding="async" />
                                             : <Package size={22} />}
                                     </span>
                                     <span className="llist-text">

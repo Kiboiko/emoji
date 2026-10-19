@@ -7,6 +7,7 @@ import shutil
 import aiofiles
 from pathlib import Path
 from fastapi.encoders import jsonable_encoder
+from starlette.concurrency import run_in_threadpool
 
 from database import get_db
 from models.product import Product
@@ -15,6 +16,7 @@ from models.digital_item import DigitalItem
 from schemas.product import ProductCreate, ProductUpdate, ProductResponse, ProductLocalized, ProductBroadcast
 from utils.auth import require_admin
 from config import settings
+from services import image_variants
 from utils.websockets import manager
 
 router = APIRouter(prefix="/api/products", tags=["Products"])
@@ -28,7 +30,10 @@ async def save_image(image: UploadFile) -> str:
     async with aiofiles.open(file_path, 'wb') as out_file:
         content = await image.read()
         await out_file.write(content)
-        
+
+    # Облегчённые копии для каталога (services/image_variants.py)
+    await run_in_threadpool(image_variants.build_quietly, Path(settings.UPLOAD_DIR), file_path)
+
     return f"/uploads/products/{file_name}"
 
 @router.get("", response_model=List[ProductLocalized])

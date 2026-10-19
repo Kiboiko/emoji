@@ -161,9 +161,12 @@
 }
 
 /* Mobile styles - apply ONLY on iOS/Android platforms */
+/* Под кнопками Telegram — тот же запас, что у остальных экранов, а не
+   подобранные на глаз 110px: высота кнопок с отступом сверху на разных
+   телефонах разная, и точную её сообщает Telegram (App.tsx) */
 html[data-platform="ios"] .checkout-page,
 html[data-platform="android"] .checkout-page {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 110px);
+    padding-top: calc(var(--tg-chrome-top) + var(--space-4));
 }
 
 /* --- Кошелёк ----------------------------------------------------------

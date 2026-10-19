@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta
@@ -35,7 +36,7 @@ from models.subscription import (
     SubscriptionPlan, SubscriptionStatus,
 )
 from models.user import User
-from services import finance_service, settings_service
+from services import finance_service, image_variants, settings_service
 from services.money import split_by_bp
 from services.telegram_service import (
     TelegramApiError, channel_access, telegram_service,
@@ -117,6 +118,12 @@ async def refresh_avatar(channel: Channel, chat: dict) -> None:
 
     async with aiofiles.open(directory / name, "wb") as out:
         await out.write(content)
+
+    # Файл перезаписан под тем же именем — копии от прошлой картинки
+    # пересобираем принудительно, иначе nginx отдавал бы старый аватар
+    await asyncio.to_thread(
+        image_variants.build_quietly, Path(settings.UPLOAD_DIR), directory / name, True,
+    )
 
     channel.avatar_url = f"/uploads/channels/{name}?v={int(datetime.utcnow().timestamp())}"
 

@@ -33,7 +33,7 @@ from models.p2p import (
 )
 from models.product import Product
 from models.user import User
-from services import image_upload, settings_service, stock_service, terms_service
+from services import image_upload, image_variants, settings_service, stock_service, terms_service
 from services.money import from_minor
 from utils.auth import get_current_user
 
@@ -259,6 +259,12 @@ async def _save_listing_image(upload: UploadFile, subdir: str = "listings") -> s
 
     async with aiofiles.open(directory / file_name, "wb") as out:
         await out.write(data)
+
+    # Облегчённые копии для каталога — сразу, до того как адрес уйдёт
+    # клиенту: иначе первым в кеш телефона попал бы тяжёлый оригинал
+    await run_in_threadpool(
+        image_variants.build_quietly, Path(settings.UPLOAD_DIR), directory / file_name,
+    )
 
     return f"/uploads/{subdir}/{file_name}"
 

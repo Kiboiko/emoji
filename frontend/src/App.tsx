@@ -137,13 +137,28 @@ export const App: React.FC = () => {
 
                 const root = document.documentElement;
 
-                // Сверху — строка состояния плюс плавающие кнопки Telegram
-                // («Закрыть», «⌄ ⋮»). Это и есть contentSafeAreaInset.top.
-                // Пока им пользуется только чат сделки: его шапка прижата к
-                // верху, и оценки --tg-chrome-top ей не хватало
+                // Сверху — строка состояния (safeAreaInset) плюс плавающие
+                // кнопки Telegram «Закрыть» и «⌄ ⋮» (contentSafeAreaInset).
+                //
+                // Раньше точную сумму брал только чат сделки, а остальные
+                // экраны — оценку из index.css: 48px плюс системный отступ.
+                // На iPhone системный отступ в WebView равен нулю, хотя окно
+                // начинается под самой чёлкой, и оценке не хватало целой
+                // строки состояния: заголовок, поиск и стрелка «Назад»
+                // уходили под кнопки Telegram, и нажать «Назад» было нельзя.
+                // Теперь сумма от Telegram заменяет оценку везде; оценка
+                // остаётся только на клиентах, которые отступов не сообщают.
                 const top = (tg.safeAreaInset?.top ?? 0) + (tg.contentSafeAreaInset?.top ?? 0);
-                if (top > 0) root.style.setProperty('--tg-content-top', `${top}px`);
-                else root.style.removeProperty('--tg-content-top');
+                if (top > 0) {
+                    root.style.setProperty('--tg-content-top', `${top}px`);
+                    // body уже сдвинут на env(safe-area-inset-top) — эту часть
+                    // не считаем второй раз
+                    const bodyTop = parseFloat(getComputedStyle(document.body).paddingTop) || 0;
+                    root.style.setProperty('--tg-chrome-top', `${Math.max(0, top - bodyTop)}px`);
+                } else {
+                    root.style.removeProperty('--tg-content-top');
+                    root.style.removeProperty('--tg-chrome-top');
+                }
 
                 if (bottom > 0) {
                     root.style.setProperty('--safe-area-bottom', `${bottom}px`);
@@ -161,6 +176,7 @@ export const App: React.FC = () => {
                 tg.onEvent('safeAreaChanged', applySafeArea);
                 tg.onEvent('contentSafeAreaChanged', applySafeArea);
                 tg.onEvent('viewportChanged', applySafeArea);
+                tg.onEvent('fullscreenChanged', applySafeArea);
             }
 
             // Set theme colors
@@ -250,9 +266,15 @@ export const App: React.FC = () => {
 const AppContent: React.FC = () => {
     const location = useLocation();
 
+    // Ключ экрана. Карточка товара открывается поверх каталога, поэтому
+    // у «/» и «/product/:id» он общий: раньше смена адреса пересоздавала
+    // каталог под карточкой — он заново грузился, показывал заглушки и
+    // мигал и при открытии товара, и при возврате
+    const screenKey = location.pathname.startsWith('/product/') ? '/' : location.pathname;
+
     return (
-        <AnimatePresence mode="wait">
-            <Routes location={location} key={location.pathname}>
+        <>
+            <Routes location={location} key={screenKey}>
                 <Route path="/" element={
                     <PageTransition>
                         <HomeWithProductOverlay />
@@ -357,48 +379,22 @@ const AppContent: React.FC = () => {
 
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-        </AnimatePresence>
+        </>
     );
 };
 
 /**
- * Появление экрана.
+ * Обёртка экрана.
  *
- * После анимации inline-стили снимаются, и это не украшательство. Элемент с
- * трансформом живёт в собственном слое композитора, а слой выше предела
- * текстуры (у большинства Android это 4096px) растрируется не целиком:
- * на длинных экранах — в списке объявлений, в заказах — часть карточек
- * занимала своё место, но оставалась незакрашенной. Пустой прямоугольник
- * вместо товара, и при прокрутке пустым оказывался уже другой.
- *
- * Снятый трансформ возвращает страницу в общий слой страницы, который
- * рисуется кусками по мере прокрутки и в предел не упирается.
+ * Здесь была анимация смены экранов: старый экран 0,2 с гас, и только
+ * потом 0,2 с проявлялся новый (AnimatePresence mode="wait"). На каждое
+ * нажатие в нижнем меню — почти полсекунды пустоты и двойное мерцание, а
+ * на длинных экранах слой с анимацией ещё и не дорисовывался. Вкладки в
+ * приложениях переключаются мгновенно — так теперь и здесь.
  */
-const PageTransition: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const ref = React.useRef<HTMLDivElement>(null);
-
-    return (
-        <motion.div
-            ref={ref}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="page-transition"
-            onAnimationComplete={() => {
-                const el = ref.current;
-                if (!el) return;
-                // Пустая строка убирает свойство целиком, а не ставит
-                // «none»: none тоже создаёт слой на части движков
-                el.style.transform = '';
-                el.style.willChange = '';
-                el.style.opacity = '';
-            }}
-        >
-            {children}
-        </motion.div>
-    );
-};
+const PageTransition: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <div className="page-transition">{children}</div>
+);
 
 const HomeWithProductOverlay: React.FC = () => {
     const location = useLocation();

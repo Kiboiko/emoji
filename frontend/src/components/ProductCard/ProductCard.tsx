@@ -1,8 +1,8 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
 import { Stars } from '@/components/Stars/Stars';
+import { thumb } from '@/lib/image';
 import './ProductCard.css';
 
 interface ProductCardProps {
@@ -37,17 +37,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
     return (
         <div className="product-card">
-            {/* Появление карточки задаёт список (Home): здесь была вторая пара
-                initial/animate, и карточка выезжала внутри уже выезжающей
-                обёртки. */}
-            <motion.button
+            {/* Отклик на нажатие — в CSS (:active), а не анимацией
+                framer-motion: две такие кнопки на каждой карточке держали
+                обработчики жестов на всю сетку и тормозили прокрутку */}
+            <button
                 type="button"
                 className="product-open"
                 onClick={onClick}
-                whileTap={{ scale: 0.98 }}
             >
                 <span className="product-image">
-                    <img src={product.image_url} alt="" loading="lazy" />
+                    <img src={thumb(product.image_url)} alt="" loading="lazy" decoding="async" />
 
                     {/* Без огонька: иконка мельче подписи, на фотографии
                         превращалась в жёлтую кляксу и клиенту не нравилась */}
@@ -68,18 +67,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 </span>
 
                 <span className="product-name">{product.name}</span>
-            </motion.button>
+            </button>
 
-            <motion.button
+            <button
                 type="button"
                 className="product-buy"
                 onClick={handleBuy}
-                whileTap={{ scale: 0.97 }}
                 aria-label={`Добавить «${product.name}» в корзину за $${product.price_usdt}`}
             >
                 <ShoppingCart size={16} />
                 ${product.price_usdt}
-            </motion.button>
+            </button>
         </div>
     );
 };

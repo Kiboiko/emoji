@@ -25,7 +25,9 @@
 
 .back-button {
     position: fixed;
-    top: 100px;
+    /* Под кнопками Telegram. Было 100px: на iPhone с «островком» кнопки
+       Telegram опускаются ниже, и «Назад» уходила под «Закрыть» */
+    top: calc(var(--tg-chrome-top) + var(--space-2));
     left: 16px;
     z-index: calc(var(--z-overlay) + 1);
     width: 44px;

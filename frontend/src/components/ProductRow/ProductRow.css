@@ -28,6 +28,11 @@
     font-family: inherit;
     text-align: left;
     cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.product-row-open:active {
+    transform: scale(0.99);
 }
 
 .product-row-image {
@@ -147,6 +152,11 @@
     background: var(--accent-primary);
     color: var(--accent-contrast);
     cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.product-row-cart:active {
+    transform: scale(0.95);
 }
 
 /* --- Скелетон ---------------------------------------------------------- */

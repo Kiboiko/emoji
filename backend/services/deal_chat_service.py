@@ -750,6 +750,26 @@ def _preview(message: DealMessage, language: str = "ru") -> str:
     return text
 
 
+def _unread_title(count: int, number: int, en: bool) -> str:
+    """
+    Заголовок уведомления о непрочитанном.
+
+    Число сообщений стоит словами впереди: «(2)» после номера сделки
+    читалось как два купленных товара, хотя человек купил один.
+    """
+    if count == 1:
+        return f"New message in deal #{number}" if en else f"Новое сообщение по сделке №{number}"
+    if en:
+        return f"{count} new messages in deal #{number}"
+    if count % 10 == 1 and count % 100 != 11:
+        words = "новое сообщение"
+    elif count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        words = "новых сообщения"
+    else:
+        words = "новых сообщений"
+    return f"{count} {words} по сделке №{number}"
+
+
 def chat_url(deal: Deal) -> str:
     return f"{settings.SITE_URL.rstrip('/')}/my/deals/{deal.id}"
 
@@ -837,18 +857,7 @@ async def notify_unread(db: AsyncSession) -> int:
             else:
                 who = "Buyer" if en else "Покупатель"
 
-            if en:
-                title = (
-                    f"New message in deal #{deal.number}"
-                    if len(unread) == 1
-                    else f"New messages in deal #{deal.number} ({len(unread)})"
-                )
-            else:
-                title = (
-                    f"Новое сообщение по сделке №{deal.number}"
-                    if len(unread) == 1
-                    else f"Новые сообщения по сделке №{deal.number} ({len(unread)})"
-                )
+            title = _unread_title(len(unread), deal.number, en)
             text = f"{title}\n{who}: {_preview(last, 'en' if en else 'ru')}"
 
             try:

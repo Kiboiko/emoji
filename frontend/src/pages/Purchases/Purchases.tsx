@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useDealsStore } from '@/store/dealsStore';
 import { errorText } from '@/store/toastStore';
 import { formatTon } from '@/lib/ton';
+import { thumb } from '@/lib/image';
 import { GramIcon } from '@/components/Gram/Gram';
 import { fmtDate, isFinished, statusLabel, statusTone } from '@/components/DealChat/dealFormat';
 import type { Deal, Order } from '@/types';
@@ -202,7 +203,7 @@ export const Purchases: React.FC = () => {
                                         className={`purchases-row${row.group === 'action' ? ' needs-you' : ''}`}
                                     >
                                         <span className="purchases-thumb">
-                                            {row.image ? <img src={row.image} alt="" loading="lazy" /> : <Package size={22} />}
+                                            {row.image ? <img src={thumb(row.image)} alt="" loading="lazy" decoding="async" /> : <Package size={22} />}
                                         </span>
                                         <span className="purchases-main">
                                             <span className="purchases-name">{row.name}</span>

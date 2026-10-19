@@ -5,6 +5,7 @@ import {
     commissionPercent, dealSteps, fmtDate, isFinished, statusLabel, statusTone, ton,
 } from './dealFormat';
 import { withGram } from '@/components/Gram/Gram';
+import { thumb } from '@/lib/image';
 
 type T = (ru: string, en: string) => string;
 
@@ -141,7 +142,7 @@ export const DealCard: React.FC<{
             >
                 <span className="dchat-thumb">
                     {deal.product_image
-                        ? <img src={deal.product_image} alt="" />
+                        ? <img src={thumb(deal.product_image)} alt="" />
                         : <Package size={20} />}
                 </span>
                 <span className="dchat-deal-info">
