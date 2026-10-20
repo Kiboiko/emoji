@@ -6,6 +6,7 @@ from pathlib import Path
 import asyncio
 import json
 import logging
+import uuid
 
 from config import settings
 from database import engine
@@ -137,13 +138,24 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
     user_id = None
     if token:
         try:
-            from utils.auth import decode_access_token
+            from utils.auth import decode_access_token, token_revoked
+            from database import AsyncSessionLocal
+            from models.user import User
             payload = decode_access_token(token)
             user_id = payload.get("user_id")
             print(f"[WS] Decoded token - user_id: {user_id}")
+
+            # Отозванный токен персонала (смена пароля, «выйти везде») не
+            # должен держать сокет: те же правила, что у обычных запросов
+            if user_id:
+                async with AsyncSessionLocal() as session:
+                    account = await session.get(User, uuid.UUID(user_id))
+                if account is None or account.is_blocked or token_revoked(payload, account):
+                    print("[WS] Token revoked or account blocked")
+                    user_id = None
         except Exception as e:
             print(f"[WS] Token decode error: {e}")
-            pass
+            user_id = None
             
     if not user_id:
         print(f"[WS] Rejecting connection - no valid user_id")

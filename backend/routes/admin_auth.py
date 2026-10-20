@@ -35,6 +35,8 @@ MAX_PASSWORD_BYTES = 72
 # Простейший in-memory лимитер попыток входа: {ip: [timestamp, ...]}.
 # Достаточно для одного инстанса; при масштабировании вынести в Redis.
 _login_attempts: dict[str, list[float]] = defaultdict(list)
+# Когда с адреса последний раз записали отказ «слишком много попыток»
+_rate_limited_logged: dict[str, float] = {}
 
 
 def _client_ip(request: Request) -> str:
@@ -145,10 +147,17 @@ async def _fail_login(
     ip = _client_ip(request)
     if count:
         _register_failed_attempt(ip)
-    audit_service.log_login(
-        db, username=username, success=False, reason=reason, ip=ip,
-        user_agent=request.headers.get("user-agent"), user=user,
-    )
+    # Отказы по лимиту пишем раз за окно с адреса, а не на каждый запрос:
+    # поток запросов от одного адреса иначе без конца раздувал бы журнал, а
+    # одной записи достаточно, чтобы увидеть перебор
+    now = time.time()
+    if reason != "rate_limited" or now - _rate_limited_logged.get(ip, 0.0) >= settings.LOGIN_ATTEMPT_WINDOW_SECONDS:
+        if reason == "rate_limited":
+            _rate_limited_logged[ip] = now
+        audit_service.log_login(
+            db, username=username, success=False, reason=reason, ip=ip,
+            user_agent=request.headers.get("user-agent"), user=user,
+        )
     # Явный коммит: get_db откатывает сессию при исключении, и запись о
     # неудачной попытке пропала бы вместе с ней — а нужна она именно тогда
     await db.commit()

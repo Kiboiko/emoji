@@ -114,7 +114,18 @@ export const Home: React.FC = () => {
     // один товар
     const loadedCount = React.useRef(cached?.products.length ?? 0);
 
-    const loadData = async (silent = false, term = activeSearch, withExtras = true) => {
+    // Свежие данные для слияния читаем из ссылки, а не из замыкания: ответ
+    // приходит позже, и список к тому моменту мог вырасти
+    const productsRef = React.useRef<Product[]>(products);
+    productsRef.current = products;
+
+    // merge — обновить загруженное, а не заменить его первой страницей. Нужен
+    // фоновым обновлениям (новый товар по сокету, возврат на вкладку): человек
+    // мог пролистать сто двадцать товаров, и откат к сорока на ровном месте —
+    // это потерянное место в списке.
+    const loadData = async (
+        silent = false, term = activeSearch, withExtras = true, merge = false,
+    ) => {
         const request = ++lastRequest.current;
         if (!silent) setIsLoading(true);
 
@@ -154,17 +165,29 @@ export const Home: React.FC = () => {
             // Порядок (хиты первыми) задаёт сервер: сортировать на клиенте
             // нельзя — страницы пришли бы вперемешку
             const { items, hasMore: more } = productsResult.value as { items: Product[]; hasMore: boolean };
-            loadedCount.current = items.length;
-            setProducts(items);
-            setHasMore(more);
+
+            let nextProducts = items;
+            let nextHasMore = more;
+            if (merge && productsRef.current.length > items.length) {
+                // Свежая первая страница встаёт вперёд, всё остальное, что
+                // человек уже пролистал, остаётся за ней. «Дальше есть» и сдвиг
+                // не трогаем: они про хвост, а не про первую страницу
+                const fresh = new Set(items.map((p) => p.id));
+                nextProducts = [...items, ...productsRef.current.filter((p) => !fresh.has(p.id))];
+                nextHasMore = hasMore;
+            } else {
+                loadedCount.current = items.length;
+            }
+            setProducts(nextProducts);
+            setHasMore(nextHasMore);
             // В память — только каталог без поиска: результат поиска не то,
             // с чего стоит начинать следующее открытие главной
             if (!term) {
                 catalogCache = {
                     language,
                     category: selectedCategory,
-                    products: items,
-                    hasMore: more,
+                    products: nextProducts,
+                    hasMore: nextHasMore,
                     categories: nextCategories,
                     stores: nextStores,
                 };
@@ -272,15 +295,16 @@ export const Home: React.FC = () => {
             });
         }
         else if (message.type === 'product_created') {
-            // New product: silent reload to ensure correct ordering/filtering
-            loadData(true);
+            // Новый товар: тихо обновляем первую страницу, не теряя
+            // уже пролистанного
+            loadData(true, activeSearch, true, true);
         }
         else if (message.type === 'product_deleted') {
             const deletedId = message.data.id;
             setProducts(prev => prev.filter(p => p.id !== deletedId));
         }
         else if (message.type === 'category_created' || message.type === 'category_updated' || message.type === 'category_deleted') {
-            loadData(true);
+            loadData(true, activeSearch, true, true);
         }
     });
 
@@ -289,7 +313,8 @@ export const Home: React.FC = () => {
     // идёт без заглушек
     useEffect(() => {
         const fresh = catalogCache?.language === language && catalogCache.category === selectedCategory;
-        loadData(fresh);
+        // Есть в памяти — показано сразу, обновляем молча и со слиянием
+        loadData(fresh, activeSearch, true, fresh);
     }, [language, selectedCategory]);
 
     // Смена строки поиска — только список товаров, молча (без заглушек между

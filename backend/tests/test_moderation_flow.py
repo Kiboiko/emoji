@@ -258,6 +258,20 @@ async def test_moderator_cannot_approve_listing_without_category(db, user_factor
     )).scalars().first() is None
 
 
+async def test_moderator_list_shows_english_texts_and_photo_ids(db, user_factory, profile, category):
+    admin = await user_factory(username="flow_admin3", is_admin=True)
+    await _listing(db, profile, category, ListingStatus.PENDING)
+
+    page = await admin_p2p.list_listings(
+        status=ListingStatus.PENDING, skip=0, limit=50, admin=admin, db=db,
+    )
+
+    item = page["items"][0]
+    assert item["name_en"] == "Keyboard" and item["description_en"] == "Mechanical, almost new"
+    assert [p["url"] for p in item["image_items"]] == item["images"]
+    assert all(p["id"] for p in item["image_items"])
+
+
 async def test_approved_product_lands_in_chosen_category(db, user_factory, profile, category):
     admin = await user_factory(username="flow_admin2", is_admin=True)
     listing = await _listing(db, profile, category, ListingStatus.PENDING)

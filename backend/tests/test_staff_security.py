@@ -44,8 +44,10 @@ def env_credentials(monkeypatch):
     monkeypatch.setattr(settings, "ADMIN_USERNAME", ENV_USER)
     monkeypatch.setattr(settings, "ADMIN_PASSWORD", ENV_PASSWORD)
     admin_auth._login_attempts.clear()
+    admin_auth._rate_limited_logged.clear()
     yield
     admin_auth._login_attempts.clear()
+    admin_auth._rate_limited_logged.clear()
 
 
 def _request(ip="203.0.113.7", agent="pytest-browser") -> Request:
@@ -136,6 +138,34 @@ async def test_failed_attempts_are_limited_per_ip_and_journaled(db, admin):
 
     # С другого адреса — можно: лимит не общий на всех
     assert (await _login(db, ENV_USER, ENV_PASSWORD, ip="198.51.100.9"))["role"] == "admin"
+
+
+async def test_rate_limit_flood_does_not_flood_the_journal(db, admin):
+    for _ in range(settings.LOGIN_MAX_ATTEMPTS):
+        with pytest.raises(HTTPException):
+            await _login(db, ENV_USER, "wrong-password-xx")
+
+    for _ in range(20):
+        with pytest.raises(HTTPException) as exc:
+            await _login(db, ENV_USER, "wrong-password-xx")
+        assert exc.value.status_code == 429
+
+    limited = [e for e in await _log(db) if e.reason == "rate_limited"]
+    assert len(limited) == 1, "каждый отказ по лимиту писался в журнал отдельно"
+
+
+async def test_token_revocation_rules():
+    user = User(id=uuid.uuid4(), telegram_id=1, first_name="x", referral_code="X", token_version=2)
+
+    # Токен приложения версии не имеет — сбросом не затрагивается
+    assert auth.token_revoked({"user_id": "u", "telegram_id": 1, "is_admin": True}, user) is False
+    # Токен админки: версия сверяется
+    assert auth.token_revoked({"user_id": "u", "tv": 2}, user) is False
+    assert auth.token_revoked({"user_id": "u", "tv": 1}, user) is True
+    # Старый токен админки без версии — как версия 0
+    assert auth.token_revoked({"user_id": "u", "is_admin": True}, user) is True
+    user.token_version = 0
+    assert auth.token_revoked({"user_id": "u", "is_admin": True}, user) is False
 
 
 async def test_login_issues_staff_token_with_version(db, admin):

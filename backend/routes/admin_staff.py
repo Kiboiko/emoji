@@ -51,7 +51,8 @@ def _moderator_dict(user: User, last_login, actions: int) -> dict:
         "username": user.username,
         "display_name": user.first_name,
         "active": not user.is_blocked,
-        "created_at": user.created_at.isoformat(),
+        # В UTC с явной «Z»: без неё браузер прочёл бы время как местное
+        "created_at": user.created_at.isoformat() + "Z",
         "last_login": last_login.isoformat() + "Z" if last_login else None,
         "actions": actions,
     }

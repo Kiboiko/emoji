@@ -24,8 +24,17 @@ export default defineConfig({
         // собственный код (он мал), а библиотеки берутся из кеша: файлы с
         // хешем в имени кешируются на год (nginx/nginx.conf, /assets/).
         manualChunks(id: string) {
+          // Полифилл Buffer обязан выполниться ДО кода TON (src/lib/polyfills.ts).
+          // Между разными файлами браузер порядок не гарантирует: при
+          // отдельном куске TON он стартовал раньше полифилла, и страница
+          // оставалась пустой с «Buffer is not defined». Поэтому полифилл и
+          // пакет buffer лежат в том же куске — внутри одного файла порядок
+          // выполнения тот же, что в исходниках.
+          if (id.includes('/src/lib/polyfills')) return 'ton'
           if (!id.includes('node_modules')) return undefined
-          if (id.includes('@tonconnect') || id.includes('@ton/') || id.includes('@tonconnect')) return 'ton'
+          if (id.includes('node_modules/buffer/') || id.includes('node_modules/base64-js/')
+            || id.includes('node_modules/ieee754/')) return 'ton'
+          if (id.includes('@tonconnect') || id.includes('@ton/')) return 'ton'
           if (id.includes('framer-motion') || id.includes('/motion-')) return 'motion'
           if (id.includes('lucide-react')) return 'icons'
           if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return 'react'

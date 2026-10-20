@@ -91,7 +91,11 @@ async def list_listings(
             {
                 "id": str(l.id),
                 "name": l.name,
+                # Английские тексты уходят в каталог наравне с русскими, и
+                # модератор проверяет оба — админка их показывает
+                "name_en": l.name_en,
                 "description": l.description,
+                "description_en": l.description_en,
                 "price_usd": str(l.price_usd),
                 "status": l.status.value,
                 "images": [img.url for img in l.images],

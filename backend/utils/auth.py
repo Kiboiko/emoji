@@ -163,6 +163,22 @@ def generate_referral_code(length: int = 8) -> str:
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 
+def token_revoked(payload: dict, user: User) -> bool:
+    """
+    Отозван ли токен персонала: версия в токене отстала от версии в базе.
+
+    Токены админки несут версию (tv) и перестают действовать при смене пароля
+    и «выйти везде». Токен приложения версии не имеет и не проверяется.
+
+    Токен админа, выданный до появления версии, тоже считается токеном
+    персонала (is_admin без telegram_id — токены приложения несут
+    telegram_id) и сверяется как версия 0: иначе он пережил бы любую смену
+    пароля до конца своих семи дней.
+    """
+    staff_token = "tv" in payload or (payload.get("is_admin") and "telegram_id" not in payload)
+    return bool(staff_token) and int(payload.get("tv", 0)) != int(user.token_version or 0)
+
+
 # === NEW DEPENDENCIES ===
 
 async def get_current_user(
@@ -224,11 +240,10 @@ async def get_current_user(
         # персонала (is_admin без telegram_id — токены приложения несут
         # telegram_id) и сверяется как версия 0: иначе он пережил бы любую
         # смену пароля до конца своих семи дней.
-        if "tv" in payload or (payload.get("is_admin") and "telegram_id" not in payload):
-            if int(payload.get("tv", 0)) != int(user.token_version or 0):
-                raise HTTPException(
-                    status_code=401, detail="Сессия завершена. Войдите заново.",
-                )
+        if token_revoked(payload, user):
+            raise HTTPException(
+                status_code=401, detail="Сессия завершена. Войдите заново.",
+            )
 
         return user
     
