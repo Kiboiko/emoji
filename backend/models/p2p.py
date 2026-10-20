@@ -318,6 +318,7 @@ class Deal(Base):
         Index("ix_deals_status_deadline", "status", "confirm_deadline_at"),
         Index("ix_deals_buyer", "buyer_id"),
         Index("ix_deals_seller", "seller_id"),
+        Index("ix_deals_product", "product_id"),
     )
 
     def __repr__(self) -> str:

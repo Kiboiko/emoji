@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Integer, Numeric, text
+from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Index, Integer, Numeric, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -89,3 +89,9 @@ class Product(Base):
     
     def __repr__(self) -> str:
         return f"<Product(id={self.id}, name_ru={self.name_ru}, price_usdt={self.price_usdt})>"
+
+
+# Каталог фильтрует по активности и категории, витрина магазина и пересчёт
+# остатка — по владельцу. Без индексов каждый такой запрос читает всю таблицу.
+Index("ix_products_catalog", Product.is_active, Product.category_id)
+Index("ix_products_owner", Product.owner_user_id)

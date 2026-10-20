@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, Integer
+from sqlalchemy import DateTime, ForeignKey, Index, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -40,3 +40,7 @@ class CartItem(Base):
     
     def __repr__(self) -> str:
         return f"<CartItem(id={self.id}, user_id={self.user_id}, product_id={self.product_id}, quantity={self.quantity})>"
+
+
+# Корзина читается при каждом открытии приложения
+Index("ix_cart_items_user", CartItem.user_id)

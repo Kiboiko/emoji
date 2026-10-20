@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, ForeignKey, Integer, Boolean, BigInteger
+from sqlalchemy import String, Text, DateTime, ForeignKey, Index, Integer, Boolean, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -66,3 +66,7 @@ class Review(Base):
     
     def __repr__(self) -> str:
         return f"<Review(id={self.id}, user_id={self.user_id}, product_id={self.product_id})>"
+
+
+# Оценки каталога и отзывы товара (с окном давности по created_at)
+Index("ix_reviews_product", Review.product_id, Review.created_at)

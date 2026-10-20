@@ -91,9 +91,26 @@ export const productsApi = {
         skip?: number;
         limit?: number;
     }) => {
-        const queryParams = { limit: 1000, ...params };
+        const queryParams = { limit: 40, ...params };
         const response = await apiClient.get('/products', { params: queryParams });
         return response.data;
+    },
+
+    // Страница каталога и признак «дальше есть». Каталог грузится кусками по
+    // мере прокрутки: раньше приходило до тысячи товаров разом, и чем их
+    // больше, тем дольше открывалась главная
+    getPage: async (params: {
+        category_id?: string;
+        search?: string;
+        lang?: string;
+        skip?: number;
+        limit?: number;
+    }) => {
+        const response = await apiClient.get('/products', { params });
+        return {
+            items: response.data as any[],
+            hasMore: response.headers['x-has-more'] === '1',
+        };
     },
 
     getProduct: async (id: string, lang: string = 'ru') => {

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File, Form, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func, desc
 from typing import Optional, List
@@ -42,10 +42,22 @@ async def get_products(
     search: Optional[str] = None,
     lang: str = Query("ru"),
     skip: int = 0,
-    limit: int = 1000,
+    limit: int = 40,
+    response: Response = None,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get products with pagination, search and filtering"""
+    """
+    Каталог постранично: товары, поиск, фильтр по категории.
+
+    Раньше отдавалось до тысячи товаров разом, а фронт грузил весь каталог
+    при каждом открытии главной: чем больше товаров, тем дольше ответ и тем
+    тяжелее разбор на телефоне. Теперь по 40 штук; есть ли следующая
+    страница, говорит заголовок X-Has-More (лишний товар запрашивается и
+    отбрасывается — дешевле отдельного подсчёта всех строк).
+    """
+    # Границы здесь, а не в Query(): функцию вызывают и напрямую
+    limit = max(1, min(int(limit), 100))
+    skip = max(0, int(skip))
     # Снятые с продажи в каталог не попадают. До этого такого состояния не
     # было вовсе, и подписки висели в витрине с момента создания тарифа —
     # то есть до модерации канала.
@@ -90,22 +102,35 @@ async def get_products(
         )
     )
         
-    if search:
-        search_filter = or_(
-            Product.name_ru.ilike(f"%{search}%"),
-            Product.name_en.ilike(f"%{search}%")
-        )
-        stmt = stmt.where(search_filter)
-        
-    # Sort by TOP first, then Sort Order, then Date
-    stmt = stmt.order_by(Product.is_top.desc(), Product.sort_order.desc(), Product.created_at.desc())
-    stmt = stmt.offset(skip).limit(limit)
-    
+    if search and search.strip():
+        # По названию и описанию на обоих языках — как искал клиент, пока
+        # поиск шёл по уже загруженному каталогу. autoescape: «%» и «_» в
+        # запросе — обычные символы, а не шаблон
+        term = search.strip()
+        stmt = stmt.where(or_(
+            Product.name_ru.icontains(term, autoescape=True),
+            Product.name_en.icontains(term, autoescape=True),
+            Product.description_ru.icontains(term, autoescape=True),
+            Product.description_en.icontains(term, autoescape=True),
+        ))
+
+    # Хиты первыми, дальше порядок и дата. id последним: без него у товаров
+    # с одинаковыми полями порядок между страницами плавает, и товар мог
+    # выпасть из выдачи или показаться дважды
+    stmt = stmt.order_by(
+        Product.is_top.desc(), Product.sort_order.desc(), Product.created_at.desc(), Product.id,
+    )
+    stmt = stmt.offset(skip).limit(limit + 1)
+
     # Здесь на КАЖДЫЙ запрос каталога печатался скомпилированный SQL и строка
-    # по каждому товару. Фронт грузит каталог с limit=1000 при каждом открытии
-    # главной, так что лог забивался мгновенно. Убрано.
+    # по каждому товару, и лог забивался мгновенно. Убрано.
     result = await db.execute(stmt)
-    products = result.scalars().all()
+    products = list(result.scalars().all())
+
+    has_more = len(products) > limit
+    products = products[:limit]
+    if response is not None:
+        response.headers["X-Has-More"] = "1" if has_more else "0"
 
     # Авторы нужны, чтобы показать на странице товара, чей он, и дать
     # ссылку на магазин. Тремя запросами на весь каталог, а не по товару.

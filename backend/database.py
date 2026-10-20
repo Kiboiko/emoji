@@ -7,7 +7,17 @@ from config import settings
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.SQL_ECHO,
-    future=True
+    future=True,
+    # Пул побольше стандартного (5+10): запрос каталога, корзина, сокеты и
+    # фоновые задачи тянут соединения одновременно, и при росте числа
+    # пользователей очередь за соединением превращалась в лаги. Запас
+    # по-прежнему мал рядом с max_connections PostgreSQL (100)
+    pool_size=15,
+    max_overflow=15,
+    # Мёртвое соединение (перезапуск базы, обрыв сети) проверяется перед
+    # выдачей: иначе первый запрос после обрыва падал бы 500-й ошибкой
+    pool_pre_ping=True,
+    pool_recycle=1800,
 )
 
 # Create async session factory

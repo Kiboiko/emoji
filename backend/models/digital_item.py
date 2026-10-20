@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -27,3 +27,7 @@ class DigitalItem(Base):
 
     # Relationships
     product: Mapped["Product"] = relationship("Product", back_populates="digital_items")
+
+
+# Наличие цифрового товара в каталоге считается подзапросом на каждый товар
+Index("ix_digital_items_product", DigitalItem.product_id, DigitalItem.is_sold)

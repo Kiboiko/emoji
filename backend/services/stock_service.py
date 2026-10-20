@@ -119,6 +119,60 @@ async def oldest_reservation(db: AsyncSession, product_id: uuid.UUID | None) -> 
     ).scalar()
 
 
+async def sale_state_by_product(
+    db: AsyncSession, product_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, dict]:
+    """
+    Остаток, продано, забронировано и ближайшая бронь — сразу для многих
+    товаров, тремя запросами на всех.
+
+    Кабинет продавца показывал это по каждому объявлению отдельно: четыре
+    запроса на штуку, то есть двести на кабинет с полусотней объявлений.
+    Условия те же, что в units_sold / units_reserved / oldest_reservation —
+    при расхождении выиграет единичная версия, на ней держатся тесты.
+    """
+    if not product_ids:
+        return {}
+
+    sold = dict((await db.execute(
+        select(Deal.product_id, func.coalesce(func.sum(func.coalesce(OrderItem.quantity, 1)), 0))
+        .select_from(Deal)
+        .outerjoin(OrderItem, OrderItem.id == Deal.order_item_id)
+        .where(
+            Deal.product_id.in_(product_ids),
+            Deal.status.notin_([DealStatus.CANCELLED, DealStatus.REFUNDED]),
+        )
+        .group_by(Deal.product_id)
+    )).all())
+
+    held_rows = (await db.execute(
+        select(
+            OrderItem.product_id,
+            func.coalesce(func.sum(OrderItem.quantity), 0),
+            func.min(Order.created_at),
+        )
+        .select_from(OrderItem)
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(OrderItem.product_id.in_(product_ids), Order.status == OrderStatus.PENDING)
+        .group_by(OrderItem.product_id)
+    )).all()
+    held = {pid: (int(units), oldest) for pid, units, oldest in held_rows}
+
+    stocks = dict((await db.execute(
+        select(Product.id, Product.stock).where(Product.id.in_(product_ids))
+    )).all())
+
+    return {
+        pid: {
+            "stock": stocks.get(pid),
+            "sold": int(sold.get(pid, 0)),
+            "reserved": held.get(pid, (0, None))[0],
+            "oldest_reservation": held.get(pid, (0, None))[1],
+        }
+        for pid in product_ids
+    }
+
+
 async def available_units(db: AsyncSession, listing: ProductListing) -> int:
     """Сколько единиц по заявке можно купить прямо сейчас."""
     if listing.status != ListingStatus.APPROVED or listing.product_id is None:

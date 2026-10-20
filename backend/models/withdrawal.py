@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
-from sqlalchemy import BigInteger, String, DateTime, ForeignKey, Float, Enum, text
+from sqlalchemy import BigInteger, String, DateTime, ForeignKey, Float, Enum, Index, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -76,3 +76,7 @@ class Withdrawal(Base):
     
     def __repr__(self) -> str:
         return f"<Withdrawal(id={self.id}, user_id={self.user_id}, status={self.status}, amount={self.amount})>"
+
+
+Index("ix_withdrawals_user", Withdrawal.user_id, Withdrawal.created_at)
+Index("ix_withdrawals_status", Withdrawal.status, Withdrawal.created_at)

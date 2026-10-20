@@ -46,9 +46,16 @@ let catalogCache: {
     language: string;
     category: string | null;
     products: Product[];
+    hasMore: boolean;
     categories: Category[];
     stores: StoreCard[];
 } | null = null;
+
+/** Сколько товаров приходит за раз: каталог грузится по мере прокрутки */
+const PAGE_SIZE = 40;
+
+/** Пауза после последней буквы поиска: запрос на каждую букву — лишняя нагрузка */
+const SEARCH_DELAY_MS = 300;
 
 export const Home: React.FC = () => {
     const navigate = useNavigate();
@@ -63,7 +70,11 @@ export const Home: React.FC = () => {
     const [stores, setStores] = useState<StoreCard[]>(cached?.stores ?? []);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(cached?.category ?? null);
     const [searchQuery, setSearchQuery] = useState('');
+    // Запрос уходит на сервер с задержкой, а поле реагирует сразу
+    const [activeSearch, setActiveSearch] = useState('');
     const [isLoading, setIsLoading] = useState(!cached);
+    const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [view, setView] = useState<CatalogView>(readView);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
@@ -78,16 +89,11 @@ export const Home: React.FC = () => {
         }
     };
 
-    // Client-side filtering for search - no flickering!
-    const filteredProducts = React.useMemo(() => {
-        if (!searchQuery.trim()) return products;
-
-        const query = searchQuery.toLowerCase();
-        return products.filter(product =>
-            product.name.toLowerCase().includes(query) ||
-            product.description?.toLowerCase().includes(query)
-        );
-    }, [products, searchQuery]);
+    // Поиск идёт на сервере: каталог приходит кусками, и искать только по
+    // уже загруженному значило бы не находить то, что ещё не подгрузилось.
+    // Пока человек печатает, на экране остаётся прежний список — без
+    // заглушек между буквами.
+    const filteredProducts = products;
 
     // Строка магазинов — витрина для разглядывания. Как только человек ищет
     // или выбрал категорию, он знает, что ему нужно, и всё лишнее между ним
@@ -98,25 +104,35 @@ export const Home: React.FC = () => {
     // и вторая обрезалась пополам. Хиты и так идут первыми в общей сетке —
     // их сортирует loadData, — и плашка «Хит» на картинке никуда не делась.
 
-    // Номер последней загрузки: при быстром переключении категорий ответ на
-    // прежнюю мог прийти позже и подменить список чужими товарами
+    // Номер последней загрузки: при быстром переключении категорий или
+    // наборе поиска ответ на прежний запрос мог прийти позже и подменить
+    // список чужими товарами
     const lastRequest = React.useRef(0);
+    // Сколько товаров сервер уже отдал в этой выдаче. Это сдвиг для
+    // следующей страницы, а не длина списка на экране: из списка товар
+    // может пропасть по сокету (раскупили), и сдвиг по длине пропустил бы
+    // один товар
+    const loadedCount = React.useRef(cached?.products.length ?? 0);
 
-    const loadData = async (silent = false) => {
+    const loadData = async (silent = false, term = activeSearch, withExtras = true) => {
         const request = ++lastRequest.current;
         if (!silent) setIsLoading(true);
 
-        // Три запроса разом, а не по очереди: по очереди время ответа
+        // Запросы разом, а не по очереди: по очереди время ответа
         // складывалось, и на мобильной сети каталог ждал втрое дольше.
         // Каждый сам по себе: без категорий и магазинов каталог работает,
-        // и падение одного не должно оставлять человека без товаров
+        // и падение одного не должно оставлять человека без товаров.
+        // withExtras=false — меняется только поиск: категории и магазины от
+        // него не зависят, перезапрашивать их незачем
         const [categoriesResult, storesResult, productsResult] = await Promise.allSettled([
-            categoriesApi.getCategories(language),
-            storesApi.getStores(),
-            // Поиск — на клиенте, поэтому без строки запроса
-            productsApi.getProducts({
+            withExtras ? categoriesApi.getCategories(language) : Promise.resolve(categories),
+            withExtras ? storesApi.getStores() : Promise.resolve(stores),
+            productsApi.getPage({
                 category_id: selectedCategory || undefined,
+                search: term || undefined,
                 lang: language,
+                skip: 0,
+                limit: PAGE_SIZE,
             }),
         ]);
         if (request !== lastRequest.current) return;
@@ -135,26 +151,90 @@ export const Home: React.FC = () => {
         setStores(nextStores);
 
         if (productsResult.status === 'fulfilled') {
-            // Хиты первыми
-            const nextProducts = [...productsResult.value].sort((a: Product, b: Product) => {
-                if (a.is_top === b.is_top) return 0;
-                return a.is_top ? -1 : 1;
-            });
-            setProducts(nextProducts);
-            catalogCache = {
-                language,
-                category: selectedCategory,
-                products: nextProducts,
-                categories: nextCategories,
-                stores: nextStores,
-            };
+            // Порядок (хиты первыми) задаёт сервер: сортировать на клиенте
+            // нельзя — страницы пришли бы вперемешку
+            const { items, hasMore: more } = productsResult.value as { items: Product[]; hasMore: boolean };
+            loadedCount.current = items.length;
+            setProducts(items);
+            setHasMore(more);
+            // В память — только каталог без поиска: результат поиска не то,
+            // с чего стоит начинать следующее открытие главной
+            if (!term) {
+                catalogCache = {
+                    language,
+                    category: selectedCategory,
+                    products: items,
+                    hasMore: more,
+                    categories: nextCategories,
+                    stores: nextStores,
+                };
+            }
         } else {
             console.error('Failed to load products:', productsResult.reason);
             // Сбой тихого обновления не стирает то, что уже на экране
-            if (!silent) setProducts([]);
+            if (!silent) {
+                setProducts([]);
+                setHasMore(false);
+            }
         }
         if (!silent) setIsLoading(false);
     };
+
+    // Следующая порция каталога — когда конец списка приближается к экрану
+    const loadMore = async () => {
+        if (!hasMore || loadingMore || isLoading) return;
+        const request = lastRequest.current;
+        setLoadingMore(true);
+        try {
+            const page = await productsApi.getPage({
+                category_id: selectedCategory || undefined,
+                search: activeSearch || undefined,
+                lang: language,
+                skip: loadedCount.current,
+                limit: PAGE_SIZE,
+            });
+            // Пока шёл запрос, выдача сменилась (другая категория, поиск)
+            if (request !== lastRequest.current) return;
+
+            const items = page.items as Product[];
+            loadedCount.current += items.length;
+            setProducts((prev) => {
+                const known = new Set(prev.map((p) => p.id));
+                const next = [...prev, ...items.filter((p) => !known.has(p.id))];
+                if (!activeSearch && catalogCache) catalogCache = { ...catalogCache, products: next, hasMore: page.hasMore };
+                return next;
+            });
+            setHasMore(page.hasMore);
+        } catch (error) {
+            // Не страшно: следующая прокрутка попробует снова
+            console.error('Failed to load more products:', error);
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    // Поиск: запрос уходит, когда человек перестал печатать
+    useEffect(() => {
+        const id = window.setTimeout(() => setActiveSearch(searchQuery.trim()), SEARCH_DELAY_MS);
+        return () => window.clearTimeout(id);
+    }, [searchQuery]);
+
+    // Конец списка: наблюдатель следит за невидимой отметкой под сеткой
+    const sentinel = React.useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const node = sentinel.current;
+        if (!node || !hasMore) return;
+        const observer = new IntersectionObserver(
+            (entries) => { if (entries[0]?.isIntersecting) loadMore(); },
+            { rootMargin: '700px 0px' },
+        );
+        observer.observe(node);
+        return () => observer.disconnect();
+        // loadMore берёт свежие значения из замыкания: пересоздаём наблюдателя,
+        // когда список вырос или загрузка закончилась — если отметка всё ещё
+        // на виду, он тут же подгрузит следующую порцию
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasMore, loadingMore, products.length, isLoading]);
 
     // Listen for WebSocket updates
     useWebSocket((message) => {
@@ -211,6 +291,17 @@ export const Home: React.FC = () => {
         const fresh = catalogCache?.language === language && catalogCache.category === selectedCategory;
         loadData(fresh);
     }, [language, selectedCategory]);
+
+    // Смена строки поиска — только список товаров, молча (без заглушек между
+    // буквами). Первый запуск пропускаем: каталог уже грузит эффект выше
+    const searchMounted = React.useRef(false);
+    useEffect(() => {
+        if (!searchMounted.current) {
+            searchMounted.current = true;
+            return;
+        }
+        loadData(true, activeSearch, false);
+    }, [activeSearch]);
 
     const handleAddToCart = async (productId: string) => {
         const product = filteredProducts.find(p => p.id === productId);
@@ -385,6 +476,19 @@ export const Home: React.FC = () => {
                             <div key={product.id}>
                                 {renderProduct(product)}
                             </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Отметка конца списка: когда она подходит к экрану, подгружается
+                    следующая порция. Пока грузится — две заглушки */}
+                {hasMore && <div ref={sentinel} className="catalog-sentinel" aria-hidden="true" />}
+                {loadingMore && (
+                    <div className={view === 'list' ? 'products-list' : 'products-grid'}>
+                        {Array.from({ length: 2 }).map((_, i) => (
+                            view === 'list'
+                                ? <ProductRowSkeleton key={i} />
+                                : <ProductCardSkeleton key={i} />
                         ))}
                     </div>
                 )}

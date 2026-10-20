@@ -462,23 +462,26 @@ async def my_listings(
     # Тот же срок, по которому бронь снимается на самом деле
     hold = await stock_service.reservation_ttl(db)
 
-    async def sale_state(l: ProductListing) -> dict:
-        """
-        Что на самом деле происходит с товаром.
+    # Что на самом деле происходит с товарами — одним заходом на все
+    # объявления, а не четыре запроса на каждое.
+    #
+    # Статус заявки говорит только о модерации: «одобрено» остаётся и когда
+    # вещь уже купили, и когда её оформил покупатель и вот-вот оплатит.
+    # Продавец видел «В продаже», а в каталоге товара не было.
+    states = await stock_service.sale_state_by_product(
+        db, [l.product_id for l in listings if l.product_id is not None],
+    )
 
-        Статус заявки говорит только о модерации: «одобрено» остаётся и
-        когда вещь уже купили, и когда её оформил покупатель и вот-вот
-        оплатит. Продавец видел «В продаже», а в каталоге товара не было.
-        """
-        if l.product_id is None:
+    async def sale_state(l: ProductListing) -> dict:
+        state = states.get(l.product_id) if l.product_id is not None else None
+        if state is None:
             return {"stock": None, "sold": 0, "reserved": 0, "reserved_until": None}
 
-        product = await db.get(Product, l.product_id)
-        oldest = await stock_service.oldest_reservation(db, l.product_id)
+        oldest = state["oldest_reservation"]
         return {
-            "stock": product.stock if product is not None else None,
-            "sold": await stock_service.units_sold(db, l.product_id),
-            "reserved": await stock_service.units_reserved(db, l.product_id),
+            "stock": state["stock"],
+            "sold": state["sold"],
+            "reserved": state["reserved"],
             # В UTC с явной «Z»: без неё браузер прочёл бы время как местное
             "reserved_until": (
                 (oldest + hold).replace(microsecond=0).isoformat() + "Z"

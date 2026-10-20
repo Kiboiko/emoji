@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum as PyEnum
-from sqlalchemy import String, DateTime, ForeignKey, Numeric, Enum, Integer
+from sqlalchemy import String, DateTime, ForeignKey, Index, Numeric, Enum, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -111,3 +111,10 @@ class OrderItem(Base):
     
     def __repr__(self) -> str:
         return f"<OrderItem(id={self.id}, order_id={self.order_id}, product_id={self.product_id})>"
+
+
+# «Мои заказы», отмена просроченных, пересчёт остатка (бронь неоплаченными)
+Index("ix_orders_user", Order.user_id, Order.created_at)
+Index("ix_orders_status", Order.status, Order.created_at)
+Index("ix_order_items_order", OrderItem.order_id)
+Index("ix_order_items_product", OrderItem.product_id)
