@@ -3,13 +3,13 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useQueryClient } from '@tanstack/react-query';
-import { Sidebar } from '../components/Sidebar';
+import { Sidebar, canSee } from '../components/Sidebar';
 import { NAV_ITEMS } from '../components/Sidebar';
 import { useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 
 export const AdminLayout: React.FC = () => {
-    const { user, isLoading, accessToken } = useAuth();
+    const { user, role, isLoading, accessToken } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const queryClient = useQueryClient();
     const location = useLocation();
@@ -35,6 +35,16 @@ export const AdminLayout: React.FC = () => {
 
     if (!user) {
         return <Navigate to="/login" replace />;
+    }
+
+    // Раздел не для этой роли — на первый доступный. Бэкенд всё равно ответит
+    // 403, но человеку незачем смотреть на пустую страницу с ошибками
+    const here = NAV_ITEMS.find((item) => (item.path === '/'
+        ? location.pathname === '/'
+        : location.pathname.startsWith(item.path)));
+    if (here && !canSee(here, role)) {
+        const first = NAV_ITEMS.find((item) => canSee(item, role));
+        return <Navigate to={first?.path ?? '/login'} replace />;
     }
 
     return (

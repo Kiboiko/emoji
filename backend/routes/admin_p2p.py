@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -15,16 +16,18 @@ from sqlalchemy.orm import selectinload
 
 from database import get_db
 from models.p2p import (
-    Deal, DealMessage, DealStatus, ListingStatus, ProductListing,
+    Deal, DealMessage, DealStatus, ListingImage, ListingStatus, ProductListing,
     SellerProfile, SellerStatus,
 )
 from models.product import Product
 from models.user import User
+from config import settings as app_settings
 from services import (
-    deal_chat_service, deal_service, moderation_service, settings_service, stock_service,
+    audit_service, deal_chat_service, deal_service, image_variants, moderation_service,
+    settings_service, stock_service,
 )
 from services.money import from_minor
-from utils.auth import require_admin
+from utils.auth import require_admin, require_staff
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +69,7 @@ async def list_listings(
     status: Optional[ListingStatus] = Query(ListingStatus.PENDING),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_staff),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(ProductListing).options(
@@ -92,10 +95,13 @@ async def list_listings(
                 "price_usd": str(l.price_usd),
                 "status": l.status.value,
                 "images": [img.url for img in l.images],
+                # С идентификаторами — чтобы модератор мог удалить конкретное фото
+                "image_items": [{"id": str(img.id), "url": img.url} for img in l.images],
                 "quantity": l.quantity,
                 "seller": {
                     "id": str(l.seller.id),
                     "display_name": l.seller.display_name,
+                    "avatar_url": l.seller.avatar_url,
                     "username": l.seller.user.username if l.seller.user else None,
                     "telegram_id": l.seller.user.telegram_id if l.seller.user else None,
                     "status": l.seller.status.value,
@@ -117,7 +123,7 @@ async def list_listings(
 async def moderate_listing(
     listing_id: uuid.UUID,
     decision: ModerationDecision,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_staff),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -166,6 +172,13 @@ async def moderate_listing(
             )
             restricted = True
 
+        audit_service.log_action(
+            db, admin, "listing.reject", target_type="listing", target_id=listing.id,
+            details={
+                "name": listing.name, "seller": seller.display_name,
+                "comment": decision.comment, "seller_restricted": restricted,
+            },
+        )
         await db.commit()
         await _notify_seller(
             db, seller,
@@ -182,6 +195,10 @@ async def moderate_listing(
         )
     except moderation_service.ModerationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    audit_service.log_action(
+        db, admin, "listing.approve", target_type="listing", target_id=listing.id,
+        details={"name": listing.name, "seller": seller.display_name, "comment": decision.comment},
+    )
     await db.commit()
 
     await _notify_seller(db, seller, f"Заявка «{listing.name}» одобрена, товар опубликован.")
@@ -232,6 +249,7 @@ async def list_sellers(
             {
                 "id": str(s.id),
                 "display_name": s.display_name,
+                "avatar_url": s.avatar_url,
                 "username": s.user.username if s.user else None,
                 "telegram_id": s.user.telegram_id if s.user else None,
                 "status": s.status.value,
@@ -297,6 +315,11 @@ async def change_seller_status(
         for product in products:
             product.stock = 0
 
+    audit_service.log_action(
+        db, admin, "seller.status", target_type="seller", target_id=seller.id,
+        details={"store": seller.display_name, "status": payload.status.value,
+                 "reason": payload.reason, "restrict_days": payload.restrict_days},
+    )
     await db.commit()
     return {"status": seller.status.value}
 
@@ -394,6 +417,10 @@ async def set_seller_verified(
         raise HTTPException(status_code=404, detail="Продавец не найден")
 
     seller.is_verified = decision.verified
+    audit_service.log_action(
+        db, admin, "seller.verify" if decision.verified else "seller.unverify",
+        target_type="seller", target_id=seller.id, details={"store": seller.display_name},
+    )
     await db.commit()
     return {"is_verified": seller.is_verified}
 
@@ -407,7 +434,7 @@ async def list_deals(
     status: Optional[DealStatus] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_staff),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Deal).options(selectinload(Deal.buyer), selectinload(Deal.seller))
@@ -447,7 +474,7 @@ async def list_deals(
 @router.get("/deals/{deal_id}/messages")
 async def deal_conversation(
     deal_id: uuid.UUID,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_staff),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -496,7 +523,7 @@ class ModeratorMessage(BaseModel):
 async def moderator_message(
     deal_id: uuid.UUID,
     payload: ModeratorMessage,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_staff),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -516,6 +543,10 @@ async def moderator_message(
     except deal_chat_service.ChatError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    audit_service.log_action(
+        db, admin, "deal.message", target_type="deal", target_id=deal.id,
+        details={"number": deal.number, "text": payload.text[:300]},
+    )
     await db.commit()
     await deal_chat_service.push_message(deal, message)
     return deal_chat_service.admin_message_dto(message)
@@ -525,7 +556,7 @@ async def moderator_message(
 async def resolve_dispute(
     deal_id: uuid.UUID,
     payload: DisputeResolution,
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_staff),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -553,8 +584,121 @@ async def resolve_dispute(
     if not payload.release and deal.product_id:
         # Возврат освобождает проданную единицу — она снова в продаже
         await stock_service.refresh_p2p_stock(db, deal.product_id)
+    audit_service.log_action(
+        db, admin, "deal.resolve", target_type="deal", target_id=deal.id,
+        details={
+            "number": deal.number,
+            "decision": "деньги продавцу" if payload.release else "возврат покупателю",
+            "comment": payload.comment,
+        },
+    )
     await db.commit()
     await deal_chat_service.push_message(deal, message)
     await deal_chat_service.push_deal(db, deal)
 
     return {"status": deal.status.value}
+
+
+# ---------------------------------------------------------------------------
+# Удаление фото
+# ---------------------------------------------------------------------------
+
+def _remove_files(urls: list[str]) -> None:
+    """Файлы удаляются ПОСЛЕ коммита: откат не должен оставить запись без файла."""
+    for url in urls:
+        try:
+            image_variants.remove(Path(app_settings.UPLOAD_DIR), url)
+        except Exception as e:
+            logger.warning("[ADMIN] Файл %s не удалён: %s", url, e)
+
+
+@router.delete("/listings/{listing_id}/images/{image_id}")
+async def delete_listing_photo(
+    listing_id: uuid.UUID,
+    image_id: uuid.UUID,
+    admin: User = Depends(require_staff),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Модератор убирает фото из объявления.
+
+    Фото исчезает и из заявки, и из карточки товара в каталоге, и с диска:
+    нарушающая картинка не должна оставаться доступной по прямой ссылке.
+    Повторной проверки не требуется — решение принял сам модератор.
+    """
+    listing = (
+        await db.execute(
+            select(ProductListing)
+            .options(selectinload(ProductListing.images), selectinload(ProductListing.seller))
+            .where(ProductListing.id == listing_id)
+        )
+    ).scalars().first()
+    if listing is None:
+        raise HTTPException(status_code=404, detail="Заявка не найдена")
+
+    image = next((i for i in listing.images if i.id == image_id), None)
+    if image is None:
+        raise HTTPException(status_code=404, detail="Фото не найдено")
+
+    url = image.url
+    remaining = [i.url for i in listing.images if i.id != image_id]
+
+    if listing.product_id:
+        product = await db.get(Product, listing.product_id)
+        if product is not None:
+            product.images = remaining
+            if product.image_url == url:
+                product.image_url = remaining[0] if remaining else moderation_service.PLACEHOLDER_IMAGE
+
+    await db.delete(image)
+    audit_service.log_action(
+        db, admin, "photo.delete", target_type="listing", target_id=listing.id,
+        details={"kind": "listing_image", "name": listing.name, "url": url,
+                 "seller": listing.seller.display_name},
+    )
+    await db.commit()
+
+    # Тот же файл мог быть у другого объявления — тогда он остаётся
+    shared = (
+        await db.execute(select(func.count(ListingImage.id)).where(ListingImage.url == url))
+    ).scalar() or 0
+    if not shared:
+        _remove_files([url])
+
+    await _notify_seller(
+        db, listing.seller,
+        f"Модератор удалил фото из объявления «{listing.name}». "
+        f"Если нужно, добавьте другое фото.",
+    )
+    return {"deleted": True, "remaining": len(remaining)}
+
+
+@router.delete("/sellers/{seller_id}/avatar")
+async def delete_seller_avatar(
+    seller_id: uuid.UUID,
+    admin: User = Depends(require_staff),
+    db: AsyncSession = Depends(get_db),
+):
+    """Убирает логотип магазина — пользователь загрузил что-то недопустимое."""
+    seller = await db.get(SellerProfile, seller_id)
+    if seller is None:
+        raise HTTPException(status_code=404, detail="Продавец не найден")
+    if seller.is_platform:
+        raise HTTPException(status_code=400, detail="Логотип площадки меняется в её настройках")
+    if not seller.avatar_url:
+        raise HTTPException(status_code=400, detail="У магазина нет логотипа")
+
+    url = seller.avatar_url
+    seller.avatar_url = None
+    audit_service.log_action(
+        db, admin, "photo.delete", target_type="seller", target_id=seller.id,
+        details={"kind": "store_avatar", "store": seller.display_name, "url": url},
+    )
+    await db.commit()
+
+    _remove_files([url])
+    await _notify_seller(
+        db, seller,
+        "Модератор удалил логотип вашего магазина. Загрузите другой в настройках магазина.",
+    )
+    return {"deleted": True}

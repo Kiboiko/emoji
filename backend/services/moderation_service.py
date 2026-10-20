@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.p2p import ListingStatus, ProductListing, SellerProfile, SellerStatus
 from models.product import Product
 from models.user import User
-from services import settings_service, stock_service
+from services import audit_service, settings_service, stock_service
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +213,12 @@ async def submit_for_review(
         try:
             await approve_listing(
                 db, listing, seller, moderator_id=None, comment=AUTO_PUBLISH_COMMENT,
+            )
+            # Решение принято системой, а не человеком — это тоже в журнале
+            audit_service.log_action(
+                db, None, "listing.auto_publish", target_type="listing", target_id=listing.id,
+                details={"name": listing.name, "seller": seller.display_name,
+                         "edited": edited},
             )
             await db.commit()
         except ModerationError as e:

@@ -18,6 +18,9 @@ import { Deals } from './pages/Deals';
 import { Subscriptions } from './pages/Subscriptions';
 import { Finance } from './pages/Finance';
 import { Referrals } from './pages/Referrals';
+import { Moderators } from './pages/Moderators';
+import { AuditLog } from './pages/AuditLog';
+import { Security } from './pages/Security';
 const queryClient = new QueryClient();
 
 function App() {
@@ -43,6 +46,9 @@ function App() {
               <Route path="subscriptions" element={<Subscriptions />} />
               <Route path="finance" element={<Finance />} />
               <Route path="referrals" element={<Referrals />} />
+              <Route path="moderators" element={<Moderators />} />
+              <Route path="audit" element={<AuditLog />} />
+              <Route path="security" element={<Security />} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Routes>

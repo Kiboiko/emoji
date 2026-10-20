@@ -61,6 +61,16 @@ async def update_setting(
     except settings_service.SettingValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # set_setting уже закоммитил — запись журнала фиксируем отдельным коммитом.
+    # Текст условий не пишем целиком: он длинный и лежит в самой настройке
+    from services import audit_service
+    shown = value if not isinstance(value, str) or len(value) <= 80 else value[:80] + "…"
+    audit_service.log_action(
+        db, admin, "settings.update", target_type="setting", target_id=key,
+        details={"value": shown},
+    )
+    await db.commit()
+
     return {"key": key, "value": value}
 
 

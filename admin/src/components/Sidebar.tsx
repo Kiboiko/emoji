@@ -17,8 +17,12 @@ import {
     Radio,
     Scale,
     Share2,
+    UserCog,
+    ScrollText,
+    KeyRound,
     Settings as SettingsIcon
 } from 'lucide-react';
+import type { Role } from '../context/AuthContext';
 
 interface SidebarProps {
     isOpen?: boolean;
@@ -30,25 +34,44 @@ interface SidebarProps {
  * этому же списку, в каком разделе человек находится, — иначе список
  * пришлось бы держать в двух местах.
  */
-export const NAV_ITEMS = [
+export interface NavItem {
+    path: string;
+    icon: React.ComponentType<{ size?: number }>;
+    label: string;
+    /** Кому виден раздел. По умолчанию — только администратору */
+    roles?: Role[];
+}
+
+const BOTH: Role[] = ['admin', 'moderator'];
+
+export const NAV_ITEMS: NavItem[] = [
     { path: '/', icon: LayoutDashboard, label: 'Дашборд' },
     { path: '/processing', icon: Zap, label: 'Обработка' },
     { path: '/products', icon: Package, label: 'Товары' },
     { path: '/categories', icon: ListTree, label: 'Категории' },
     { path: '/orders', icon: ShoppingCart, label: 'Заказы' },
     { path: '/users', icon: Users, label: 'Пользователи' },
-    { path: '/moderation', icon: ShieldCheck, label: 'Модерация' },
-    { path: '/deals', icon: Handshake, label: 'Сделки' },
+    // Модератору — только проверка товаров и споры; остальное закрыто и
+    // на бэкенде, меню лишь не показывает недоступное
+    { path: '/moderation', icon: ShieldCheck, label: 'Модерация', roles: BOTH },
+    { path: '/deals', icon: Handshake, label: 'Сделки', roles: BOTH },
     { path: '/subscriptions', icon: Radio, label: 'Каналы' },
     { path: '/referrals', icon: Share2, label: 'Рефералы' },
     { path: '/finance', icon: Scale, label: 'Финансы' },
     { path: '/reviews', icon: MessageSquare, label: 'Отзывы' },
     { path: '/withdrawals', icon: Wallet, label: 'Выводы' },
+    { path: '/moderators', icon: UserCog, label: 'Модераторы' },
+    { path: '/audit', icon: ScrollText, label: 'Журнал действий' },
+    { path: '/security', icon: KeyRound, label: 'Безопасность', roles: BOTH },
     { path: '/settings', icon: SettingsIcon, label: 'Настройки' },
 ];
 
+/** Раздел виден роли? */
+export const canSee = (item: NavItem, role: Role | null): boolean =>
+    Boolean(role) && (item.roles ?? ['admin']).includes(role as Role);
+
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
-    const { logout } = useAuth();
+    const { logout, role, user } = useAuth();
     const navigate = useNavigate();
 
     const handleLogout = async () => {
@@ -56,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
         navigate('/login');
     };
 
-    const navItems = NAV_ITEMS;
+    const navItems = NAV_ITEMS.filter((item) => canSee(item, role));
 
     return (
         <>
@@ -75,7 +98,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = true, onClose }) => {
                 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
             `}>
                 <div className="px-6 py-4 flex justify-between items-center">
-                    <span className="font-semibold text-white">Админка</span>
+                    <span className="font-semibold text-white">
+                        {role === 'moderator' ? 'Модератор' : 'Админка'}
+                        {user?.username && (
+                            <span className="block text-xs font-normal text-gray-500 truncate max-w-[160px]">
+                                {user.username}
+                            </span>
+                        )}
+                    </span>
 
                     <button
                         onClick={onClose}

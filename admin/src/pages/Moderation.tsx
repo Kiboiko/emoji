@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Check, X, Loader2, Image as ImageIcon, BadgeCheck, Ban, Undo2,
+    Check, X, Loader2, Image as ImageIcon, BadgeCheck, Ban, Undo2, Trash2,
 } from 'lucide-react';
 import { p2pApi } from '../api/admin';
+import { useAuth } from '../context/AuthContext';
 import { DataTable, type Column } from '../components/ui/DataTable';
 import { Pagination } from '../components/ui/Pagination';
 import { StatusBadge } from '../components/ui/Badge';
@@ -27,12 +28,15 @@ const STATUSES = [
  */
 export const Moderation: React.FC = () => {
     const [tab, setTab] = useState<'listings' | 'sellers' | 'store'>('listings');
+    // Модератору — только заявки: продавцы и магазин площадки закрыты на бэкенде
+    const { role } = useAuth();
+    const isAdmin = role === 'admin';
 
     return (
         <div>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Модерация</h1>
 
-            <div className="flex flex-wrap gap-2 mb-5">
+            {isAdmin && <div className="flex flex-wrap gap-2 mb-5">
                 <button
                     onClick={() => setTab('listings')}
                     className={`px-4 py-2 rounded-lg text-sm ${
@@ -57,11 +61,11 @@ export const Moderation: React.FC = () => {
                 >
                     Магазин площадки
                 </button>
-            </div>
+            </div>}
 
-            {tab === 'listings' && <ListingsTab />}
-            {tab === 'sellers' && <SellersTab />}
-            {tab === 'store' && <PlatformStoreTab />}
+            {(tab === 'listings' || !isAdmin) && <ListingsTab />}
+            {isAdmin && tab === 'sellers' && <SellersTab />}
+            {isAdmin && tab === 'store' && <PlatformStoreTab />}
         </div>
     );
 };
@@ -120,6 +124,34 @@ const ListingsTab: React.FC = () => {
         }
     };
 
+    const deletePhoto = async (listing: any, imageId: string) => {
+        if (!window.confirm('Удалить это фото насовсем? Оно исчезнет из объявления, каталога и с сервера.')) return;
+        setBusy(imageId);
+        try {
+            await p2pApi.deleteListingPhoto(listing.id, imageId);
+            toast.success('Фото удалено, продавцу отправлено уведомление');
+            await load();
+        } catch (e) {
+            toast.fromError(e);
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const deleteAvatar = async (listing: any) => {
+        if (!window.confirm(`Удалить логотип магазина «${listing.seller?.display_name}»?`)) return;
+        setBusy(listing.id);
+        try {
+            await p2pApi.deleteSellerAvatar(listing.seller.id);
+            toast.success('Логотип удалён');
+            await load();
+        } catch (e) {
+            toast.fromError(e);
+        } finally {
+            setBusy(null);
+        }
+    };
+
     return (
         <div>
             <div className="flex gap-2 mb-5 flex-wrap">
@@ -162,6 +194,23 @@ const ListingsTab: React.FC = () => {
                                     {' · '}{listing.seller?.display_name ?? 'продавец'}
                                     {listing.seller?.username && ` (@${listing.seller.username})`}
                                 </div>
+                                {listing.seller?.avatar_url && (
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <img
+                                            src={listing.seller.avatar_url}
+                                            alt=""
+                                            className="w-8 h-8 rounded-full object-cover border border-gray-700"
+                                        />
+                                        <span className="text-xs text-gray-500">логотип магазина</span>
+                                        <button
+                                            onClick={() => deleteAvatar(listing)}
+                                            disabled={busy === listing.id}
+                                            className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                                        >
+                                            удалить
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <StatusBadge status={listing.status} />
                         </div>
@@ -178,14 +227,28 @@ const ListingsTab: React.FC = () => {
 
                         {listing.images?.length > 0 ? (
                             <div className="flex gap-2 flex-wrap mb-4">
-                                {listing.images.map((url: string) => (
-                                    <a key={url} href={url} target="_blank" rel="noreferrer">
-                                        <img
-                                            src={url}
-                                            alt=""
-                                            className="w-24 h-24 object-cover rounded-lg border border-gray-700"
-                                        />
-                                    </a>
+                                {(listing.image_items ?? listing.images.map((url: string) => ({ id: url, url })))
+                                    .map((photo: { id: string; url: string }) => (
+                                    <div key={photo.id} className="relative">
+                                        <a href={photo.url} target="_blank" rel="noreferrer">
+                                            <img
+                                                src={photo.url}
+                                                alt=""
+                                                className="w-24 h-24 object-cover rounded-lg border border-gray-700"
+                                            />
+                                        </a>
+                                        {/* Недопустимое фото убирается с диска и из каталога */}
+                                        {listing.image_items && (
+                                            <button
+                                                onClick={() => deletePhoto(listing, photo.id)}
+                                                disabled={busy === photo.id}
+                                                className="absolute -top-2 -right-2 p-1 rounded-full bg-red-600 text-white shadow hover:bg-red-500 disabled:opacity-50"
+                                                title="Удалить фото"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        )}
+                                    </div>
                                 ))}
                             </div>
                         ) : (
@@ -304,6 +367,11 @@ const SellersTab: React.FC = () => {
         'Ограничения сняты',
     );
 
+    const removeAvatar = (seller: any) => {
+        if (!window.confirm(`Удалить логотип магазина «${seller.display_name}»?`)) return;
+        return run(seller, () => p2pApi.deleteSellerAvatar(seller.id), 'Логотип удалён');
+    };
+
     const columns: Column<any>[] = [
         {
             key: 'name',
@@ -319,6 +387,18 @@ const SellersTab: React.FC = () => {
                     <div className="text-xs text-gray-500">
                         {s.username ? `@${s.username}` : s.telegram_id ?? '—'}
                     </div>
+                    {s.avatar_url && (
+                        <div className="flex items-center gap-2 mt-1">
+                            <img src={s.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover border border-gray-700" />
+                            <button
+                                onClick={() => removeAvatar(s)}
+                                disabled={busy === s.id}
+                                className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                            >
+                                удалить логотип
+                            </button>
+                        </div>
+                    )}
                 </div>
             ),
         },

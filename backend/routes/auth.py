@@ -16,64 +16,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
-class AdminLoginRequest(BaseModel):
-    username: str
-    password: str
-
-@router.post("/admin", response_model=dict)
-async def authenticate_admin(
-    login_data: AdminLoginRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Admin authentication via username/password from .env
-    """
-    if (login_data.username != settings.ADMIN_USERNAME or 
-        login_data.password != settings.ADMIN_PASSWORD):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid admin credentials"
-        )
-    
-    # Create or update admin user in DB to ensure relationships work
-    # We use a special reserved ID for the main admin
-    ADMIN_TELEGRAM_ID = 777000 # Reserved ID
-    
-    stmt = select(User).where(User.telegram_id == ADMIN_TELEGRAM_ID)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-    
-    if not user:
-        user = User(
-            id=uuid.uuid4(),
-            telegram_id=ADMIN_TELEGRAM_ID,
-            username=settings.ADMIN_USERNAME,
-            first_name="Administrator",
-            language_code="en",
-            is_admin=True,
-            referral_code="admin"
-        )
-        db.add(user)
-    else:
-        # Ensure admin status
-        user.is_admin = True
-        
-    await db.commit()
-    await db.refresh(user)
-    
-    access_token = create_access_token(
-        data={
-            "user_id": str(user.id),
-            "telegram_id": user.telegram_id,
-            "is_admin": True
-        }
-    )
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": UserResponse.model_validate(user)
-    }
+# Здесь был второй вход для администратора — POST /api/auth/admin. Он проверял
+# пароль из .env без лимита попыток и без журнала, а после смены пароля в
+# админке продолжал пускать по старому: смена пароля ничего бы не закрывала.
+# Клиенты им не пользовались. Вход в админку один: POST /api/admin/auth/login.
 
 async def _authenticate_dev_impl(db: AsyncSession):
     """

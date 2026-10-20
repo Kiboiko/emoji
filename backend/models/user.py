@@ -19,6 +19,21 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     hashed_password: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # Модератор: заходит в админку со своим логином и паролем, но видит только
+    # проверку товаров и споры. Отдельный флаг, а не is_admin: тот открывает
+    # ВСЕ разделы админки (require_admin), включая финансы и настройки.
+    is_moderator: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+
+    # Версия токенов персонала. Токен несёт её в себе и перестаёт действовать,
+    # когда версия в базе выросла: смена пароля и «выйти везде» повышают её.
+    # Токен живёт неделю, и без этого украденный оставался бы рабочим всё
+    # время после смены пароля.
+    token_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+
     # Moderation. Колонка существует в БД с первой миграции, но отсутствовала в модели —
     # из-за этого INSERT не заполнял её и регистрация новых пользователей падала
     # с NotNullViolationError. server_default нужен для уже существующих строк.

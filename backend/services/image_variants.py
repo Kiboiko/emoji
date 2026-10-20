@@ -123,6 +123,34 @@ def build(root: Path, source: Path, force: bool = False) -> int:
     return written
 
 
+def remove(root: Path, url: str) -> bool:
+    """
+    Удаляет загруженный файл и его облегчённые копии. True — файл был удалён.
+
+    Нужна модерации: фото, которое нужно убрать, не должно оставаться
+    доступным по прямой ссылке. Ссылка приходит из базы, но проверяется всё
+    равно — путь не должен выйти из каталога загрузок, а заглушку товаров
+    удалять нельзя: на неё ссылаются все товары без фото.
+    """
+    base_url = url.split("?", 1)[0]
+    if not base_url.startswith("/uploads/"):
+        return False
+    resolved_root = root.resolve()
+    source = (root / base_url[len("/uploads/"):]).resolve()
+    if resolved_root not in source.parents:
+        return False
+    if source.name == "placeholder.png":
+        return False
+
+    for variant in VARIANTS:
+        _drop(variant_base(resolved_root, variant, source))
+
+    if not source.is_file():
+        return False
+    source.unlink()
+    return True
+
+
 def build_quietly(root: Path, source: Path, force: bool = False) -> int:
     """Копии — ускорение, а не часть загрузки: сбой здесь не роняет запрос."""
     try:

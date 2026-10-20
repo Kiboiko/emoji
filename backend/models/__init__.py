@@ -27,6 +27,7 @@ from .finance import (
     Account, AccountOwnerType, LedgerEntry, LedgerEntryType, LedgerRefType,
 )
 from .app_setting import AppSetting
+from .admin_log import AdminAuditLog, AdminLoginLog
 from .p2p import (
     Deal, DealMessage, DealStatus, ListingImage, ListingStatus, MessageDirection,
     ProductListing, SellerProfile, SellerStatus, TermsAcceptance,
@@ -58,6 +59,8 @@ __all__ = [
     "LedgerEntryType",
     "LedgerRefType",
     "AppSetting",
+    "AdminAuditLog",
+    "AdminLoginLog",
     "Channel",
     "ChannelStatus",
     "SubscriptionPlan",

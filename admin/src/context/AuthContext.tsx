@@ -1,14 +1,19 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import api, { setOnTokenRefreshed } from '../api/axios';
+import api, { setOnSessionLost, setOnTokenRefreshed } from '../api/axios';
+
+export type Role = 'admin' | 'moderator';
 
 interface User {
     id: string;
     username: string;
     is_admin: boolean;
+    role: Role;
 }
 
 interface AuthContextType {
     user: User | null;
+    /** Роль нужна меню и охране маршрутов; настоящие права проверяет бэкенд */
+    role: Role | null;
     accessToken: string | null;
     isLoading: boolean;
     login: (token: string) => void;
@@ -25,14 +30,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updateToken = (token: string) => {
         setAccessToken(token);
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        // Optionally decode token to get user info
-        // For now, we will fetch user info or decode generic fields
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
+            // Токены, выданные до появления ролей, роли не несут — это админы
+            const role: Role = payload.role === 'moderator' ? 'moderator' : 'admin';
             setUser({
                 id: payload.user_id,
                 username: payload.sub,
-                is_admin: payload.is_admin
+                is_admin: Boolean(payload.is_admin),
+                role,
             });
         } catch (e) {
             console.error("Failed to decode token", e);
@@ -59,6 +65,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setOnTokenRefreshed((token) => {
             updateToken(token);
         });
+        setOnSessionLost(() => {
+            setAccessToken(null);
+            setUser(null);
+            delete api.defaults.headers.common['Authorization'];
+        });
 
         // Try to refresh token on mount to check if we are logged in
         const checkAuth = async () => {
@@ -76,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, accessToken, isLoading, login, logout }}>
+        <AuthContext.Provider value={{ user, role: user?.role ?? null, accessToken, isLoading, login, logout }}>
             {children}
         </AuthContext.Provider>
     );

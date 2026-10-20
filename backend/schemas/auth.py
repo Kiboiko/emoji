@@ -7,3 +7,5 @@ class AdminLogin(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    # admin | moderator — админка по нему решает, какие разделы показать
+    role: str | None = None

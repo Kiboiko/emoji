@@ -139,6 +139,74 @@ export const p2pApi = {
         api.post<any>(`/api/admin/p2p/deals/${id}/messages`, { text }).then((r) => r.data),
     resolveDispute: (id: string, release: boolean, comment?: string) =>
         api.post(`/api/admin/p2p/deals/${id}/resolve`, { release, comment }).then((r) => r.data),
+
+    // Модератор убирает недопустимое фото: из заявки, карточки товара и с диска
+    deleteListingPhoto: (listingId: string, imageId: string) =>
+        api.delete(`/api/admin/p2p/listings/${listingId}/images/${imageId}`).then((r) => r.data),
+    deleteSellerAvatar: (sellerId: string) =>
+        api.delete(`/api/admin/p2p/sellers/${sellerId}/avatar`).then((r) => r.data),
+};
+
+export type StaffRole = 'admin' | 'moderator';
+
+export interface Moderator {
+    id: string;
+    username: string;
+    display_name: string;
+    active: boolean;
+    created_at: string;
+    last_login: string | null;
+    actions: number;
+}
+
+export interface LoginLogEntry {
+    id: string;
+    username: string;
+    success: boolean;
+    reason: string;
+    ip: string | null;
+    user_agent: string | null;
+    created_at: string;
+}
+
+export interface AuditEntry {
+    id: string;
+    actor_id: string | null;
+    actor_name: string;
+    actor_role: 'admin' | 'moderator' | 'system';
+    action: string;
+    target_type: string | null;
+    target_id: string | null;
+    details: Record<string, any> | null;
+    created_at: string;
+}
+
+/** Персонал: модераторы и журналы — только для администратора */
+export const staffApi = {
+    moderators: () => api.get<Moderator[]>('/api/admin/staff/moderators').then((r) => r.data),
+    createModerator: (data: { username: string; password: string; display_name?: string }) =>
+        api.post<Moderator>('/api/admin/staff/moderators', data).then((r) => r.data),
+    resetPassword: (id: string, password: string) =>
+        api.post(`/api/admin/staff/moderators/${id}/password`, { password }).then((r) => r.data),
+    revokeSessions: (id: string) =>
+        api.post(`/api/admin/staff/moderators/${id}/revoke`).then((r) => r.data),
+    setActive: (id: string, active: boolean) =>
+        api.post(`/api/admin/staff/moderators/${id}/active`, { active }).then((r) => r.data),
+    remove: (id: string) => api.delete(`/api/admin/staff/moderators/${id}`).then((r) => r.data),
+
+    loginLog: (params: { success?: boolean; skip?: number; limit?: number }) =>
+        api.get<Page<LoginLogEntry>>('/api/admin/staff/login-log', { params }).then((r) => r.data),
+    auditLog: (params: {
+        actor_id?: string; role?: string; action?: string; skip?: number; limit?: number;
+    }) => api.get<Page<AuditEntry>>('/api/admin/staff/audit-log', { params }).then((r) => r.data),
+};
+
+/** Безопасность своей учётки: доступно и администратору, и модератору */
+export const securityApi = {
+    changePassword: (current_password: string, new_password: string) =>
+        api.post('/api/admin/auth/change-password', { current_password, new_password })
+            .then((r) => r.data),
+    logoutAll: () => api.post('/api/admin/auth/logout-all').then((r) => r.data),
 };
 
 export const referralsApi = {

@@ -18,6 +18,7 @@ from utils.placeholder import ensure_placeholder
 from models import *
 
 # Import routers
+from routes import admin_staff
 from routes import auth, products, categories, cart, orders, payments, reviews, users, admin_auth, admin_stats, admin_orders, admin_finance, admin_subscriptions, admin_p2p, admin_referrals, admin_users, deals, internal, p2p, settings as settings_routes, stores, subscriptions, terms, withdrawals
 
 
@@ -196,6 +197,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
 # Include routers
 # Include routers
 app.include_router(admin_auth.router)
+app.include_router(admin_staff.router)
 app.include_router(admin_stats.router)
 app.include_router(admin_finance.router)
 app.include_router(admin_subscriptions.router)

@@ -28,6 +28,15 @@ export const setOnTokenRefreshed = (callback: (token: string) => void) => {
     onTokenRefreshed = callback;
 };
 
+// Сессия потеряна насовсем: токен отозван (смена пароля, «выйти везде»,
+// модератора отключили), и обновить его нельзя. Админка по этому сигналу
+// возвращает на страницу входа, а не оставляет экран с ошибками
+let onSessionLost: (() => void) | null = null;
+
+export const setOnSessionLost = (callback: () => void) => {
+    onSessionLost = callback;
+};
+
 // Add a request interceptor to add token
 api.interceptors.request.use(
     (config) => {
@@ -78,6 +87,7 @@ api.interceptors.response.use(
                 return api(originalRequest);
             } catch (refreshError) {
                 processQueue(refreshError, null);
+                if (onSessionLost) onSessionLost();
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;

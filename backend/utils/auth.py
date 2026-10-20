@@ -18,7 +18,12 @@ import uuid
 import bcrypt
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except ValueError:
+        # Пароль длиннее 72 байт или битый хеш — это «не подходит», а не
+        # ошибка сервера: иначе вход отвечал бы 500 и выдавал причину
+        return False
 
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -211,6 +216,20 @@ async def get_current_user(
                 detail="Аккаунт заблокирован. Обратитесь в поддержку.",
             )
 
+        # Токены персонала (админка) несут версию и перестают действовать,
+        # когда она выросла — смена пароля и «выйти везде». Токен приложения
+        # версии не имеет и не проверяется.
+        #
+        # Токен админки, выданный до появления версии, тоже считается токеном
+        # персонала (is_admin без telegram_id — токены приложения несут
+        # telegram_id) и сверяется как версия 0: иначе он пережил бы любую
+        # смену пароля до конца своих семи дней.
+        if "tv" in payload or (payload.get("is_admin") and "telegram_id" not in payload):
+            if int(payload.get("tv", 0)) != int(user.token_version or 0):
+                raise HTTPException(
+                    status_code=401, detail="Сессия завершена. Войдите заново.",
+                )
+
         return user
     
     except HTTPException:
@@ -220,8 +239,21 @@ async def get_current_user(
 
 
 async def require_admin(user: User = Depends(get_current_user)) -> User:
-    """Dependency to require admin access"""
+    """Только администратор: все разделы админки, кроме общих с модератором."""
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+async def require_staff(user: User = Depends(get_current_user)) -> User:
+    """
+    Администратор или модератор.
+
+    Нужен там, где работает и модератор: проверка товаров, споры по сделкам,
+    удаление фото. Всё остальное закрыто require_admin — модератор с
+    флагом is_moderator туда не попадает.
+    """
+    if not (user.is_admin or user.is_moderator):
+        raise HTTPException(status_code=403, detail="Staff access required")
     return user
 
