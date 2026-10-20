@@ -442,6 +442,8 @@ export interface Listing {
 }
 
 export interface Terms {
+    /** Язык, на котором текст пришёл на самом деле: перевода может не быть */
+    language?: 'ru' | 'en';
     version: string;
     text: string;
     is_empty: boolean;

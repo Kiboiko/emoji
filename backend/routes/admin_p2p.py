@@ -14,24 +14,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database import get_db
-from models.category import Category
 from models.p2p import (
     Deal, DealMessage, DealStatus, ListingStatus, ProductListing,
     SellerProfile, SellerStatus,
 )
 from models.product import Product
 from models.user import User
-from services import deal_chat_service, deal_service, settings_service, stock_service
+from services import (
+    deal_chat_service, deal_service, moderation_service, settings_service, stock_service,
+)
 from services.money import from_minor
 from utils.auth import require_admin
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin/p2p", tags=["Admin P2P"])
-
-# Картинка для заявки без фото. Файл рисуется при старте бэкенда — см.
-# utils/placeholder.py; раньше ссылка вела в никуда.
-PLACEHOLDER_IMAGE = "/uploads/products/placeholder.png"
 
 
 class ModerationDecision(BaseModel):
@@ -179,74 +176,16 @@ async def moderate_listing(
         return {"status": listing.status.value, "seller_restricted": restricted}
 
     # --- Одобрение: заводим или обновляем товар в каталоге ---
-    category_id = listing.category_id or await _default_category_id(db)
-    # Все фотографии, а не только первая. Заявка принимает до восьми, а в
-    # товар доезжала одна — остальные покупатель не видел никогда.
-    gallery = [img.url for img in listing.images]
-    image_url = gallery[0] if gallery else PLACEHOLDER_IMAGE
-
-    # Заявку могли править после одобрения — тогда она вернулась на модерацию
-    # вместе с уже существующим товаром. Заводить второй нельзя: на первый
-    # ссылаются корзины и заказы, и в каталоге оказалось бы два одинаковых.
-    product = await db.get(Product, listing.product_id) if listing.product_id else None
-
-    if product is None:
-        product = Product(
-            id=uuid.uuid4(),
-            category_id=category_id,
-            type="p2p",
-            min_quantity=1,
-            content_data={"listing_id": str(listing.id)},
-            owner_user_id=seller.user_id,
-            is_p2p=True,
+    try:
+        product = await moderation_service.approve_listing(
+            db, listing, seller, moderator_id=admin.id, comment=decision.comment,
         )
-        db.add(product)
-
-    product.name_ru = listing.name
-    # Английского названия может не быть: тогда в каталоге на обоих языках
-    # стоит русское — так было всегда, и это лучше пустой строки
-    product.name_en = listing.name_en or listing.name
-    product.description_ru = listing.description
-    # Английского описания может не быть у старых заявок — тогда русское
-    product.description_en = listing.description_en or listing.description
-    product.price_usdt = listing.price_usd
-    product.image_url = image_url
-    product.images = gallery
-    product.category_id = category_id
-    product.max_quantity = listing.quantity
-    product.is_active = True
-    await db.flush()
-
-    listing.product_id = product.id
-    listing.status = ListingStatus.APPROVED
-    seller.rejected_streak = 0    # серия отказов прервана
-
-    # Сток — заявленное количество за вычетом проданного и того, что ждёт
-    # оплаты. Без стока одну и ту же вещь могли бы оплатить сразу несколько
-    # покупателей: max_quantity ограничивает только одну корзину.
-    #
-    # Считается уже для одобренной заявки: после правки она возвращается
-    # на модерацию вместе с товаром, который уже покупали, и полное
-    # количество продало бы проданное повторно.
-    await stock_service.refresh_p2p_stock(db, product.id)
+    except moderation_service.ModerationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     await db.commit()
 
     await _notify_seller(db, seller, f"Заявка «{listing.name}» одобрена, товар опубликован.")
     return {"status": listing.status.value, "product_id": str(product.id)}
-
-
-async def _default_category_id(db: AsyncSession) -> uuid.UUID:
-    category = (
-        await db.execute(select(Category).where(Category.name_en == "User items"))
-    ).scalars().first()
-    if category is not None:
-        return category.id
-    category = Category(
-        id=uuid.uuid4(), name_ru="Товары пользователей", name_en="User items", sort_order=200
-    )
-    db.add(category)
-    await db.flush()
-    return category.id
 
 
 async def _notify_seller(db: AsyncSession, seller: SellerProfile, text: str) -> None:

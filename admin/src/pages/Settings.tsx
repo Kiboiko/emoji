@@ -34,13 +34,14 @@ const GROUPS: Array<{ title: string; keys: string[] }> = [
     {
         title: 'Маркетплейс',
         keys: [
+            'p2p_auto_publish_verified',
             'p2p_max_pending_listings', 'p2p_reject_block_threshold',
             'p2p_confirm_deadline_days', 'chat_retention_days',
         ],
     },
     {
         title: 'Условия площадки',
-        keys: ['terms_version', 'terms_text'],
+        keys: ['terms_version', 'terms_text', 'terms_text_en'],
     },
     {
         title: 'Поддержка',
@@ -65,8 +66,10 @@ const TITLES: Record<string, string> = {
     p2p_reject_block_threshold: 'Отказов подряд до ограничения продавца',
     order_payment_ttl_min: 'Сколько минут ждать оплату заказа',
     support_contact: 'Контакт поддержки',
-    terms_version: 'Версия условий площадки',
-    terms_text: 'Текст условий площадки',
+    p2p_auto_publish_verified: 'Публиковать товары проверенных продавцов без проверки',
+    terms_version: 'Версия условий площадки (общая для обоих языков)',
+    terms_text: 'Текст условий площадки — русский',
+    terms_text_en: 'Текст условий площадки — английский',
 };
 
 /**
@@ -187,7 +190,7 @@ export const Settings: React.FC = () => {
                                                     <option value="true">включено</option>
                                                     <option value="false">выключено</option>
                                                 </select>
-                                            ) : def.key === 'terms_text' ? (
+                                            ) : def.key === 'terms_text' || def.key === 'terms_text_en' ? (
                                                 <textarea
                                                     value={draft}
                                                     onChange={(e) => setDrafts({ ...drafts, [def.key]: e.target.value })}

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,10 +22,24 @@ class AcceptIn(BaseModel):
 
 
 @router.get("")
-async def get_terms(db: AsyncSession = Depends(get_db)):
-    """Текущая редакция условий. Публичный: читать можно до регистрации."""
-    version, text = await terms_service.current(db)
-    return {"version": version, "text": text, "is_empty": not text.strip()}
+async def get_terms(lang: str = Query("ru"), db: AsyncSession = Depends(get_db)):
+    """
+    Текущая редакция условий. Публичный: читать можно до регистрации.
+
+    lang — язык приложения. Нет перевода — придёт русский текст, поле
+    language в ответе говорит, на каком языке текст на самом деле.
+    """
+    wanted = "en" if lang == "en" else "ru"
+    version, text = await terms_service.current(db, wanted)
+    served = wanted
+    if wanted == "en" and text == (await terms_service.current(db, "ru"))[1]:
+        served = "ru"     # перевода нет — отдан русский текст
+    return {
+        "version": version,
+        "text": text,
+        "language": served,
+        "is_empty": not text.strip(),
+    }
 
 
 @router.get("/status")

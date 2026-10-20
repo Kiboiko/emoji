@@ -10,14 +10,29 @@ from utils.auth import require_admin
 
 router = APIRouter(prefix="/api/categories", tags=["Categories"])
 
+# Английское имя служебной категории, которую заводила публикация заявок без
+# категории (см. services/moderation_service.py)
+LEGACY_USER_ITEMS = "User items"
+
 
 @router.get("", response_model=list[CategoryLocalized])
 async def get_categories(
     lang: str = Query("ru"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all categories with localization"""
-    stmt = select(Category).order_by(Category.sort_order.desc(), Category.created_at.desc())
+    """
+    Категории для каталога и формы объявления.
+
+    Служебной «Товары пользователей» здесь нет: в неё раньше падали заявки без
+    категории, и покупатель видел в списке раздел-свалку. Товары, уже лежащие
+    в ней, остаются в общем каталоге, а администратор может перенести их по
+    настоящим категориям (список для админки — /all, там она видна).
+    """
+    stmt = (
+        select(Category)
+        .where(Category.name_en != LEGACY_USER_ITEMS)
+        .order_by(Category.sort_order.desc(), Category.created_at.desc())
+    )
     result = await db.execute(stmt)
     categories = result.scalars().all()
     

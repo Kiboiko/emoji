@@ -328,9 +328,15 @@ async def moderate_listing_from_bot(
         # Обычный случай: двое администраторов нажали одну и ту же кнопку
         return {"reply": f"Заявка уже обработана (статус: {listing.status.value})"}
 
+    from fastapi import HTTPException
     from routes.admin_p2p import moderate_listing, ModerationDecision
 
-    result = await moderate_listing(
-        listing.id, ModerationDecision(approve=True), admin=admin, db=db,
-    )
+    try:
+        result = await moderate_listing(
+            listing.id, ModerationDecision(approve=True), admin=admin, db=db,
+        )
+    except HTTPException as e:
+        # Например, у старой заявки нет категории: в Telegram это причина, а
+        # не повод для ошибки сервера
+        return {"reply": str(e.detail)}
     return {"reply": f"Товар «{listing.name}» опубликован", "status": result["status"]}

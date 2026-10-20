@@ -32,7 +32,7 @@ export const TermsGate: React.FC<TermsGateProps> = ({ onChange }) => {
             try {
                 const [status, text] = await Promise.all([
                     termsApi.status(),
-                    termsApi.get(),
+                    termsApi.get(language),
                 ]);
                 if (cancelled) return;
                 setTerms(text);
@@ -46,7 +46,7 @@ export const TermsGate: React.FC<TermsGateProps> = ({ onChange }) => {
             }
         })();
         return () => { cancelled = true; };
-    }, [onChange]);
+    }, [onChange, language]);
 
     if (needed === null || needed === false) return null;
 

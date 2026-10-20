@@ -30,10 +30,21 @@ class TermsNotAccepted(Exception):
         super().__init__(f"Необходимо принять условия площадки (редакция {version})")
 
 
-async def current(db: AsyncSession) -> tuple[str, str]:
-    """(версия, текст) текущей редакции."""
+async def current(db: AsyncSession, lang: str = "ru") -> tuple[str, str]:
+    """
+    (версия, текст) текущей редакции на нужном языке.
+
+    Английского текста может не быть — тогда отдаётся русский: пустая
+    страница условий хуже, чем страница на другом языке. Версия у обоих
+    текстов общая: принятие условий не зависит от языка, на котором их
+    прочитали.
+    """
     version = await settings_service.get_str(db, "terms_version")
     text = await settings_service.get_str(db, "terms_text")
+    if lang == "en":
+        english = await settings_service.get_str(db, "terms_text_en")
+        if english.strip():
+            return version, english
     return version, text
 
 

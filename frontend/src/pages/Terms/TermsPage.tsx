@@ -36,7 +36,7 @@ export const TermsPage: React.FC = () => {
         (async () => {
             try {
                 const [text, status] = await Promise.all([
-                    termsApi.get(),
+                    termsApi.get(language),
                     // Статус спрашиваем отдельно и не роняем страницу, если
                     // он не пришёл: текст условий читают и до входа
                     termsApi.status().catch(() => null),
@@ -49,7 +49,7 @@ export const TermsPage: React.FC = () => {
             }
         })();
         return () => { alive = false; };
-    }, []);
+    }, [language]);
 
     const accept = async () => {
         if (!terms) return;
@@ -68,7 +68,7 @@ export const TermsPage: React.FC = () => {
                         ?? t('Условия обновились — перечитайте', 'The terms changed — please re-read'),
                     'info',
                 );
-                setTerms(await termsApi.get());
+                setTerms(await termsApi.get(language));
             }
         } catch (e) {
             haptic.notification('error');

@@ -26,6 +26,7 @@ from starlette.concurrency import run_in_threadpool
 
 from config import settings
 from database import get_db
+from models.category import Category
 from models.finance import Account, AccountOwnerType
 from models.order import OrderItem
 from models.p2p import (
@@ -33,7 +34,10 @@ from models.p2p import (
 )
 from models.product import Product
 from models.user import User
-from services import image_upload, image_variants, settings_service, stock_service, terms_service
+from services import (
+    image_upload, image_variants, moderation_service, settings_service, stock_service,
+    terms_service,
+)
 from services.money import from_minor
 from utils.auth import get_current_user
 
@@ -75,7 +79,9 @@ class ListingCreate(BaseModel):
     # пока количество вообще нельзя было указать.
     quantity: int = Field(1, ge=1, le=10000)
     price_usd: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2)
-    category_id: Optional[uuid.UUID] = None
+    # Обязательная: товар без категории раньше падал в служебную «Товары
+    # пользователей», и покупатель находил его только случайно
+    category_id: uuid.UUID
     accept_terms: bool
 
 
@@ -156,6 +162,14 @@ async def _get_seller(db: AsyncSession, user: User) -> SellerProfile:
     if profile is None:
         raise HTTPException(status_code=404, detail="Сначала зарегистрируйтесь как продавец")
     return profile
+
+
+async def _assert_category_exists(db: AsyncSession, category_id: uuid.UUID) -> None:
+    category = await db.get(Category, category_id)
+    # Служебную «Товары пользователей» не принимаем: её скрыли из списка
+    # именно затем, чтобы товары не сваливались в одну кучу
+    if category is None or category.name_en == "User items":
+        raise HTTPException(status_code=400, detail="Выберите категорию товара")
 
 
 def _assert_can_sell(profile: SellerProfile) -> None:
@@ -508,6 +522,7 @@ async def create_listing(
 
     profile = await _get_seller(db, user)
     _assert_can_sell(profile)
+    await _assert_category_exists(db, payload.category_id)
 
     max_pending = await settings_service.get_int(db, "p2p_max_pending_listings")
     pending = (
@@ -570,7 +585,16 @@ async def upload_listing_image(
     remoderating = await _apply_edit_side_effects(db, listing)
     await db.commit()
 
-    return {"id": str(record.id), "url": url, "remoderating": remoderating}
+    published = False
+    if remoderating:
+        outcome = await moderation_service.submit_for_review(db, listing, profile, edited=True)
+        published = outcome == "published"
+        remoderating = not published
+
+    return {
+        "id": str(record.id), "url": url,
+        "remoderating": remoderating, "published": published,
+    }
 
 
 @router.post("/seller/listings/{listing_id}/submit")
@@ -587,40 +611,17 @@ async def submit_listing(
         raise HTTPException(status_code=400, detail=f"Заявка уже в статусе {listing.status.value}")
     if not listing.images:
         raise HTTPException(status_code=400, detail="Добавьте хотя бы одно фото")
+    if listing.category_id is None:
+        # Заявки, заведённые до того, как категория стала обязательной
+        raise HTTPException(status_code=400, detail="Выберите категорию товара")
 
     listing.status = ListingStatus.PENDING
     listing.moderation_comment = None
     await db.commit()
 
-    from services.telegram_service import telegram_service
-
-    # Кнопки прямо в уведомлении: типовое решение по заявке — «да» или «нет»,
-    # и заставлять ради него открывать админку на телефоне незачем. Отказ
-    # кнопкой уходит без комментария, поэтому кнопка отказа ведёт в админку,
-    # где причину можно написать: без причины продавец не знает, что чинить.
-    keyboard = {
-        "inline_keyboard": [[
-            {"text": "Одобрить", "callback_data": f"mod:approve:{listing.id}"},
-            {"text": "Отклонить", "callback_data": f"mod:reject:{listing.id}"},
-        ]]
-    }
-
-    for chat_id in telegram_service.admin_chat_ids:
-        try:
-            await telegram_service.send_message(
-                chat_id,
-                f"Новая заявка на размещение\n"
-                f"Продавец: {profile.display_name}\n"
-                f"Товар: {listing.name}\n"
-                f"Цена: ${listing.price_usd}\n"
-                f"Фото: {len(listing.images)}",
-                parse_mode=None,
-                reply_markup=keyboard,
-            )
-        except Exception as e:
-            logger.warning("[P2P] Не удалось уведомить о заявке: %s", e)
-
-    return {"status": listing.status.value}
+    # Уведомление модераторам или публикация без проверки — для проверенных
+    outcome = await moderation_service.submit_for_review(db, listing, profile, edited=False)
+    return {"status": listing.status.value, "published": outcome == "published"}
 
 
 @router.patch("/seller/listings/{listing_id}")
@@ -674,6 +675,7 @@ async def update_listing(
         listing.price_usd = payload.price_usd
         changed = True
     if payload.category_id is not None and payload.category_id != listing.category_id:
+        await _assert_category_exists(db, payload.category_id)
         listing.category_id = payload.category_id
         changed = True
 
@@ -708,10 +710,22 @@ async def update_listing(
     remoderating = await _apply_edit_side_effects(db, listing) if changed else False
 
     await db.commit()
+
+    # Правка опубликованного товара — это новая заявка на проверку, и
+    # модераторам о ней сообщается так же, как о первой. Раньше уведомление
+    # уходило только при самой первой отправке, и после правки названия
+    # заявка тихо ждала в очереди, о которой никто не знал.
+    published = False
+    if remoderating:
+        outcome = await moderation_service.submit_for_review(db, listing, profile, edited=True)
+        published = outcome == "published"
+        remoderating = not published
+
     return {
         "id": str(listing.id),
         "status": listing.status.value,
         "remoderating": remoderating,
+        "published": published,
     }
 
 
@@ -788,13 +802,16 @@ async def delete_listing_image(
 
     # Первое фото — это картинка товара в каталоге, поэтому удаление фото у
     # опубликованной заявки тоже идёт через повторную проверку
-    await _apply_edit_side_effects(db, listing)
+    remoderating = await _apply_edit_side_effects(db, listing)
 
     # Файл с диска не удаляем: он мог уже уйти в каталог как картинка товара
     # (при одобрении берётся первое фото), и удаление оставило бы битую
     # ссылку. Место под фото стоит дешевле сломанной витрины.
     await db.delete(image)
     await db.commit()
+
+    if remoderating:
+        await moderation_service.submit_for_review(db, listing, profile, edited=True)
     return {"deleted": True}
 
 

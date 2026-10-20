@@ -192,7 +192,7 @@ const ConnectForm: React.FC<{
         setTermsOpen(!termsOpen);
         if (termsText === null) {
             try {
-                const data = await termsApi.get();
+                const data = await termsApi.get(language);
                 setTermsText(data.is_empty ? '' : data.text);
             } catch {
                 setTermsText('');

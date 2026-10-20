@@ -263,7 +263,9 @@ export const storesApi = {
 
 // Terms API
 export const termsApi = {
-    get: async () => (await apiClient.get('/terms')).data,
+    // Язык приложения: условия есть на русском и английском, без перевода
+    // сервер отдаёт русский текст
+    get: async (lang?: string) => (await apiClient.get('/terms', { params: { lang } })).data,
     // Нужно ли показывать галочку: условия принимаются раз на версию,
     // а не перед каждой покупкой
     status: async () => (await apiClient.get('/terms/status')).data,
@@ -317,7 +319,7 @@ export const p2pApi = {
         name: string; name_en: string;
         description: string; description_en: string;
         price_usd: string; quantity?: number;
-        category_id?: string; accept_terms: boolean;
+        category_id: string; accept_terms: boolean;
     }) => (await apiClient.post('/p2p/seller/listings', data)).data,
 
     uploadListingImage: async (listingId: string, file: File) => {

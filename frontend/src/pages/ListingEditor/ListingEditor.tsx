@@ -155,7 +155,7 @@ export const ListingEditor: React.FC = () => {
         description_en: form.description_en.trim(),
         price_usd: form.price_usd,
         quantity: Math.max(1, form.quantity),
-        category_id: form.category_id || undefined,
+        category_id: form.category_id,
     });
 
     const validate = (): boolean => {
@@ -171,6 +171,11 @@ export const ListingEditor: React.FC = () => {
         }
         if (!(Number(f.price_usd) > 0)) {
             showToast(t('Укажите цену', 'Set a price'), 'error');
+            return false;
+        }
+        // Категория обязательна: без неё покупатель не найдёт товар в каталоге
+        if (!f.category_id) {
+            showToast(t('Выберите категорию', 'Choose a category'), 'error');
             return false;
         }
         return true;
@@ -202,6 +207,8 @@ export const ListingEditor: React.FC = () => {
             const result = await p2pApi.updateListing(listing!.id, payload());
             if (result?.remoderating) {
                 showToast(t('Объявление ушло на повторную проверку', 'The listing went back for review'), 'info');
+            } else if (result?.published) {
+                showToast(t('Изменения уже в каталоге — проверка не нужна', 'Changes are live — no review needed'), 'info');
             }
             await load();
         }, t('Сохранено', 'Saved')).catch(() => undefined);
@@ -290,8 +297,14 @@ export const ListingEditor: React.FC = () => {
         primary = {
             label: t('Отправить на модерацию', 'Submit for review'),
             disabled: !listing!.images.length || blocked,
-            onClick: () => run(async () => { await p2pApi.submitListing(listing!.id); await load(); },
-                t('Отправлено на модерацию', 'Submitted for review')).catch(() => undefined),
+            onClick: () => run(async () => {
+                const result = await p2pApi.submitListing(listing!.id);
+                await load();
+                // Проверенный продавец: товар ушёл в каталог без модерации
+                if (result?.published) {
+                    showToast(t('Товар опубликован', 'The listing is live'), 'success');
+                }
+            }, t('Отправлено на модерацию', 'Submitted for review')).catch(() => undefined),
         };
     } else if (status === 'withdrawn') {
         primary = {
@@ -464,8 +477,9 @@ export const ListingEditor: React.FC = () => {
 
                     <label className="led-field">
                         {t('Категория', 'Category')}
-                        <select value={form.category_id} onChange={(e) => set('category_id', e.target.value)}>
-                            <option value="">{t('Без категории', 'No category')}</option>
+                        <select value={form.category_id} onChange={(e) => set('category_id', e.target.value)} required>
+                            {/* Не вариант, а подсказка: выбрать категорию обязательно */}
+                            <option value="" disabled>{t('Выберите категорию', 'Choose a category')}</option>
                             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                     </label>
