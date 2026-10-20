@@ -10,6 +10,7 @@ from models.order import Order, OrderStatus
 from models.product import Product
 from schemas.review import ReviewCreate, ReviewResponse, FakeReviewCreate
 from utils.auth import get_current_user, require_admin
+from services import review_service
 from services.telegram_service import telegram_service
 
 router = APIRouter(prefix="/api/reviews", tags=["Reviews"])
@@ -43,7 +44,15 @@ async def get_reviews(
     
     if product_id:
         stmt = stmt.where(Review.product_id == uuid.UUID(product_id))
-    
+
+        # Отзывы о товаре продавца показываются только за последние N дней:
+        # это отзывы о нём самом, а репутация — то, как он работает сейчас
+        product = await db.get(Product, uuid.UUID(product_id))
+        if product is not None and product.is_p2p:
+            cutoff = await review_service.window_cutoff(db)
+            if cutoff is not None:
+                stmt = stmt.where(Review.created_at >= cutoff)
+
     stmt = stmt.order_by(Review.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(stmt)
     reviews = result.scalars().all()

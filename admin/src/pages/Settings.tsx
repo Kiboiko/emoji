@@ -34,7 +34,7 @@ const GROUPS: Array<{ title: string; keys: string[] }> = [
     {
         title: 'Маркетплейс',
         keys: [
-            'p2p_auto_publish_verified',
+            'p2p_auto_publish_verified', 'seller_reviews_window_days',
             'p2p_max_pending_listings', 'p2p_reject_block_threshold',
             'p2p_confirm_deadline_days', 'chat_retention_days',
         ],
@@ -67,6 +67,7 @@ const TITLES: Record<string, string> = {
     order_payment_ttl_min: 'Сколько минут ждать оплату заказа',
     support_contact: 'Контакт поддержки',
     p2p_auto_publish_verified: 'Публиковать товары проверенных продавцов без проверки',
+    seller_reviews_window_days: 'За сколько дней показывать отзывы о продавцах',
     terms_version: 'Версия условий площадки (общая для обоих языков)',
     terms_text: 'Текст условий площадки — русский',
     terms_text_en: 'Текст условий площадки — английский',

@@ -153,10 +153,13 @@ async def _details(db: AsyncSession, deal: Deal, role: str) -> dict:
             await db.execute(select(SellerProfile).where(SellerProfile.user_id == deal.seller_id))
         ).scalars().first()
         if profile is not None:
+            from services import review_service
+            # За окно давности — как на витрине магазина
+            rating, rating_count = await review_service.seller_rating(db, profile.user_id)
             store = {
                 "id": str(profile.id),
-                "rating": profile.rating,
-                "rating_count": profile.rating_count,
+                "rating": rating,
+                "rating_count": rating_count,
                 "deals_completed": profile.deals_completed,
             }
 

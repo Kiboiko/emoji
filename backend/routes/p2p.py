@@ -35,8 +35,8 @@ from models.p2p import (
 from models.product import Product
 from models.user import User
 from services import (
-    image_upload, image_variants, moderation_service, settings_service, stock_service,
-    terms_service,
+    image_upload, image_variants, moderation_service, review_service, settings_service,
+    stock_service, terms_service,
 )
 from services.money import from_minor
 from utils.auth import get_current_user
@@ -298,6 +298,10 @@ async def seller_profile(
     if profile is None:
         return {"registered": False}
 
+    # Оценка за окно давности — ту же видят покупатели на витрине; накопленная
+    # за всё время остаётся только в админке
+    rating, rating_count = await review_service.seller_rating(db, profile.user_id)
+
     return {
         "registered": True,
         "id": str(profile.id),
@@ -314,8 +318,8 @@ async def seller_profile(
             profile.restricted_until.isoformat() if profile.restricted_until else None
         ),
         "restriction_reason": profile.restriction_reason,
-        "rating": profile.rating,
-        "rating_count": profile.rating_count,
+        "rating": rating,
+        "rating_count": rating_count,
         "deals_completed": profile.deals_completed,
         "balance_ton": str(from_minor(await _seller_balance_nano(db, user), "TON")),
     }

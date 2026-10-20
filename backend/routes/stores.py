@@ -26,6 +26,7 @@ from models.review import Review
 from models.subscription import (
     Channel, ChannelStatus, Subscription, SubscriptionPlan, SubscriptionStatus,
 )
+from services import review_service
 
 router = APIRouter(prefix="/api/stores", tags=["Stores"])
 
@@ -80,9 +81,14 @@ async def _product_cards(db: AsyncSession, products: list, lang: str) -> list[di
     ]
 
 
-async def _rating_over(db: AsyncSession, product_ids: list) -> tuple[float | None, int]:
+async def _rating_over(
+    db: AsyncSession, product_ids: list, *, windowed: bool = False,
+) -> tuple[float | None, int]:
     """
     Оценка магазина — среднее по отзывам на его товары.
+
+    windowed — только отзывы за последние N дней (services/review_service.py).
+    Включается для продавцов; у площадки и каналов отзывы считаются все.
 
     Раньше сюда шёл счётчик из seller_profiles. Он растёт только от отзывов
     по сделкам P2P, а обычная покупка сделкой не оформляется — и у магазина
@@ -95,16 +101,16 @@ async def _rating_over(db: AsyncSession, product_ids: list) -> tuple[float | Non
     if not product_ids:
         return None, 0
 
-    average, count = (
-        await db.execute(
-            select(func.avg(Review.rating), func.count(Review.id))
-            .where(
-                Review.product_id.in_(product_ids),
-                Review.rating.is_not(None),
-                Review.is_hidden.is_(False),
-            )
-        )
-    ).one()
+    stmt = select(func.avg(Review.rating), func.count(Review.id)).where(
+        Review.product_id.in_(product_ids),
+        Review.rating.is_not(None),
+        Review.is_hidden.is_(False),
+    )
+    if windowed:
+        cutoff = await review_service.window_cutoff(db)
+        if cutoff is not None:
+            stmt = stmt.where(Review.created_at >= cutoff)
+    average, count = (await db.execute(stmt)).one()
 
     if not count:
         return None, 0
@@ -135,7 +141,9 @@ async def rating_for_author(db: AsyncSession, kind: str, author_id) -> tuple[flo
     seller = await db.get(SellerProfile, author_id)
     if seller is None:
         return None, 0
-    return await _rating_over(db, await _seller_product_ids(db, seller))
+    return await _rating_over(
+        db, await _seller_product_ids(db, seller), windowed=not seller.is_platform,
+    )
 
 
 async def _seller_product_ids(db: AsyncSession, seller: SellerProfile) -> list:
@@ -266,6 +274,9 @@ async def store_list(
             "products": platform_products,
         })
 
+    # Оценка за окно давности (30 дней), а не накопленная за всё время
+    windowed = await review_service.seller_ratings(db, [s.user_id for s in sellers])
+
     for seller in sellers:
         items.append({
             "kind": "seller",
@@ -273,7 +284,7 @@ async def store_list(
             "name": seller.display_name,
             "avatar_url": seller.avatar_url,
             "is_verified": bool(seller.is_verified),
-            "rating": seller.rating,
+            "rating": windowed.get(seller.user_id, (None, 0))[0],
             "products": by_user.get(seller.user_id, 0),
         })
 
@@ -305,7 +316,9 @@ async def seller_store(
     if seller.status == SellerStatus.BANNED and not seller.is_platform:
         raise HTTPException(status_code=404, detail="Магазин не найден")
 
-    rating, rating_count = await _rating_over(db, await _seller_product_ids(db, seller))
+    rating, rating_count = await _rating_over(
+        db, await _seller_product_ids(db, seller), windowed=not seller.is_platform,
+    )
 
     return {
         "kind": "platform" if seller.is_platform else "seller",

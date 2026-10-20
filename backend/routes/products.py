@@ -16,7 +16,7 @@ from models.digital_item import DigitalItem
 from schemas.product import ProductCreate, ProductUpdate, ProductResponse, ProductLocalized, ProductBroadcast
 from utils.auth import require_admin
 from config import settings
-from services import image_variants
+from services import image_variants, review_service
 from utils.websockets import manager
 
 router = APIRouter(prefix="/api/products", tags=["Products"])
@@ -213,21 +213,35 @@ async def _ratings_by_product(db: AsyncSession, products: list) -> dict:
     if not product_ids:
         return {}
 
-    rows = (
-        await db.execute(
-            select(
-                Review.product_id,
-                func.avg(Review.rating),
-                func.count(Review.id),
-            )
-            .where(
-                Review.product_id.in_(product_ids),
-                Review.rating.is_not(None),
-                Review.is_hidden.is_(False),
-            )
-            .group_by(Review.product_id)
+    stmt = (
+        select(
+            Review.product_id,
+            func.avg(Review.rating),
+            func.count(Review.id),
         )
-    ).all()
+        .where(
+            Review.product_id.in_(product_ids),
+            Review.rating.is_not(None),
+            Review.is_hidden.is_(False),
+        )
+        .group_by(Review.product_id)
+    )
+
+    # Отзыв о товаре продавца — это отзыв о продавце, и он действует только
+    # в окне давности (services/review_service.py). Товары площадки и каналов
+    # под окно не попадают
+    cutoff = await review_service.window_cutoff(db)
+    if cutoff is not None:
+        seller_product_ids = [p.id for p in products if p.is_p2p]
+        if seller_product_ids:
+            stmt = stmt.where(
+                or_(
+                    Review.product_id.not_in(seller_product_ids),
+                    Review.created_at >= cutoff,
+                )
+            )
+
+    rows = (await db.execute(stmt)).all()
 
     return {
         product_id: {
