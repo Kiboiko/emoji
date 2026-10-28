@@ -28,6 +28,19 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(obj, name, type_, reflected, compare_to):
+    """
+    Индексы для поиска (…_trgm) живут только в миграции 0027.
+
+    Они строятся расширением pg_trgm по выражению lower(колонка): модели его не
+    описывают (расширение есть не в каждой тестовой базе), и без этого
+    фильтра `alembic check` и autogenerate предлагали бы их удалить.
+    """
+    if type_ == "index" and name and name.endswith("_trgm"):
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
@@ -36,6 +49,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -43,7 +57,9 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection, target_metadata=target_metadata, include_object=include_object,
+    )
 
     with context.begin_transaction():
         context.run_migrations()

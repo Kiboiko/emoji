@@ -255,6 +255,20 @@ async def test_batched_sale_state_handles_empty_and_unknown_products(db):
 # Индексы
 # ---------------------------------------------------------------------------
 
+async def test_catalog_order_index_is_partial_and_matches_the_sort(db):
+    """
+    Индекс порядка каталога: без него каждая страница читает все активные
+    товары. Он обязан совпадать с ORDER BY запроса, иначе база его не возьмёт.
+    """
+    definition = (await db.execute(text(
+        "select indexdef from pg_indexes where indexname = 'ix_products_catalog_order'"
+    ))).scalar()
+
+    assert definition, "индекса порядка каталога нет в моделях"
+    for part in ("is_top DESC", "sort_order DESC", "created_at DESC", "WHERE (is_active IS TRUE)"):
+        assert part in definition, f"в индексе нет «{part}»: {definition}"
+
+
 def _migration_indexes():
     path = next(Path(__file__).resolve().parent.parent.glob("alembic/versions/*_hot_path_indexes.py"))
     spec = importlib.util.spec_from_file_location("hot_path_indexes", path)

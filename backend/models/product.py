@@ -95,3 +95,14 @@ class Product(Base):
 # остатка — по владельцу. Без индексов каждый такой запрос читает всю таблицу.
 Index("ix_products_catalog", Product.is_active, Product.category_id)
 Index("ix_products_owner", Product.owner_user_id)
+
+# Порядок каталога: хиты, затем порядок и дата, затем id. Без этого индекса
+# каждая страница читала ВСЕ активные товары и сортировала их ради сорока
+# (на 5000 товаров — 2,5 мс на странице, на пятидесяти тысячах — в десять раз
+# больше). С ним база идёт по индексу и останавливается на сорок первой строке.
+# Один индекс обслуживает и каталог целиком, и страницу категории.
+Index(
+    "ix_products_catalog_order",
+    Product.is_top.desc(), Product.sort_order.desc(), Product.created_at.desc(), Product.id,
+    postgresql_where=Product.is_active.is_(True),
+)

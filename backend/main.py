@@ -8,6 +8,11 @@ import json
 import logging
 import uuid
 
+# Первым делом: токен бота не должен попасть в логи (см. utils/log_redact.py).
+# До остальных импортов — сервисы печатают при загрузке
+from utils import log_redact
+log_redact.install()
+
 from config import settings
 from database import engine
 from services import image_variants
@@ -29,6 +34,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
 )
+# basicConfig создаёт обработчик только сейчас — вешаем фильтр и на него
+log_redact.install()
 logger = logging.getLogger(__name__)
 
 
