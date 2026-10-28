@@ -119,6 +119,85 @@ async def test_revoked_token_is_rejected_over_http(client, staff, db):
     assert response.status_code == 401
 
 
+ADMIN_SECTIONS_WITH_OWN_DEPENDENCY = (
+    "/api/admin/stats", "/api/admin/stats/attention", "/api/admin/stats/conversion",
+    "/api/admin/users", "/api/admin/orders", "/api/admin/orders/processing",
+)
+
+
+async def test_revoked_admin_token_is_rejected_in_stats_users_and_orders(client, staff, db):
+    """Эти разделы когда-то имели свою проверку токена без сверки версии."""
+    admin, _, _ = staff
+    headers = _bearer(admin, role="admin")
+    for path in ADMIN_SECTIONS_WITH_OWN_DEPENDENCY:
+        assert (await client.get(path, headers=headers)).status_code == 200, path
+
+    admin.token_version = 1  # смена пароля или «Выйти везде»
+    await db.flush()
+
+    for path in ADMIN_SECTIONS_WITH_OWN_DEPENDENCY:
+        assert (await client.get(path, headers=headers)).status_code == 401, path
+    block = await client.post(f"/api/admin/users/{uuid.uuid4()}/block", headers=headers, json={})
+    complete = await client.post(f"/api/admin/orders/{uuid.uuid4()}/complete", headers=headers)
+    assert block.status_code == complete.status_code == 401
+
+
+async def test_blocked_admin_is_refused_in_stats_users_and_orders(client, staff, db):
+    admin, _, _ = staff
+    headers = _bearer(admin, role="admin")
+    admin.is_blocked = True
+    await db.flush()
+
+    for path in ADMIN_SECTIONS_WITH_OWN_DEPENDENCY:
+        assert (await client.get(path, headers=headers)).status_code == 403, path
+
+
+def _api_routes(app):
+    """Все маршруты, включая вложенные роутеры (в новых FastAPI они лежат в _IncludedRouter)."""
+    from fastapi.routing import APIRoute
+
+    for r in app.routes:
+        if isinstance(r, APIRoute):
+            yield "", r
+        elif hasattr(r, "original_router"):
+            prefix = getattr(getattr(r, "include_context", None), "prefix", "") or ""
+            for inner in r.original_router.routes:
+                if isinstance(inner, APIRoute):
+                    yield prefix, inner
+
+
+def _dependency_calls(dependant):
+    for dep in dependant.dependencies:
+        yield dep.call
+        yield from _dependency_calls(dep)
+
+
+async def test_every_admin_route_goes_through_the_shared_staff_check():
+    """
+    Забытая или самодельная защита на новом админском маршруте — главный способ
+    дыры. Любой адрес с /admin обязан зависеть от require_admin или
+    require_staff; открытыми остаются только вход, обновление и выход.
+    """
+    import main
+
+    public = {"/api/admin/auth/login", "/api/admin/auth/refresh", "/api/admin/auth/logout"}
+    routes = list(_api_routes(main.app))
+    assert len(routes) > 100, "обход не нашёл маршрутов: проверка стала бы пустой"
+
+    unguarded, admin_routes = [], 0
+    for prefix, route in routes:
+        path = prefix + route.path
+        if "/admin" not in path or path in public:
+            continue
+        admin_routes += 1
+        calls = set(_dependency_calls(route.dependant))
+        if auth.require_admin not in calls and auth.require_staff not in calls:
+            unguarded.append(path)
+
+    assert admin_routes > 40
+    assert unguarded == []
+
+
 async def test_old_admin_login_endpoint_is_gone(client):
     response = await client.post(
         "/api/auth/admin", json={"username": "admin", "password": "whatever"},

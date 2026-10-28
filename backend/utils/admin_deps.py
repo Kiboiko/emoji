@@ -1,45 +1,17 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db
+from fastapi import Depends
+
 from models.user import User
-from utils.auth import decode_access_token
-from sqlalchemy import select
-import uuid
+from utils.auth import require_admin
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="admin/auth/login")
 
-async def get_current_admin_user(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db)
-) -> User:
-    try:
-        payload = decode_access_token(token)
-        user_id = payload.get("user_id")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-        
-    user = await db.get(User, uuid.UUID(user_id))
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-        
-    if not user.is_admin:
-         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not an admin",
-        )
-        
+async def get_current_admin_user(user: User = Depends(require_admin)) -> User:
+    """
+    Администратор для разделов «Статистика», «Пользователи» и «Заказы».
+
+    Здесь была своя проверка токена, которая смотрела только на is_admin: ни
+    версия токена, ни блокировка не сверялись. Поэтому после смены пароля или
+    «Выйти везде» старый админский токен продолжал открывать эти разделы
+    (включая блокировку пользователей и смену статуса заказов) до конца срока
+    жизни. Теперь проверка общая со всей админкой — utils.auth.require_admin.
+    """
     return user

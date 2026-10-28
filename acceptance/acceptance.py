@@ -206,8 +206,8 @@ async def main() -> int:
     print(f"  маршрутов в приложении: {total_routes}; только администратору: {len(admin_only)}; администратору и модератору: {len(staff_routes)}")
 
     # Защита от пустой проверки: обход обязан найти маршруты
-    check("П.13–14", "обход нашёл все маршруты приложения (не пустая проверка): не меньше 150, из них не меньше 45 админских",
-          total_routes >= 150 and len(admin_only) >= 45, f"{total_routes} / {len(admin_only)}")
+    check("П.13–14", "обход нашёл все маршруты приложения (не пустая проверка): не меньше 150, из них не меньше 60 админских",
+          total_routes >= 150 and len(admin_only) >= 60, f"{total_routes} / {len(admin_only)}")
     expected_staff = {
         ("GET", "/api/admin/auth/me"), ("POST", "/api/admin/auth/change-password"), ("POST", "/api/admin/auth/logout-all"),
         ("GET", "/api/admin/p2p/listings"), ("POST", "/api/admin/p2p/listings/{listing_id}/moderate"),
@@ -218,6 +218,15 @@ async def main() -> int:
     actual_staff = {(m, r.path) for r in staff_routes for m in r.methods - {"HEAD", "OPTIONS"}}
     check("П.13–14", "модератору (и администратору) доступны ровно 11 действий: свой пароль и сессии, заявки, споры, удаление фото",
           actual_staff == expected_staff, f"лишнее: {sorted(actual_staff - expected_staff)}; пропало: {sorted(expected_staff - actual_staff)}")
+
+    public_admin = {"/api/admin/auth/login", "/api/admin/auth/refresh", "/api/admin/auth/logout"}
+    unguarded = [
+        prefix + route.path for prefix, route in iter_api_routes(app_main.app)
+        if "/admin" in prefix + route.path and prefix + route.path not in public_admin
+        and not ({require_admin, require_staff} & set(deps(route.dependant)))
+    ]
+    check("П.13–14", "каждый адрес с /admin закрыт общей проверкой администратора или персонала (самодельной или забытой защиты нет)",
+          not unguarded, "; ".join(unguarded[:4]))
 
     def url_of(route):
         path = route.path
@@ -586,6 +595,16 @@ async def main() -> int:
     check("П.15", "пароль меняется", r.status_code == 200, r.text[:100])
     check("П.15", "сразу после смены старый токен не работает (выход из админки)", (await c.get("/api/admin/staff/moderators", headers=OLD)).status_code == 401)
     check("П.15", "и первый токен тоже", (await c.get("/api/admin/staff/moderators", headers=A)).status_code == 401)
+    revoked_bad, revoked_n = [], 0
+    for route in admin_only + staff_routes:
+        if "GET" in route.methods and "{" not in route.path:
+            for hdr in (OLD, A):
+                resp = await c.get(route.path, headers=hdr)
+                revoked_n += 1
+                if resp.status_code != 401:
+                    revoked_bad.append(f"{route.path} -> {resp.status_code}")
+    check("П.15", f"после смены пароля оба старых токена закрыты во ВСЕХ разделах админки, включая статистику, пользователей и заказы ({revoked_n} запросов)",
+          not revoked_bad and revoked_n >= 50, "; ".join(revoked_bad[:4]) or str(revoked_n))
     r = await c.post("/api/admin/auth/refresh", headers={"Cookie": f"admin_refresh_token={old_cookie}"})
     check("П.15", "старая refresh-кука больше не продлевает сессию", r.status_code == 401)
     r = await c.post("/api/admin/auth/login", json={"username": ADMIN_USER, "password": ADMIN_PASS}, headers={"X-Forwarded-For": "203.0.113.12"})
