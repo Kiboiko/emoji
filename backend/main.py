@@ -102,11 +102,15 @@ async def lifespan(app: FastAPI):
     # и падаем на старте с внятной ошибкой, если нет.
     await _verify_schema_is_current()
 
+    # Чей токен бота в настройках — в фоне и только в журнал (см. модуль)
+    from services.bot_identity import check_bot_identity
+    app.state.bot_identity_check = asyncio.create_task(check_bot_identity())
+
     # Start background scheduler
     start_scheduler()
-    
+
     yield
-    
+
     # Shutdown
     shutdown_scheduler()
     await engine.dispose()

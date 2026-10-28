@@ -6,6 +6,7 @@ import { useTheme } from './hooks/useTheme';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useAuthStore } from './store/authStore';
 import { useCartStore } from './store/cartStore';
+import { useToastStore } from './store/toastStore';
 import { startDeals } from './store/dealsStore';
 import { authApi } from './api/client';
 import { BottomNav } from './components/BottomNav/BottomNav';
@@ -225,6 +226,20 @@ export const App: React.FC = () => {
 
         } catch (error: any) {
             console.error('Authentication failed:', error);
+            // Раньше неудачный вход молчал: приложение открывалось «гостем», а
+            // человек видел невнятные ошибки в разных местах (например, при
+            // регистрации магазина) и не понимал, что дело во входе.
+            const ru = useAuthStore.getState().language === 'ru';
+            const status = error?.response?.status;
+            const detail = error?.response?.data?.detail;
+            const text = status === 403 && typeof detail === 'string'
+                ? detail
+                : !error?.response
+                    ? (ru ? 'Нет связи с сервером. Откройте приложение заново.'
+                        : 'No connection. Reopen the app.')
+                    : (ru ? 'Не удалось войти через Telegram. Откройте приложение заново.'
+                        : 'Sign-in failed. Reopen the app.');
+            useToastStore.getState().show(text, 'error');
         } finally {
             setIsAuthenticating(false);
         }

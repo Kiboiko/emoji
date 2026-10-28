@@ -18,6 +18,8 @@ echo "== suite exit code: $RC"
 echo "== stage backend log: secrets and errors"
 echo "fake bot token occurrences in stage logs: $(docker logs mp-acc-backend 2>&1 | grep -c 'ACCfakeTokenFake')"
 echo "redaction markers in stage logs:          $(docker logs mp-acc-backend 2>&1 | grep -c 'скрыто')"
+echo "startup bot check in stage log (fake token, Telegram must reject it and say so):"
+docker logs mp-acc-backend 2>&1 | grep -F '[CONFIG]' | cut -c1-160 | head -3
 docker logs mp-acc-backend 2>&1 | grep -E 'Traceback|Exception|ERROR ' | grep -v 'TELEGRAM' | sort | uniq -c | sort -rn | head -8
 echo "== resources after the run"
 docker stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' mp-acc-backend mp-acc-db mp-acc-nginx marketplace_backend marketplace_db

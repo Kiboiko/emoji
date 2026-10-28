@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     
     # Telegram
     TELEGRAM_BOT_TOKEN: str = ""
+    # Имя бота, из которого открывается приложение. Попадает в фронтенд при
+    # сборке; бэкенд сверяет с ним токен при старте (services/bot_identity.py)
+    VITE_BOT_USERNAME: str = ""
     REVIEWS_CHANNEL_ID: str = ""
     ADMIN_CHAT_ID: str = ""
     

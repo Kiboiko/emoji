@@ -26,6 +26,21 @@ const STORE_NAME_MAX = 20;
 const cleanStoreName = (value: string) => value
     .replace(/[^A-Za-z0-9 ._&-]/g, '')
     .slice(0, STORE_NAME_MAX);
+/** Набрано то, чего в названии не бывает (русские буквы и т. п.): такие символы из поля пропадают */
+const hasForbiddenChars = (value: string) => /[^A-Za-z0-9 ._&-]/.test(value);
+
+/** Без этой подсказки русская буква просто исчезает из поля, и кажется, что оно сломано */
+const NameWarn: React.FC<{ show: boolean; t: (ru: string, en: string) => string }> = ({ show, t }) => (
+    show ? (
+        <p className="seller-hint seller-hint--warn" role="alert">
+            <AlertTriangle size={13} />
+            {t(
+                'Русские буквы здесь не принимаются. Напишите название латиницей, например Magazin Igrushek.',
+                'Only English letters, digits, space and . _ & - are accepted, e.g. Fun Shop.',
+            )}
+        </p>
+    ) : null
+);
 
 export const SellerCabinet: React.FC<{ standalone?: boolean }> = ({ standalone = false }) => {
     const { language } = useAuthStore();
@@ -68,7 +83,15 @@ export const SellerCabinet: React.FC<{ standalone?: boolean }> = ({ standalone =
         // Был window.alert: системное окно поверх Mini App выглядит чужеродно
         // и блокирует интерфейс до нажатия «ОК». Тосты появились позже, здесь
         // просто приводим к общему виду.
-        showToast(errorText(e, fallback), 'error');
+        //
+        // 401 здесь значит «приложение не вошло в аккаунт» (вход через Telegram
+        // не удался), а не «название не подошло»: без этой оговорки любая
+        // поломка входа выглядела как придирка к названию магазина.
+        const text = e?.response?.status === 401
+            ? t('Вы не вошли в приложение. Закройте его и откройте заново из Telegram.',
+                'You are not signed in. Close the app and open it again from Telegram.')
+            : errorText(e, fallback);
+        showToast(text, 'error');
     };
 
     if (!profile) return null;
@@ -131,6 +154,7 @@ const SellerRegistration: React.FC<{
 }> = ({ language, busy, setBusy, onDone, onError }) => {
     const { haptic } = useTelegram();
     const [name, setName] = useState('');
+    const [nameWarn, setNameWarn] = useState(false);
     const [accepted, setAccepted] = useState(false);
     const [termsOpen, setTermsOpen] = useState(false);
     const [termsText, setTermsText] = useState<string | null>(null);
@@ -182,7 +206,10 @@ const SellerRegistration: React.FC<{
                 <input
                     className="seller-input"
                     value={name}
-                    onChange={(e) => setName(cleanStoreName(e.target.value))}
+                    onChange={(e) => {
+                        setNameWarn(hasForbiddenChars(e.target.value));
+                        setName(cleanStoreName(e.target.value));
+                    }}
                     placeholder={t('Видно покупателям', 'Visible to buyers')}
                     minLength={3}
                     maxLength={STORE_NAME_MAX}
@@ -196,6 +223,7 @@ const SellerRegistration: React.FC<{
                     '3 to 20 characters: English letters, digits, space and . _ & -',
                 )}
             </p>
+            <NameWarn show={nameWarn} t={t} />
 
             {/* Предупреждение до кнопки, а не после: сказать «имя навсегда»
                 нужно до того, как человек его отправит */}
@@ -247,6 +275,7 @@ const SellerSummary: React.FC<{
     const { haptic } = useTelegram();
     const [editing, setEditing] = useState(false);
     const [name, setName] = useState(profile.display_name ?? '');
+    const [nameWarn, setNameWarn] = useState(false);
     const [about, setAbout] = useState(profile.description ?? '');
     const [saving, setSaving] = useState(false);
     const avatarInput = useRef<HTMLInputElement | null>(null);
@@ -427,7 +456,10 @@ const SellerSummary: React.FC<{
                             <input
                                 className="seller-input"
                                 value={name}
-                                onChange={(e) => setName(cleanStoreName(e.target.value))}
+                                onChange={(e) => {
+                                    setNameWarn(hasForbiddenChars(e.target.value));
+                                    setName(cleanStoreName(e.target.value));
+                                }}
                                 placeholder={t('Название маркета', 'Store name')}
                                 minLength={3}
                                 maxLength={STORE_NAME_MAX}
@@ -439,6 +471,7 @@ const SellerSummary: React.FC<{
                                     '3 to 20 characters: English letters, digits, space and . _ & -',
                                 )}
                             </p>
+                            <NameWarn show={nameWarn} t={t} />
                             <p className="seller-hint seller-hint--warn">
                                 <AlertTriangle size={13} />
                                 {t(

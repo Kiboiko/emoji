@@ -569,7 +569,11 @@ async def test_store_name_rejects_bad_names(db, user_factory, name):
     assert "Название магазина" in exc.value.detail
 
 
-@pytest.mark.parametrize("name", ["Fun Shop", "Shop_24", "A&B-store", "Abc", "x" * 20])
+@pytest.mark.parametrize("name", [
+    "Fun Shop", "Shop_24", "A&B-store", "Abc", "x" * 20,
+    # русские слова латиницей — принимаются как любые другие
+    "Magazin Igrushek", "Kupi_Tut", "Dobryi-Magazin", "Tovary dlya dushi", "Ya Prodavets",
+])
 async def test_store_name_accepts_good_names(db, user_factory, name):
     newcomer = await user_factory(username=f"g_{abs(hash(name)) % 10**8}")
 

@@ -500,6 +500,42 @@ async def main() -> int:
     r = await c.get("/api/admin/p2p/listings", headers=app_token)
     check("вход", "токен обычного пользователя не открывает админку (403)", r.status_code == 403)
 
+    # ================================================================== регистрация магазина (жалоба заказчика)
+    head("Регистрация магазина через настоящий вход (жалоба заказчика: новые маркеты не создавались)")
+    # Поломка на сайте: токен бота в настройках сервера принадлежал другому боту,
+    # подпись входа не сходилась у всех, и ни одно действие не проходило
+    other_bot = init_data("222222222:SomeOtherBotsTokenSomeOtherBotsToken1", tg_id)
+    r = await c.post("/api/auth/telegram", headers={"X-Telegram-Init-Data": other_bot})
+    check("маркет", "подпись токеном другого бота отклоняется (Invalid hash): так выглядела поломка на сайте",
+          r.status_code == 401 and "Invalid hash" in r.text, f"{r.status_code} {r.text[:80]}")
+    r = await c.post("/api/p2p/seller/register", json={"display_name": "Magazin Test", "accept_terms": True})
+    check("маркет", "без входа регистрация отвечает 401, а не придирается к названию", r.status_code == 401, str(r.status_code))
+
+    async def login_new(label):
+        tg = random.randint(5_000_000_000, 5_900_000_000)
+        resp = await c.post("/api/auth/telegram", headers={"X-Telegram-Init-Data": init_data(BOT_TOKEN, tg, label)})
+        return {"Authorization": f"Bearer {resp.json().get('access_token', '')}"}, resp.status_code
+
+    registered = []
+    for base_name in ("Magazin Igrushek", "Kupi_Tut", "Dobryi-Magazin", "Tovary dlya dushi", "Ya Prodavets"):
+        name = f"{base_name} {random.randint(10, 99)}"
+        hdr, code = await login_new("Translit")
+        resp = await c.post("/api/p2p/seller/register", headers=hdr, json={"display_name": name, "accept_terms": True})
+        check("маркет", f"русские слова латиницей принимаются: «{name}»", code == 200 and resp.status_code == 200, f"{code}/{resp.status_code} {resp.text[:80]}")
+        if resp.status_code == 200:
+            registered.append(name)
+    if registered:
+        hdr, _ = await login_new("Dup")
+        resp = await c.post("/api/p2p/seller/register", headers=hdr, json={"display_name": registered[0].upper(), "accept_terms": True})
+        check("маркет", "то же название другим регистром занято (400)", resp.status_code == 400 and "занято" in resp.text, resp.text[:80])
+    hdr, _ = await login_new("Cyr")
+    resp = await c.post("/api/p2p/seller/register", headers=hdr, json={"display_name": "Магазин Игрушек", "accept_terms": True})
+    check("маркет", "русские буквы отклоняются понятным текстом", resp.status_code == 400 and "английские буквы" in resp.text, resp.text[:80])
+    resp = await c.post("/api/p2p/seller/register", headers=hdr, json={"display_name": "Internet Magazin Igrushek", "accept_terms": True})
+    check("маркет", "название длиннее 20 символов отклоняется понятным текстом", resp.status_code == 400 and "20 символов" in resp.text, resp.text[:80])
+    resp = await c.post("/api/p2p/seller/register", headers=hdr, json={"display_name": "Valid Name 77", "accept_terms": False})
+    check("маркет", "без принятия условий регистрация отклоняется", resp.status_code == 400 and "условия" in resp.text, resp.text[:80])
+
     # ================================================================== П.18 удаление фото
     head("П.18. Удаление фото и аватарок модератором")
     r = await c.post("/api/p2p/seller/me/avatar", headers=S, files={"image": ("logo.png", png(400, 400), "image/png")})
