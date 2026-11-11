@@ -1,0 +1,27 @@
+.photo-file-target {
+    position: relative;
+}
+
+.photo-file-target:has(.photo-file-input:focus-visible) {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+.photo-file-target:has(.photo-file-input:disabled) {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.photo-file-input {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.photo-file-input:disabled {
+    cursor: default;
+}

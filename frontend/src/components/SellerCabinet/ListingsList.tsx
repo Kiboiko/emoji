@@ -1,3 +1,4 @@
+import { PromotionButton } from './PromotionButton';
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, Pencil, Plus, Search } from 'lucide-react';
@@ -161,6 +162,7 @@ export const ListingsList: React.FC<{
                                         </span>
                                     </span>
                                 </Link>
+                                {!blocked && listing.status === 'approved' && listing.stock !== 0 && listing.product_id && <PromotionButton productId={listing.product_id} language={language} />}
                                 <Link
                                     className="llist-edit"
                                     to={`/my/listings/${listing.id}`}

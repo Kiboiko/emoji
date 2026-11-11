@@ -24,7 +24,7 @@ const GROUPS: Array<{ title: string; keys: string[] }> = [
         title: 'Оплата',
         keys: [
             'ton_rate_source', 'ton_rate_fixed_usd', 'ton_rate_ttl_sec',
-            'order_payment_ttl_min',
+            'order_payment_ttl_min', 'promotion_price_nano', 'promotion_duration_hours',
         ],
     },
     {
@@ -34,7 +34,7 @@ const GROUPS: Array<{ title: string; keys: string[] }> = [
     {
         title: 'Маркетплейс',
         keys: [
-            'p2p_auto_publish_verified', 'seller_reviews_window_days',
+            'p2p_auto_publish_verified',
             'p2p_max_pending_listings', 'p2p_reject_block_threshold',
             'p2p_confirm_deadline_days', 'chat_retention_days',
         ],
@@ -54,6 +54,8 @@ const GROUPS: Array<{ title: string; keys: string[] }> = [
  * ищут в документации и логах.
  */
 const TITLES: Record<string, string> = {
+    promotion_price_nano: 'Стоимость продвижения товара',
+    promotion_duration_hours: 'Срок продвижения, часов',
     commission_p2p_bp: 'Комиссия с продажи товара',
     commission_subscription_bp: 'Комиссия с подписки',
     referral_l1_bp: 'Реферальные, первый уровень',
@@ -267,7 +269,17 @@ function serialize(def: SettingDef): string {
 function parse(def: SettingDef, raw: string): unknown {
     const unit = unitOf(def);
     // Округление обязательно: 0.07 * 100 в плавающей точке — 7.000000000000001
-    if (unit) return Math.round(Number(raw.replace(',', '.')) * unit.factor);
+    if (unit) {
+        const decimals = unit.factor === 1e9 ? 9 : 2;
+        const normalized = raw.trim().replace(',', '.');
+        if (!/^[0-9]+(?:[.][0-9]+)?$/.test(normalized) || (normalized.split('.')[1]?.length ?? 0) > decimals) {
+            throw new Error(`Введите положительное число, не более ${decimals} знаков после запятой`);
+        }
+        const [whole, fraction = ''] = normalized.split('.');
+        const minor = BigInt(whole) * BigInt(unit.factor) + BigInt(fraction.padEnd(decimals, '0'));
+        if (minor > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Сумма слишком велика');
+        return Number(minor);
+    }
     if (def.type === 'int') return Number(raw);
     if (def.type === 'bool') return raw === 'true';
     if (def.type === 'list') {

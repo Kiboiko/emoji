@@ -16,7 +16,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -59,6 +59,7 @@ async def _product_cards(db: AsyncSession, products: list, lang: str) -> list[di
     return [
         ProductLocalized(
             id=p.id,
+            owner_user_id=p.owner_user_id,
             name=p.name_ru if lang == "ru" else p.name_en,
             description=p.description_ru if lang == "ru" else p.description_en,
             price_usdt=p.price_usdt,
@@ -82,7 +83,7 @@ async def _product_cards(db: AsyncSession, products: list, lang: str) -> list[di
 
 
 async def _rating_over(
-    db: AsyncSession, product_ids: list, *, windowed: bool = False,
+    db: AsyncSession, product_ids: list | Select, *, windowed: bool = False,
 ) -> tuple[float | None, int]:
     """
     Оценка магазина — среднее по отзывам на его товары.
@@ -98,7 +99,7 @@ async def _rating_over(
     модератором и без оценки не берём. Счётчик в seller_profiles не трогаем —
     это внутренняя репутация по сделкам, её смотрит администратор.
     """
-    if not product_ids:
+    if isinstance(product_ids, list) and not product_ids:
         return None, 0
 
     stmt = select(func.avg(Review.rating), func.count(Review.id)).where(
@@ -107,9 +108,9 @@ async def _rating_over(
         Review.is_hidden.is_(False),
     )
     if windowed:
-        cutoff = await review_service.window_cutoff(db)
-        if cutoff is not None:
-            stmt = stmt.where(Review.created_at >= cutoff)
+        recent = (select(Review.id).where(Review.product_id.in_(product_ids), Review.is_hidden.is_(False))
+            .order_by(Review.created_at.desc(), Review.id.desc()).limit(review_service.SELLER_REVIEW_LIMIT))
+        stmt = stmt.where(Review.id.in_(recent))
     average, count = (await db.execute(stmt)).one()
 
     if not count:
@@ -126,27 +127,21 @@ async def rating_for_author(db: AsyncSession, kind: str, author_id) -> tuple[flo
     функция, а не повтор запроса, именно поэтому.
     """
     if kind == "channel":
-        ids = [
-            product_id for (product_id,) in (
-                await db.execute(
-                    select(SubscriptionPlan.product_id).where(
-                        SubscriptionPlan.channel_id == author_id,
-                        SubscriptionPlan.product_id.is_not(None),
-                    )
-                )
-            ).all()
-        ]
+        ids = select(SubscriptionPlan.product_id).where(
+            SubscriptionPlan.channel_id == author_id,
+            SubscriptionPlan.product_id.is_not(None),
+        )
         return await _rating_over(db, ids)
 
     seller = await db.get(SellerProfile, author_id)
     if seller is None:
         return None, 0
-    return await _rating_over(
-        db, await _seller_product_ids(db, seller), windowed=not seller.is_platform,
-    )
+    if not seller.is_platform:
+        return await review_service.seller_rating(db, seller.user_id)
+    return await _rating_over(db, _seller_product_ids(seller))
 
 
-async def _seller_product_ids(db: AsyncSession, seller: SellerProfile) -> list:
+def _seller_product_ids(seller: SellerProfile) -> Select:
     """
     Все товары магазина, включая снятые с продажи.
 
@@ -162,7 +157,9 @@ async def _seller_product_ids(db: AsyncSession, seller: SellerProfile) -> list:
     else:
         stmt = stmt.where(Product.owner_user_id == seller.user_id)
 
-    return [row for (row,) in (await db.execute(stmt)).all()]
+    # Keep the set in PostgreSQL: a large market must not send thousands of
+    # IDs to Python and bind them back for every product card's author rating.
+    return stmt
 
 
 async def _seller_products(db: AsyncSession, seller: SellerProfile, lang: str) -> list[dict]:
@@ -234,6 +231,7 @@ async def store_list(
                     select(SellerProfile).where(
                         SellerProfile.user_id.in_(by_user.keys()),
                         SellerProfile.status != SellerStatus.BANNED,
+                        SellerProfile.home_visible.is_(True),
                     )
                 )
             ).scalars().all()
@@ -263,7 +261,7 @@ async def store_list(
 
     items: list[dict] = []
 
-    if platform is not None and platform_products:
+    if platform is not None and platform_products and platform.home_visible:
         items.append({
             "kind": "platform",
             "id": str(platform.id),
@@ -288,11 +286,16 @@ async def store_list(
             "products": by_user.get(seller.user_id, 0),
         })
 
+    from services.market_ranking_service import badges
+    ranks = await badges(db)
+    for item in items:
+        item.update(ranks.get(item["id"], {}))
     # Площадка первой — это лицо маркета. Дальше проверенные, дальше те, у
     # кого товаров больше: у пустоватого магазина меньше причин быть в начале.
     head = items[:1] if items and items[0]["kind"] == "platform" else []
     tail = items[len(head):]
     tail.sort(key=lambda item: (
+        item.get("rank", 1000000),
         not item["is_verified"],
         -item["products"],
         item["name"].lower(),
@@ -316,12 +319,14 @@ async def seller_store(
     if seller.status == SellerStatus.BANNED and not seller.is_platform:
         raise HTTPException(status_code=404, detail="Магазин не найден")
 
-    rating, rating_count = await _rating_over(
-        db, await _seller_product_ids(db, seller), windowed=not seller.is_platform,
-    )
+    rating, rating_count = (await _rating_over(db, _seller_product_ids(seller)) if seller.is_platform
+        else await review_service.seller_rating(db, seller.user_id))
+    from services.market_ranking_service import badges
+    ranking_badge = (await badges(db)).get(str(seller.id), {})
 
     return {
         "kind": "platform" if seller.is_platform else "seller",
+        **ranking_badge,
         "id": str(seller.id),
         "name": seller.display_name,
         "avatar_url": seller.avatar_url,

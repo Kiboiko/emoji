@@ -2,6 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Header, Body, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 import uuid
 
 from database import get_db
@@ -105,6 +106,7 @@ async def authenticate_telegram(
 
             # Update user data from Telegram (name/username may have changed)
             user.first_name = telegram_data["first_name"]
+            user.photo_url = telegram_data.get("photo_url")
             user.username = telegram_data.get("username")
             await db.commit()
             await db.refresh(user)
@@ -119,11 +121,18 @@ async def authenticate_telegram(
             
             # Check if referral code was provided and find referrer
             referrer = None
+            partner = None
             if referral_code:
+                from models.partner import PartnerLink
+                partner = await db.scalar(select(PartnerLink).where(PartnerLink.code == referral_code,
+                    PartnerLink.enabled.is_(True)).with_for_update())
+                if partner:
+                    referrer = await db.get(User, partner.beneficiary_id)
                 # First try to find by referral_code (which is now telegram_id string)
-                stmt = select(User).where(User.referral_code == referral_code)
-                result = await db.execute(stmt)
-                referrer = result.scalar_one_or_none()
+                if referrer is None:
+                    stmt = select(User).where(User.referral_code == referral_code)
+                    result = await db.execute(stmt)
+                    referrer = result.scalar_one_or_none()
                 
                 # If not found, try to find by telegram_id (backward compatibility or direct ID match)
                 if not referrer and referral_code.isdigit():
@@ -144,12 +153,27 @@ async def authenticate_telegram(
                 telegram_id=telegram_data["telegram_id"],
                 username=telegram_data.get("username"),
                 first_name=telegram_data["first_name"],
+                photo_url=telegram_data.get("photo_url"),
                 language_code=telegram_data.get("language_code", "ru"),
                 referral_code=new_referral_code,
                 referrer_id=referrer.id if referrer else None
             )
             db.add(user)
-            await db.commit()
+            try:
+                if partner:
+                    from models.partner import PartnerAttribution
+                    await db.flush()
+                    db.add(PartnerAttribution(buyer_id=user.id, link_id=partner.id))
+                await db.commit()
+            except IntegrityError:
+                # Two first launches may both observe no account. The unique
+                # Telegram identity wins once; the other request signs in to it.
+                await db.rollback()
+                user = await db.scalar(select(User).where(User.telegram_id == telegram_data["telegram_id"]))
+                if user is None:
+                    raise
+                if user.is_blocked:
+                    raise HTTPException(status_code=403, detail="Аккаунт заблокирован. Обратитесь в поддержку.")
             await db.refresh(user)
             print(f"[AUTH] User created. Referrer ID set to: {user.referrer_id}")
         
@@ -183,9 +207,9 @@ async def authenticate_telegram(
         raise HTTPException(status_code=401, detail=str(e))
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"DEBUG: Auth failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Authentication failed: {str(e)}")
+    except Exception:
+        logger.exception("[AUTH] Ошибка входа")
+        raise HTTPException(status_code=500, detail="Не удалось выполнить вход. Повторите позже.")
 
 
 @router.get("/me", response_model=UserResponse)

@@ -15,6 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
+_promotion_poll_failures = 0
 
 from utils.websockets import manager
 from schemas.product import ProductBroadcast
@@ -166,6 +167,24 @@ async def poll_ton_payments():
             await db.rollback()
 
 
+async def poll_promotions():
+    from services import promotion_service, ton_service
+    global _promotion_poll_failures
+
+    async with AsyncSessionLocal() as db:
+        try:
+            await promotion_service.poll_invoices(db)
+            _promotion_poll_failures = 0
+        except ton_service.TonTemporaryError as error:
+            _promotion_poll_failures += 1
+            log = logger.error if _promotion_poll_failures >= 3 else logger.warning
+            log("[SCHEDULER] Promotion verification deferred (%s consecutive polls): %s", _promotion_poll_failures, error)
+            await db.rollback()
+        except Exception:
+            logger.exception("[SCHEDULER] Promotion poll failed")
+            await db.rollback()
+
+
 async def confirm_payouts():
     """
     Закрывает выплаты, отправленные из админки через кошелёк площадки.
@@ -202,8 +221,59 @@ async def process_subscriptions():
             await db.rollback()
 
 
+async def refresh_market_rankings():
+    from services.market_ranking_service import refresh
+    async with AsyncSessionLocal() as db:
+        try:
+            await refresh(db)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.exception("Ranking refresh failed")
+
+
+async def dispatch_publications():
+    from services.telegram_publication_service import dispatch_one
+    for _ in range(3):
+        if not await dispatch_one():
+            break
+
+
+async def finalize_giveaways():
+    from services.giveaway_service import due_giveaways, draw_one
+    async with AsyncSessionLocal() as db:
+        identifiers = await due_giveaways(db)
+    for ident in identifiers:
+        await draw_one(ident)
+
+
+async def maintain_giveaways():
+    from services.giveaway_service import recheck_entries
+    from services.giveaway_lifecycle import purge, erase_posts, dispatch_post
+    for operation in (purge, erase_posts, dispatch_post, recheck_entries):
+        try:
+            await operation()
+        except Exception:
+            logger.exception("Giveaway maintenance failed: %s", operation.__name__)
+
+
+async def cleanup_inquiries():
+    from services.inquiry_service import cleanup
+    try:
+        await cleanup()
+    except Exception:
+        logger.exception("Inquiry cleanup failed")
+
+
 def start_scheduler():
     if not scheduler.running:
+        scheduler.add_job(refresh_market_rankings, trigger=IntervalTrigger(minutes=5), id="market_rankings", replace_existing=True)
+        scheduler.add_job(dispatch_publications, trigger=IntervalTrigger(seconds=30), id="publications", replace_existing=True)
+        scheduler.add_job(finalize_giveaways, trigger=IntervalTrigger(seconds=30), id="giveaways", replace_existing=True)
+        scheduler.add_job(maintain_giveaways, trigger=IntervalTrigger(seconds=30), id="giveaway_maintenance", replace_existing=True)
+        scheduler.add_job(cleanup_inquiries, trigger=IntervalTrigger(minutes=1), id="inquiry_cleanup", replace_existing=True)
+        scheduler.add_job(poll_promotions, trigger=IntervalTrigger(seconds=15),
+                          id="poll_promotions", replace_existing=True)
         scheduler.add_job(
             cleanup_reservations,
             # Раз в полминуты: бронь живёт минуты, и проверка раз в пять

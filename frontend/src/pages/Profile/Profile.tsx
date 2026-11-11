@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Copy, Store, Radio, Handshake, Ticket } from 'lucide-react';
+import { Copy, Store, Radio, Handshake, Ticket, Gift } from 'lucide-react';
 import { usersApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
@@ -99,6 +99,12 @@ export const Profile: React.FC = () => {
             label: t('Мои подписки', 'My subscriptions'),
             hint: t('Доступ в закрытые каналы', 'Access to private channels'),
             count: summary?.subscriptions ?? null,
+        },
+        {
+            to: '/giveaways', icon: <Gift size={18} />,
+            label: t('Розыгрыши', 'Giveaways'),
+            hint: t('NFT-подарки и результаты', 'NFT gifts and results'),
+            count: null,
         },
     ];
 

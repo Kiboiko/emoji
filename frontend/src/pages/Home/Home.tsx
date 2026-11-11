@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutGrid, List, PackageOpen } from 'lucide-react';
+import { Activity, LayoutGrid, List, PackageOpen } from 'lucide-react';
 import { Header } from '@/components/Header/Header';
+import { CategoryFilter } from '@/components/CategoryFilter/CategoryFilter';
+import { CatalogSortMenu, type CatalogSort } from '@/components/CatalogSort/CatalogSort';
 import { ProductCard } from '@/components/ProductCard/ProductCard';
 import { ProductCardSkeleton } from '@/components/ProductCard/ProductCardSkeleton';
 import { ProductRow, ProductRowSkeleton } from '@/components/ProductRow/ProductRow';
 import { StoreStrip } from '@/components/StoreStrip/StoreStrip';
+import { StoreHeading } from '@/components/StoreStrip/StoreHeading';
 import { productsApi, categoriesApi, cartApi, storesApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore, errorText } from '@/store/toastStore';
@@ -13,6 +16,8 @@ import { useCartStore } from '@/store/cartStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import type { Product, Category, StoreCard } from '@/types';
+import { markStartup, readyStartupImages, failStartup } from '@/store/startupStore';
+import { thumb } from '@/lib/image';
 import './Home.css';
 
 type CatalogView = 'grid' | 'list';
@@ -45,6 +50,8 @@ const readView = (): CatalogView => {
 let catalogCache: {
     language: string;
     category: string | null;
+    root: string | null;
+    sort: CatalogSort;
     products: Product[];
     hasMore: boolean;
     categories: Category[];
@@ -69,6 +76,8 @@ export const Home: React.FC = () => {
     const [categories, setCategories] = useState<Category[]>(cached?.categories ?? []);
     const [stores, setStores] = useState<StoreCard[]>(cached?.stores ?? []);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(cached?.category ?? null);
+    const [selectedRoot, setSelectedRoot] = useState<string | null>(cached?.root ?? null);
+    const [sort, setSort] = useState<CatalogSort>(cached?.sort ?? 'default');
     const [searchQuery, setSearchQuery] = useState('');
     // Запрос уходит на сервер с задержкой, а поле реагирует сразу
     const [activeSearch, setActiveSearch] = useState('');
@@ -136,10 +145,13 @@ export const Home: React.FC = () => {
         // withExtras=false — меняется только поиск: категории и магазины от
         // него не зависят, перезапрашивать их незачем
         const [categoriesResult, storesResult, productsResult] = await Promise.allSettled([
-            withExtras ? categoriesApi.getCategories(language) : Promise.resolve(categories),
-            withExtras ? storesApi.getStores() : Promise.resolve(stores),
+            (withExtras ? categoriesApi.getCategories(language) : Promise.resolve(categories))
+                .then(value => { markStartup('categories'); return value; }, error => { markStartup('categories'); throw error; }),
+            (withExtras ? storesApi.getStores() : Promise.resolve(stores))
+                .then(value => { markStartup('stores'); return value; }, error => { markStartup('stores'); throw error; }),
             productsApi.getPage({
                 category_id: selectedCategory || undefined,
+                sort,
                 search: term || undefined,
                 lang: language,
                 skip: 0,
@@ -162,9 +174,11 @@ export const Home: React.FC = () => {
         setStores(nextStores);
 
         if (productsResult.status === 'fulfilled') {
+            markStartup('products');
             // Порядок (хиты первыми) задаёт сервер: сортировать на клиенте
             // нельзя — страницы пришли бы вперемешку
             const { items, hasMore: more } = productsResult.value as { items: Product[]; hasMore: boolean };
+            void readyStartupImages(items.slice(0, 2).map(product => thumb(product.image_url)));
 
             let nextProducts = items;
             let nextHasMore = more;
@@ -186,6 +200,7 @@ export const Home: React.FC = () => {
                 catalogCache = {
                     language,
                     category: selectedCategory,
+                    root: selectedRoot, sort,
                     products: nextProducts,
                     hasMore: nextHasMore,
                     categories: nextCategories,
@@ -194,6 +209,7 @@ export const Home: React.FC = () => {
             }
         } else {
             console.error('Failed to load products:', productsResult.reason);
+            failStartup(t('Не удалось загрузить товары. Проверьте подключение и повторите попытку.', 'Could not load products. Check your connection and try again.'), () => { void loadData(false, term, true, merge); });
             // Сбой тихого обновления не стирает то, что уже на экране
             if (!silent) {
                 setProducts([]);
@@ -211,6 +227,7 @@ export const Home: React.FC = () => {
         try {
             const page = await productsApi.getPage({
                 category_id: selectedCategory || undefined,
+                sort,
                 search: activeSearch || undefined,
                 lang: language,
                 skip: loadedCount.current,
@@ -312,20 +329,18 @@ export const Home: React.FC = () => {
     // Если этот же список уже есть в памяти, он на экране, и обновление
     // идёт без заглушек
     useEffect(() => {
-        const fresh = catalogCache?.language === language && catalogCache.category === selectedCategory;
+        const fresh = catalogCache?.language === language && catalogCache.category === selectedCategory && catalogCache.sort === sort;
         // Есть в памяти — показано сразу, обновляем молча и со слиянием
         loadData(fresh, activeSearch, true, fresh);
-    }, [language, selectedCategory]);
+    }, [language, selectedCategory, sort]);
 
     // Смена строки поиска — только список товаров, молча (без заглушек между
     // буквами). Первый запуск пропускаем: каталог уже грузит эффект выше
-    const searchMounted = React.useRef(false);
+    const previousSearch = React.useRef(activeSearch);
     useEffect(() => {
-        if (!searchMounted.current) {
-            searchMounted.current = true;
-            return;
-        }
-        loadData(true, activeSearch, false);
+        if (previousSearch.current === activeSearch) return;
+        previousSearch.current = activeSearch;
+        loadData(true, activeSearch, categories.length === 0);
     }, [activeSearch]);
 
     const handleAddToCart = async (productId: string) => {
@@ -376,19 +391,22 @@ export const Home: React.FC = () => {
     const openProduct = (id: string) => navigate(`/product/${id}`);
 
     // Товар рисуется одним из двух видов, но данные и обработчики у них общие
-    const renderProduct = (product: Product) => (
+    const renderProduct = (product: Product, index: number) => (
         view === 'list'
             ? (
                 <ProductRow
                     key={product.id}
                     product={product}
+                    priority={index < 2}
                     onClick={() => openProduct(product.id)}
                     onAddToCart={() => handleAddToCart(product.id)}
                 />
             )
             : (
                 <ProductCard
+                    key={product.id}
                     product={product}
+                    priority={index < 2}
                     onClick={() => openProduct(product.id)}
                     onAddToCart={() => handleAddToCart(product.id)}
                 />
@@ -400,6 +418,13 @@ export const Home: React.FC = () => {
             <Header
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
+                searchActions={<CatalogSortMenu value={sort} onChange={setSort} language={language} />}
+                searchAside={(
+                    <button type="button" className="header-sales-button" onClick={() => navigate('/sales')}>
+                        <Activity size={20} strokeWidth={1.8} aria-hidden="true" />
+                        <span>{t('Продажи', 'Sales')}</span>
+                    </button>
+                )}
                 pageTitle={t('Каталог', 'Catalog')}
                 actions={(
                     <div className="view-switch">
@@ -426,31 +451,22 @@ export const Home: React.FC = () => {
             />
 
             <div className="container">
-                {/* Categories */}
-                <div className="categories-scroll">
-                    <button
-                        className={`category-chip ${!selectedCategory ? 'active' : ''}`}
-                        onClick={() => setSelectedCategory(null)}
-                    >
-                        {t('Все', 'All')}
-                    </button>
-                    {categories.map((category) => (
-                        <button
-                            key={category.id}
-                            className={`category-chip ${selectedCategory === category.id ? 'active' : ''}`}
-                            onClick={() => setSelectedCategory(selectedCategory === category.id ? null : category.id)}
-                        >
-                            {category.name}
-                        </button>
-                    ))}
-                </div>
-
+                <CategoryFilter
+                    categories={categories}
+                    root={selectedRoot}
+                    selected={selectedCategory}
+                    language={language}
+                    onChange={(root, category) => {
+                        setSelectedRoot(root);
+                        setSelectedCategory(category);
+                    }}
+                />
                 {/* Даже один магазин показываем: строка отвечает на вопрос
                     «кто здесь торгует», и при единственном продавце ответ
                     не менее важен, чем при десяти. */}
                 {isBrowsing && !isLoading && stores.length > 0 && (
                     <>
-                        <h2 className="home-section">{t('Магазины', 'Stores')}</h2>
+                        <StoreHeading language={language} />
                         <StoreStrip stores={stores} />
                     </>
                 )}
@@ -497,9 +513,9 @@ export const Home: React.FC = () => {
                     // сетка заново «въезжала» — второе мерцание после смены
                     // экрана, да ещё анимация на каждую карточку
                     <div className="products-grid">
-                        {filteredProducts.map((product) => (
+                        {filteredProducts.map((product, index) => (
                             <div key={product.id}>
-                                {renderProduct(product)}
+                                {renderProduct(product, index)}
                             </div>
                         ))}
                     </div>

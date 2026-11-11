@@ -74,3 +74,7 @@ marketplace.zip
 # кошельков и историю платежей. В репозиторий не попадают никогда.
 /backups/
 *.sql.gz
+
+# Private Claude project history (may contain credentials)
+/.codex/claude-import/
+/docs/chat-history/

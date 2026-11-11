@@ -1,0 +1,73 @@
+.catalog-sort-menu {
+    position: relative;
+    height: 100%;
+    display: flex;
+    justify-content: flex-end;
+    pointer-events: none;
+}
+
+.catalog-sort-trigger {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.catalog-sort-trigger.active,
+.catalog-sort-trigger[aria-expanded='true'] {
+    color: var(--accent-primary);
+}
+
+.catalog-sort-options {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 1;
+    width: min(280px, 100%);
+    padding: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-md);
+    pointer-events: auto;
+}
+
+.catalog-sort-options button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.4;
+    text-align: start;
+    cursor: pointer;
+}
+
+.catalog-sort-options button[aria-pressed='true'] {
+    background: var(--bg-tertiary);
+    color: var(--accent-primary);
+}
+
+.catalog-sort-options svg {
+    flex-shrink: 0;
+}
+
+.catalog-sort-menu button:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+}

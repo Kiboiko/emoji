@@ -6,6 +6,7 @@ import { MyDeals } from '@/components/MyDeals/MyDeals';
 import { Purchases } from '@/pages/Purchases/Purchases';
 import { MySubscriptions } from '@/components/MySubscriptions/MySubscriptions';
 import { CabinetPage } from './CabinetPage';
+import { InquiryList } from '@/components/Inquiries/InquiryList';
 
 /**
  * Экраны разделов кабинета.
@@ -53,6 +54,7 @@ export const ChatsPage: React.FC = () => {
     const t = useT();
     return (
         <CabinetPage title={t('Чаты', 'Chats')} back={false}>
+            <InquiryList />
             <MyDeals mode="chats" />
         </CabinetPage>
     );

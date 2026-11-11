@@ -38,14 +38,21 @@ apiClient.interceptors.response.use(
         const isLogin = LOGIN_PATHS.some((path) => url.includes(path));
 
         if (error.response?.status === 401 && !isLogin) {
+            const currentToken = useAuthStore.getState().accessToken;
+            const requestAuth = error.config?.headers?.get?.('Authorization')
+                ?? error.config?.headers?.Authorization;
             // Перезагрузку не дёргаем: фоновый запрос заблокированного
             // пользователя уходил бы в бесконечный цикл перезагрузок.
             //
             // Чистим И хранилище, И состояние. Раньше стирался только
             // localStorage, а в хранилище zustand токен оставался: приложение
             // считало себя авторизованным, а заголовок уже никуда не подставлялся.
-            useAuthStore.getState().logout();
-            localStorage.removeItem('user');
+            // Ответ старого запроса может прийти уже после успешного входа.
+            // Он отзывает только ту сессию, с которой был отправлен запрос.
+            if (!currentToken || requestAuth === `Bearer ${currentToken}`) {
+                useAuthStore.getState().logout();
+                localStorage.removeItem('user');
+            }
         }
 
         // А вот при провале самого входа токен НЕ трогаем. Приложение
@@ -60,6 +67,7 @@ apiClient.interceptors.response.use(
 export const authApi = {
     authenticateTelegram: async (initData: string, referralCode?: string) => {
         const response = await apiClient.post('/auth/telegram', null, {
+            timeout: 15000,
             headers: {
                 'X-Telegram-Init-Data': initData,
             },
@@ -84,6 +92,7 @@ export const authApi = {
 // Products API
 export const productsApi = {
     getProducts: async (params?: {
+        sort?: 'default' | 'price_asc' | 'price_desc' | 'rating' | 'sales';
         category_id?: string;
         search?: string;
         is_top?: boolean;
@@ -100,21 +109,22 @@ export const productsApi = {
     // мере прокрутки: раньше приходило до тысячи товаров разом, и чем их
     // больше, тем дольше открывалась главная
     getPage: async (params: {
+        sort?: 'default' | 'price_asc' | 'price_desc' | 'rating' | 'sales';
         category_id?: string;
         search?: string;
         lang?: string;
         skip?: number;
         limit?: number;
     }) => {
-        const response = await apiClient.get('/products', { params });
+        const response = await apiClient.get('/products', { params, timeout: 15000 });
         return {
             items: response.data as any[],
             hasMore: response.headers['x-has-more'] === '1',
         };
     },
 
-    getProduct: async (id: string, lang: string = 'ru') => {
-        const response = await apiClient.get(`/products/${id}`, { params: { lang } });
+    getProduct: async (id: string, lang: string = 'ru', signal?: AbortSignal) => {
+        const response = await apiClient.get(`/products/${id}`, { params: { lang }, signal, timeout: 15000 });
         return response.data;
     },
 };
@@ -124,6 +134,7 @@ export const categoriesApi = {
     getCategories: async (lang: string = 'ru') => {
         const response = await apiClient.get('/categories', {
             params: { lang },
+            timeout: 15000,
         });
         return response.data;
     },
@@ -269,7 +280,7 @@ export const settingsApi = {
 export const storesApi = {
     // Магазины, у которых есть что купить: строка на главной
     getStores: async (): Promise<StoreCard[]> =>
-        (await apiClient.get('/stores')).data,
+        (await apiClient.get('/stores', { timeout: 15000 })).data,
 
     getSellerStore: async (id: string, lang = 'ru'): Promise<Store> =>
         (await apiClient.get(`/stores/seller/${id}`, { params: { lang } })).data,

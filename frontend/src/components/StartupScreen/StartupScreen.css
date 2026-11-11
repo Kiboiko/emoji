@@ -1,0 +1,12 @@
+.startup-screen{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:#000;color:#fff;padding:32px 24px;opacity:1;transition:opacity .22s ease;overflow:hidden}
+.startup-complete{opacity:0;pointer-events:none}
+.startup-content{display:flex;flex-direction:column;align-items:center;width:min(100%,360px);transform:translateY(-12px)}
+.startup-logo{position:relative;display:block;width:min(76vw,300px);height:min(76vw,300px);margin-bottom:4px;overflow:hidden}
+.startup-logo>img,.startup-logo>video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.startup-progress{width:196px}
+.startup-track{height:3px;background:#252525;border-radius:8px;overflow:hidden;margin-top:18px}
+.startup-track>span{display:block;height:100%;background:#fff;border-radius:inherit;transition:width .2s ease}
+.startup-error{text-align:center;color:#b5b5b5;font-size:14px;line-height:1.5;margin-top:20px;max-width:310px}
+.startup-error button{display:block;margin:16px auto 0;padding:12px 20px;border:1px solid #525252;border-radius:12px;background:#171717;color:white;font:inherit;cursor:pointer}
+@media(prefers-reduced-motion:reduce){.startup-screen,.startup-track>span{transition:none}}
+@media(max-height:520px){.startup-logo{width:180px;height:180px}.startup-content{transform:none}}

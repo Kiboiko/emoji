@@ -7,7 +7,18 @@
     <title>Gram Market</title>
     <link rel="icon" type="image/png" href="/icon-180.png" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="preload" href="/launch/safedeal-v3.webp" as="image" />
+    <style>
+      #launch-static{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:#000;color:#fff;font-family:Arial,sans-serif}
+      #launch-static .launch-inner{display:flex;flex-direction:column;align-items:center;transform:translateY(-12px)}
+      #launch-static .launch-logo{position:relative;width:min(76vw,300px);height:min(76vw,300px);margin-bottom:4px;overflow:hidden}
+      #launch-static video,#launch-static img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+      #launch-static img{display:none}
+      #launch-static .launch-track{width:196px;height:3px;margin-top:18px;background:#252525;border-radius:8px}
+      @media(prefers-reduced-motion:reduce){#launch-static video{display:none}#launch-static img{display:block}}
+      @media(max-height:520px){#launch-static .launch-logo{width:180px;height:180px}}
+    </style>
+    <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
       // Тема ставится до первой отрисовки. React монтируется не мгновенно, и
       // без этого приложение успевало мигнуть светлым у тех, у кого тёмная.
@@ -26,7 +37,12 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="launch-static" role="status" aria-label="Загрузка SafeDeal">
+      <div class="launch-inner">
+        <div class="launch-logo"><video id="launch-video" autoplay muted playsinline preload="auto" poster="/launch/safedeal-v3.webp" aria-label="SafeDeal"><source src="/launch/safedeal-v3.mp4" type="video/mp4" /></video><img src="/launch/safedeal-v3.webp" alt="SafeDeal" /></div>
+        <div class="launch-track"></div>
+      </div>
+    </div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

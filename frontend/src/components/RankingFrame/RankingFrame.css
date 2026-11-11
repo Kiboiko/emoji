@@ -1,0 +1,74 @@
+.medal-gold { --medal-light: #fff0b0; --medal-main: #c99735; --medal-dark: #71501c; }
+.medal-silver { --medal-light: #f0f5ff; --medal-main: #a4b2c5; --medal-dark: #535f72; }
+.medal-bronze { --medal-light: #ffd6b0; --medal-main: #bf855b; --medal-dark: #72492e; }
+
+.ranking-frame {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+    width: var(--ranking-size, 84px);
+    aspect-ratio: 120 / 136;
+    vertical-align: middle;
+    isolation: isolate;
+}
+
+.ranking-frame-portrait {
+    z-index: 0;
+    position: absolute;
+    left: 15.833%;
+    top: 20.588%;
+    width: 68.334%;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: calc(var(--ranking-size, 84px) * .28);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.ranking-frame-portrait img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ranking-frame-ornament {
+    z-index: 1;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.store-name-ornament {
+    position: relative;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, var(--medal-light), var(--medal-dark) 28%, var(--medal-main) 65%, var(--medal-light));
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+    isolation: isolate;
+}
+
+.store-name-ornament::before {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    z-index: -1;
+    background: var(--bg-primary);
+    clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px), calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px);
+}
+
+.store-name-ornament::after {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    z-index: -1;
+    border-top: 1px solid var(--medal-main);
+    border-bottom: 1px solid var(--medal-main);
+    opacity: .5;
+}

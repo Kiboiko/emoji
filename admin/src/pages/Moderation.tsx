@@ -27,7 +27,7 @@ const STATUSES = [
  * было. Галочка проверенного продавца без неё тоже не ставилась бы.
  */
 export const Moderation: React.FC = () => {
-    const [tab, setTab] = useState<'listings' | 'sellers' | 'store'>('listings');
+    const [tab, setTab] = useState<'listings' | 'sellers' | 'store' | 'photos'>('listings');
     // Модератору — только заявки: продавцы и магазин площадки закрыты на бэкенде
     const { role } = useAuth();
     const isAdmin = role === 'admin';
@@ -36,7 +36,8 @@ export const Moderation: React.FC = () => {
         <div>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Модерация</h1>
 
-            {isAdmin && <div className="flex flex-wrap gap-2 mb-5">
+            <div className="flex flex-wrap gap-2 mb-5">
+                <button onClick={() => setTab('photos')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'photos' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Фото каналов</button>
                 <button
                     onClick={() => setTab('listings')}
                     className={`px-4 py-2 rounded-lg text-sm ${
@@ -45,29 +46,74 @@ export const Moderation: React.FC = () => {
                 >
                     Товары
                 </button>
-                <button
+                {isAdmin && <button
                     onClick={() => setTab('sellers')}
                     className={`px-4 py-2 rounded-lg text-sm ${
                         tab === 'sellers' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                     }`}
                 >
                     Продавцы
-                </button>
-                <button
+                </button>}
+                {isAdmin && <button
                     onClick={() => setTab('store')}
                     className={`px-4 py-2 rounded-lg text-sm ${
                         tab === 'store' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                     }`}
                 >
                     Магазин площадки
-                </button>
-            </div>}
+                </button>}
+            </div>
 
-            {(tab === 'listings' || !isAdmin) && <ListingsTab />}
+            {tab === 'listings' && <ListingsTab />}
+            {tab === 'photos' && <ChannelPhotosTab />}
             {isAdmin && tab === 'sellers' && <SellersTab />}
             {isAdmin && tab === 'store' && <PlatformStoreTab />}
         </div>
     );
+};
+
+const ChannelPhotosTab: React.FC = () => {
+    const toast = useToast();
+    const [rows, setRows] = useState<any[]>([]);
+    const [total, setTotal] = useState(0);
+    const [skip, setSkip] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState<string | null>(null);
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const page = await p2pApi.channelPhotos(skip, LIMIT);
+            setRows(page.items);
+            setTotal(page.total);
+        } catch (e) { setError(errorText(e, 'Не удалось загрузить фото каналов')); }
+        finally { setLoading(false); }
+    }, [skip]);
+    useEffect(() => { load(); }, [load]);
+    const remove = async (channel: any, kind: 'avatar' | 'cover') => {
+        if (!window.confirm(`Удалить ${kind === 'avatar' ? 'аватарку' : 'обложку'} канала «${channel.title}»? Владелец получит уведомление.`)) return;
+        setBusy(channel.id);
+        try {
+            await p2pApi.deleteChannelPhoto(channel.id, kind);
+            toast.success('Фото удалено');
+            await load();
+        } catch (e) { toast.fromError(e); }
+        finally { setBusy(null); }
+    };
+    const columns: Column<any>[] = [
+        { key: 'title', title: 'Канал' },
+        ...(['avatar', 'cover'] as const).map((kind) => ({
+            key: kind, title: kind === 'avatar' ? 'Аватарка' : 'Обложка',
+            render: (channel: any) => channel[`${kind}_url`] ? (
+                <div className="flex items-center gap-3">
+                    <img src={channel[`${kind}_url`]} alt={kind === 'avatar' ? 'Аватарка канала' : 'Обложка канала'} className="w-24 h-24 object-cover rounded-lg" />
+                    <button onClick={() => remove(channel, kind)} disabled={busy === channel.id} className="p-2 text-red-400 disabled:opacity-50" aria-label={kind === 'avatar' ? 'Удалить аватарку' : 'Удалить обложку'}><Trash2 size={18} /></button>
+                </div>
+            ) : 'Нет фото',
+        })),
+    ];
+    return <><DataTable columns={columns} rows={rows} rowKey={(c) => c.id} loading={loading} error={error} emptyText="Каналов нет" /><Pagination total={total} skip={skip} limit={LIMIT} onChange={setSkip} /></>;
 };
 
 /* ------------------------------------------------------------------ */

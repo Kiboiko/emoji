@@ -1,14 +1,16 @@
 import React from 'react';
+import { useAuthStore } from '@/store/authStore';
 import { BadgeCheck, ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
 import { Stars } from '@/components/Stars/Stars';
-import { thumb } from '@/lib/image';
+import { ProductImage } from '@/components/ProductImage/ProductImage';
 import './ProductRow.css';
 
 interface ProductRowProps {
     product: Product;
     onClick: () => void;
     onAddToCart: () => void;
+    priority?: boolean;
 }
 
 /**
@@ -25,12 +27,16 @@ export const ProductRow: React.FC<ProductRowProps> = ({
     product,
     onClick,
     onAddToCart,
+    priority = false,
 }) => {
+    const language = useAuthStore(s => s.language);
+    const userId = useAuthStore(s => s.user?.id);
+    const isOwnProduct = !!userId && product.owner_user_id === userId;
     const rating = product.rating ?? null;
 
     const handleBuy = (e: React.MouseEvent) => {
         e.stopPropagation();
-        onAddToCart();
+        if (!isOwnProduct) onAddToCart();
     };
 
     return (
@@ -42,8 +48,9 @@ export const ProductRow: React.FC<ProductRowProps> = ({
                 onClick={onClick}
             >
                 <span className="product-row-image">
-                    <img src={thumb(product.image_url)} alt="" loading="lazy" decoding="async" />
-                    {product.is_top && <span className="product-row-tag">Хит</span>}
+                    <ProductImage key={product.image_url} url={product.image_url} priority={priority} />
+                    {product.is_promoted && <span className="product-row-tag">{language === 'ru' ? 'Промо' : 'Promoted'}</span>}
+                    {!product.is_promoted && product.is_top && <span className="product-row-tag">Хит</span>}
                 </span>
 
                 <span className="product-row-body">
@@ -74,7 +81,9 @@ export const ProductRow: React.FC<ProductRowProps> = ({
                     type="button"
                     className="product-row-cart"
                     onClick={handleBuy}
-                    aria-label={`Добавить «${product.name}» в корзину за $${product.price_usdt}`}
+                    disabled={isOwnProduct}
+                    title={isOwnProduct ? (language === 'ru' ? 'Ваш товар' : 'Your product') : undefined}
+                    aria-label={isOwnProduct ? (language === 'ru' ? 'Ваш товар' : 'Your product') : `Добавить «${product.name}» в корзину за $${product.price_usdt}`}
                 >
                     <ShoppingCart size={17} />
                 </button>

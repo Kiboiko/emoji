@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
     AlertTriangle, ArrowLeft, ChevronDown, EyeOff, Minus, Plus, RotateCcw, ShieldCheck, X,
@@ -11,6 +11,7 @@ import { useBarHeight } from '@/hooks/useBarHeight';
 import { usePublicSettings } from '@/hooks/usePublicSettings';
 import { CommissionNote } from '@/components/CommissionNote/CommissionNote';
 import { AutoTextarea } from '@/components/AutoTextarea/AutoTextarea';
+import { PhotoFileInput, photoFileError } from '@/components/PhotoFileInput/PhotoFileInput';
 import { listingBadge } from '@/components/SellerCabinet/ListingsList';
 import type { Category, Listing, SellerProfile } from '@/types';
 import '@/pages/DealPage/DealPage.css';
@@ -76,6 +77,7 @@ export const ListingEditor: React.FC = () => {
     const [listing, setListing] = useState<Listing | null>(null);
     const [profile, setProfile] = useState<SellerProfile | null>(null);
     const [categories, setCategories] = useState<Category[]>([]);
+    const [chosenRoot, setChosenRoot] = useState('');
     const [form, setForm] = useState<Form>(EMPTY);
     const [failed, setFailed] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -83,7 +85,6 @@ export const ListingEditor: React.FC = () => {
     const [confirm, setConfirm] = useState<Confirm>(null);
     const [cover, setCover] = useState(0);
     const [pending, setPending] = useState<File[]>([]);
-    const fileInput = useRef<HTMLInputElement>(null);
     const [barRef, barStyle] = useBarHeight();
 
     const previews = useMemo(() => pending.map((f) => URL.createObjectURL(f)), [pending]);
@@ -130,6 +131,10 @@ export const ListingEditor: React.FC = () => {
     const moderatedChange = listing?.status === 'approved' && (Object.keys(form) as (keyof Form)[])
         .some((k) => k !== 'quantity' && String(form[k]).trim() !== String(original[k]).trim());
     const englishMissing = !form.name_en.trim() || !form.description_en.trim();
+    const selectedCategory = categories.find(category => category.id === form.category_id);
+    const rootId = chosenRoot || selectedCategory?.parent_id || selectedCategory?.id || '';
+    const roots = categories.filter(category => !category.parent_id);
+    const children = categories.filter(category => category.parent_id === rootId);
 
     const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -188,19 +193,21 @@ export const ListingEditor: React.FC = () => {
                 const created = await p2pApi.createListing({ ...payload(), accept_terms: true });
                 // Объявление уже создано: неудачное фото — не повод говорить
                 // «не сохранилось», иначе человек заведёт товар второй раз
-                let lost = 0;
+                const uploadErrors: string[] = [];
                 for (const file of pending) {
                     try {
                         await p2pApi.uploadListingImage(created.id, file);
-                    } catch {
-                        lost += 1;
+                    } catch (error) {
+                        uploadErrors.push(`${file.name}: ${errorText(error, t('Не удалось загрузить фото', 'Photo upload failed'))}`);
                     }
                 }
-                if (lost) {
-                    showToast(t(`Объявление создано, но ${lost} фото не загрузилось`, `Created, but ${lost} photo(s) failed`), 'error');
+                if (uploadErrors.length) {
+                    showToast(t('Черновик создан. ', 'Draft created. ') + uploadErrors[0], 'error');
+                } else {
+                    showToast(t('Объявление создано. Отправьте его на модерацию', 'Created. Now submit it for review'), 'success');
                 }
                 navigate(`/my/listings/${created.id}`, { replace: true });
-            }, t('Объявление создано. Отправьте его на модерацию', 'Created. Now submit it for review')).catch(() => undefined);
+            }).catch(() => undefined);
             return;
         }
         await run(async () => {
@@ -214,17 +221,21 @@ export const ListingEditor: React.FC = () => {
         }, t('Сохранено', 'Saved')).catch(() => undefined);
     };
 
-    const onFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const chosen = Array.from(e.target.files ?? []);
-        // Сбрасываем сразу: повторный выбор того же файла иначе не даст события
-        e.target.value = '';
-        if (!chosen.length) return;
+    const onFiles = async (chosen: File[]) => {
+        if (busy || blocked || !editable) return;
+        const valid = chosen.filter((file) => {
+            const error = photoFileError(file, t);
+            if (error) showToast(`${file.name}: ${error}`, 'error');
+            return !error;
+        });
+        if (!valid.length) return;
         const have = creating ? pending.length : (listing?.images.length ?? 0);
         const room = MAX_PHOTOS - have;
-        if (chosen.length > room) {
+        if (valid.length > room) {
             showToast(t(`Больше ${MAX_PHOTOS} фото не поместится`, `At most ${MAX_PHOTOS} photos`), 'info');
         }
-        const take = chosen.slice(0, Math.max(room, 0));
+        const take = valid.slice(0, Math.max(room, 0));
+        if (!take.length) return;
         if (creating) {
             setPending((prev) => [...prev, ...take]);
             return;
@@ -337,14 +348,6 @@ export const ListingEditor: React.FC = () => {
 
     return (
         <div className="dpage" style={hasBar ? barStyle : undefined}>
-            <input
-                ref={fileInput}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                hidden
-                onChange={onFiles}
-            />
             <div className={`container dpage-body${hasBar ? ' with-bar' : ''}`}>
                 <div className="dpage-top">
                     <button className="btn-back" onClick={goBack}>
@@ -360,10 +363,12 @@ export const ListingEditor: React.FC = () => {
                 <div className="led-gallery">
                     <div className="led-cover">
                         {photos[cover] ? <img src={photos[cover]} alt="" /> : (
-                            <button type="button" className="led-cover-empty" onClick={() => fileInput.current?.click()} disabled={!editable}>
-                                <Plus size={28} />
+                            <div className="led-cover-empty photo-file-target">
+                                <PhotoFileInput label={t('Добавьте фото товара', 'Add item photos')} multiple
+                                    disabled={!editable || busy || blocked} onFiles={onFiles} />
+                                <Plus size={28} aria-hidden="true" />
                                 {t('Добавьте фото товара', 'Add item photos')}
-                            </button>
+                            </div>
                         )}
                     </div>
                     {(photos.length > 0 || editable) && (
@@ -387,15 +392,11 @@ export const ListingEditor: React.FC = () => {
                                 </div>
                             ))}
                             {editable && photos.length < MAX_PHOTOS && (
-                                <button
-                                    type="button"
-                                    className="led-thumb-add"
-                                    onClick={() => fileInput.current?.click()}
-                                    disabled={busy}
-                                    aria-label={t('Добавить фото', 'Add photo')}
-                                >
-                                    <Plus size={20} />
-                                </button>
+                                <div className="led-thumb-add photo-file-target">
+                                    <PhotoFileInput label={t('Добавить фото', 'Add photo')} multiple
+                                        disabled={busy || blocked} onFiles={onFiles} />
+                                    <Plus size={20} aria-hidden="true" />
+                                </div>
                             )}
                         </div>
                     )}
@@ -476,13 +477,24 @@ export const ListingEditor: React.FC = () => {
                     <CommissionNote price={form.price_usd} bp={settings?.commission_p2p_bp ?? null} />
 
                     <label className="led-field">
-                        {t('Категория', 'Category')}
-                        <select value={form.category_id} onChange={(e) => set('category_id', e.target.value)} required>
-                            {/* Не вариант, а подсказка: выбрать категорию обязательно */}
-                            <option value="" disabled>{t('Выберите категорию', 'Choose a category')}</option>
-                            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {t('Главный раздел', 'Main category')}
+                        <select value={rootId} onChange={(event) => {
+                            const next = event.target.value;
+                            setChosenRoot(next);
+                            set('category_id', categories.some(category => category.parent_id === next) ? '' : next);
+                        }} required>
+                            <option value="" disabled>{t('Выберите раздел', 'Choose a main category')}</option>
+                            {roots.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
                         </select>
                     </label>
+                    {children.length > 0 && <label className="led-field">
+                        {t('Подкатегория', 'Subcategory')}
+                        <select value={selectedCategory?.parent_id ? form.category_id : ''}
+                            onChange={event => set('category_id', event.target.value)} required={form.category_id !== rootId}>
+                            <option value="" disabled>{t('Выберите подкатегорию', 'Choose a subcategory')}</option>
+                            {children.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+                        </select>
+                    </label>}
 
                     {/* Английская версия обязательна — каталог двуязычный, — но
                         нужна реже: свёрнута, пока заполнена */}

@@ -1,0 +1,210 @@
+{
+  "date": "2026-11-01",
+  "backend": {
+    "passed": 666,
+    "failed": 0,
+    "seconds": 38.27,
+    "warnings": 207,
+    "coverage_scope": "services/routes/utils",
+    "coverage_percent": 75.04
+  },
+  "bot": {
+    "passed": 8,
+    "failed": 0
+  },
+  "ops_scripts": {
+    "passed": 5,
+    "failed": 0
+  },
+  "http": {
+    "passed": 197,
+    "total": 197
+  },
+  "growth_http": {
+    "passed": 91,
+    "total": 91,
+    "failed": []
+  },
+  "load_realistic": {
+    "users": 300,
+    "seconds": 55,
+    "requests": 4517,
+    "rps": 82,
+    "errors": 0,
+    "p50_ms": 4,
+    "p95_ms": 49,
+    "p99_ms": 83,
+    "max_ms": 505,
+    "statuses": {
+      "200": 4517
+    },
+    "cache_hits": 2072,
+    "by_endpoint": {
+      "главная страница": {
+        "n": 167,
+        "p50": 3,
+        "p95": 19,
+        "errors": 0
+      },
+      "карточка товара": {
+        "n": 469,
+        "p50": 13,
+        "p95": 32,
+        "errors": 0
+      },
+      "каталог (страница)": {
+        "n": 1705,
+        "p50": 3,
+        "p95": 25,
+        "errors": 0
+      },
+      "каталог по категории": {
+        "n": 546,
+        "p50": 3,
+        "p95": 25,
+        "errors": 0
+      },
+      "категории": {
+        "n": 298,
+        "p50": 3,
+        "p95": 18,
+        "errors": 0
+      },
+      "корзина (личные данные)": {
+        "n": 527,
+        "p50": 11,
+        "p95": 39,
+        "errors": 0
+      },
+      "магазины": {
+        "n": 264,
+        "p50": 3,
+        "p95": 18,
+        "errors": 0
+      },
+      "настройки": {
+        "n": 179,
+        "p50": 3,
+        "p95": 29,
+        "errors": 0
+      },
+      "поиск": {
+        "n": 362,
+        "p50": 49,
+        "p95": 88,
+        "errors": 0
+      }
+    }
+  },
+  "load_cold_with_growth": {
+    "users": 300,
+    "seconds": 54.8,
+    "requests": 4521,
+    "errors": 0,
+    "p95_ms": 34.5,
+    "p99_ms": 48.5,
+    "by_endpoint": {
+      "categories": {
+        "n": 248,
+        "p95_ms": 14.2
+      },
+      "catalog": {
+        "n": 1706,
+        "p95_ms": 21.0
+      },
+      "giveaways": {
+        "n": 235,
+        "p95_ms": 23.1
+      },
+      "cart": {
+        "n": 478,
+        "p95_ms": 25.9
+      },
+      "stores": {
+        "n": 262,
+        "p95_ms": 13.8
+      },
+      "search": {
+        "n": 362,
+        "p95_ms": 51.5
+      },
+      "product": {
+        "n": 469,
+        "p95_ms": 27.9
+      },
+      "rankings": {
+        "n": 214,
+        "p95_ms": 25.1
+      },
+      "category": {
+        "n": 547,
+        "p95_ms": 16.1
+      }
+    }
+  },
+  "browser": {
+    "mock_suites_passed": 4,
+    "real_api": "signed stage login + transliterated registration, 8 user pages 390px, 5 admin pages; wallet metadata mocked",
+    "real_telegram_login": false,
+    "real_blockchain_payment": false
+  },
+  "security": {
+    "pip_backend_vulnerabilities": 0,
+    "pip_bot_vulnerabilities": 0,
+    "npm_runtime_unique_low_advisories": 1,
+    "npm_runtime_affected_nodes": 3,
+    "npm_runtime_high_critical": 0,
+    "npm_all": {
+      "frontend": {
+        "info": 0,
+        "low": 3,
+        "moderate": 11,
+        "high": 0,
+        "critical": 0,
+        "total": 14
+      },
+      "admin": {
+        "info": 0,
+        "low": 3,
+        "moderate": 12,
+        "high": 0,
+        "critical": 0,
+        "total": 15
+      }
+    },
+    "bandit": {
+      "high": 0,
+      "medium": 2,
+      "low": 9
+    }
+  },
+  "lint": {
+    "frontend": {
+      "errors": 63,
+      "warnings": 16
+    },
+    "admin": {
+      "errors": 114,
+      "warnings": 5
+    }
+  },
+  "production_changed": false,
+  "deployment_authorized": false,
+  "cleanup_complete": true,
+  "timezone": "Europe/Moscow",
+  "production_readonly": {
+    "schema_revision": "f7a8b9c0d1e2",
+    "health_http": 200,
+    "bot_username": "Funshop_bot",
+    "debug": false,
+    "algorithm": "HS256",
+    "secret_at_least_32_bytes": true,
+    "secret_known_placeholder": false,
+    "nginx_bind_mount_hashes_equal": true,
+    "ledger_accounts": 4,
+    "ledger_issues": 0,
+    "backup_timer_success": true,
+    "monitor_timer_success": true,
+    "latest_regular_backup_gzip_valid": "marketplace_20261101_003005.sql.gz"
+  }
+}

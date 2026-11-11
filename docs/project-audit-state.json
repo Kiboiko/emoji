@@ -1,0 +1,215 @@
+{
+  "date": "2026-11-01",
+  "status": "completed_with_findings",
+  "user_scope": "Maximum practical verification of the whole project; check old creation/transliteration/auth failures; fix reproduced issues. Production read-only; isolated tests allowed; no deployment or real external transactions.",
+  "subagents": false,
+  "findings": [
+    {
+      "id": "A1",
+      "status": "fixed_verified",
+      "issue": "Cabinet mounts and requests seller profile before Telegram authentication finishes.",
+      "evidence": "seller-auth-ui-smoke failed on old code with 2 early profile requests, passes after App.tsx fix."
+    },
+    {
+      "id": "A2",
+      "status": "fixed_verified",
+      "issue": "Late 401 for previous token logs out fresh session.",
+      "evidence": "same regression failed before client.ts change, now passes; current-token 401 still logs out."
+    },
+    {
+      "id": "A3",
+      "status": "fixed_verified",
+      "issue": "npm security advisories in both applications.",
+      "evidence": "compatible audit fix updates lockfiles; high/critical now zero, moderate/low remain."
+    },
+    {
+      "id": "A4",
+      "status": "fixed_verified",
+      "issue": "Concurrent seller registration returns 500 for loser.",
+      "evidence": "real nginx HTTP [200,500] before fix; User row lock + friendly unique conflict; 2 independent-session tests passed and growth HTTP passed after fix."
+    },
+    {
+      "id": "A5",
+      "status": "fixed_verified",
+      "issue": "Concurrent first Telegram login returns 500 on unique Telegram identity.",
+      "evidence": "Deterministic independent-session barrier reproduced [200,500]; IntegrityError recovery added. Full 666-test suite and nginx HTTP checks passed."
+    },
+    {
+      "id": "A6",
+      "status": "fixed_verified",
+      "issue": "Fresh Python image includes vulnerable python-jose and ecdsa with no patched versions.",
+      "evidence": "pip-audit 3 reports/2 packages; switch utils/auth.py to existing PyJWT and remove python-jose; legacy jose HS256 compatibility fixture added."
+    },
+    {
+      "id": "A7",
+      "status": "fixed_verified",
+      "issue": "Active promotions force full catalog sort and degrade latency under 300 users.",
+      "evidence": "Independent pre-fix mix: 4104 requests,0 errors,p95 1701.6ms,p99 2640.3ms. Query probe execution50.7ms/catalog235ms at5013 products. Paid placements now paged separately; normal tail keeps index. Pagination boundary regression added."
+    },
+    {
+      "id": "A8",
+      "status": "fixed_verified",
+      "issue": "Refresh cookie JWT accepted as access Bearer; decoder now separates token types while accepting legacy access tokens.",
+      "evidence": "Unit and real nginx HTTP rejection; full 666 pass."
+    },
+    {
+      "id": "A9",
+      "status": "fixed_verified",
+      "issue": "Author rating materialized the whole inventory in Python on every product page.",
+      "evidence": "SQL subquery replaces ID array; cardinality regression and cold-cache 300-user load passed."
+    },
+    {
+      "id": "A10",
+      "status": "fixed_verified",
+      "issue": "Malformed bot callbacks raised parsing errors.",
+      "evidence": "Action/number/UUID validation and 8 bot tests."
+    },
+    {
+      "id": "A11",
+      "status": "fixed_verified",
+      "issue": "Bot base image had vulnerable pip/setuptools.",
+      "evidence": "Updated build tools; final bot pip-audit clean."
+    }
+  ],
+  "checks": {
+    "backend_full": "666 passed, 38.27s, 75.04% services/routes/utils coverage; 207 short-test-key warnings",
+    "nginx_integration": "197/197 + growth 91/91 on final candidate",
+    "load": "300 users, cold nginx cache, 4521 requests, 0 errors, p95 34.5ms, p99 48.5ms; primary mix 4517 requests/0 errors/p95 49ms/p99 83ms",
+    "npm_ci_build": "passed both apps; Docker backend/frontend/admin/bot built",
+    "bot": "8 passed; pip check passed; no polling or real messages",
+    "ops_unit": "5 passed",
+    "browser_mock": "4 suites passed, RU/light EN/dark, mobile390",
+    "browser_real_api": "candidate-ui.cjs passed: stage signed login -> transliterated seller; 8 user screens/5 admin screens",
+    "dependency_audit": "Backend/bot pip-audit 0. npm high/critical0; runtime1 unpatched low-advisory via3 TONConnect nodes; dev moderate remain.",
+    "lint": "NOT CLEAN: frontend63 errors/16 warnings, admin114/5; recorded, not hidden",
+    "static_security": "Bandit HIGH0/MEDIUM2/LOW9; medium trusted configured urllib URLs",
+    "production_readonly": "Funshop_bot both containers, DEBUGfalse, HS256 secret >=32 bytes/non-placeholder, frontend bot names correct, nginx host/container hashes match, schema f7a8b9c0d1e2, health200, ledger4 accounts/0 issues, timers successful/enabled, latest backup20261101_003005 gzip valid"
+  },
+  "next_action": "Owner market TEST Market created and checked through real Telegram Desktop. Remaining: phone-specific keyboard/gallery/deep-link/wallet checks; actual product details and stage3 setup; real payments/gifts remain separate.",
+  "artifacts": {
+    "baseline": ".tmp/project-audit-baseline",
+    "production_probe": ".tmp/project-audit-readonly.sh",
+    "regression": "acceptance/seller-auth-ui-smoke.cjs",
+    "report": "docs/PROJECT-AUDIT-2026-11-01.md",
+    "results": "docs/project-audit-results.json",
+    "manifest": "docs/project-audit-manifest.json"
+  },
+  "finished_on": "2026-11-01",
+  "timezone": "Europe/Moscow",
+  "cleanup": {
+    "containers_removed": [
+      "gram-verify-nginx",
+      "gram-verify-backend",
+      "gram-verify-db"
+    ],
+    "networks_removed": [
+      "gram-verify-net",
+      "gram-verify-edge"
+    ],
+    "anonymous_database_volume_removed": true,
+    "copied_uploads_outbox_removed": true,
+    "local_ssh_tunnel_stopped": true,
+    "retained": "/opt/gram-verify-20261101 candidate, test builds and restricted logs; .tmp local ignored evidence",
+    "production_modified": false
+  },
+  "remaining": [
+    "Real Telegram/phone and wallet-owner mainnet validation",
+    "Owner admin-password change and offsite backup destination",
+    "ESLint debt and unpatched low deepmerge advisory"
+  ],
+  "subsequent_deployment": {
+    "date": "2026-11-01",
+    "authorization": "выложи на сайт и дай чеклист",
+    "status": "deployed_manual_acceptance_pending",
+    "report": "docs/DEPLOY-STAGE-3-2026-11-01.md",
+    "revision": "a0032giveaways"
+  },
+  "subsequent_nonfinancial_ui_review": {
+    "date": "2026-11-01",
+    "authorization": "пройди сам все пункты, которые можно проверить без реальных платежей и подарков; Можешь открыть мой телегармм",
+    "telegram_desktop": "Real existing session, Funshop_bot identity, launch and relaunch, authenticated profile, transliterated name input and live terms, RU/EN, light/dark/match Telegram restored, category/search/price sorting/product detail/share recipient chooser cancelled, rankings/giveaways, cart/chats/sales/channels/deals/subscriptions.",
+    "admin_browser": [
+      {
+        "path": "market-ranking",
+        "title": "Рейтинг маркетов",
+        "passed": true
+      },
+      {
+        "path": "publications",
+        "title": "Крупные сделки",
+        "passed": true
+      },
+      {
+        "path": "giveaways",
+        "title": "Розыгрыши подарков",
+        "passed": true
+      },
+      {
+        "path": "moderation",
+        "title": "Модерация",
+        "passed": true
+      },
+      {
+        "path": "categories",
+        "title": "Категории",
+        "passed": true
+      },
+      {
+        "path": "products",
+        "title": "Товары",
+        "passed": true
+      },
+      {
+        "path": "settings",
+        "title": "Настройки",
+        "passed": true
+      }
+    ],
+    "admin_runtime_errors": [],
+    "admin_failed_api": [],
+    "admin_mutations_blocked_except_session": true,
+    "publications_enabled": false,
+    "public_api_sorts": [
+      "default",
+      "price_asc",
+      "price_desc",
+      "rating",
+      "sales"
+    ],
+    "external_browser_requires_telegram": true,
+    "promotion_config": "mainnet, 300000000 nano, 24h",
+    "frontend_patch": {
+      "file": "frontend/src/components/MySubscriptions/MySubscriptions.tsx",
+      "sha256": "1a175c42dae3e304530b9368fea6437e2419d1bf974c397e4a41b50763f9543a",
+      "sha256_lf": "94d83b9e755aabf2fd74996590c51ba303b57232809e26eb28f1255e4a6ca0b8",
+      "frontend_image": "marketplace-frontend:stage3-subscriptions-20261101",
+      "rollback_image": "marketplace-frontend:before-subscriptions-fix-20261101",
+      "archive": "/opt/marketplace-stage3-release-20261101/subscriptions-fix",
+      "reason": "Empty subscriptions page returned null; loading/error/empty states added with retry.",
+      "validation": "npm ci and npm run build passed; public JS/manifest/health checked; real Telegram Desktop close/reopen -> profile -> subscriptions shows empty-state message.",
+      "backend_schema_changed": false
+    },
+    "temporary_admin_session_files_removed": true,
+    "not_performed": [
+      "Real payments, transactions, Telegram posts and gifts",
+      "Public product creation/moderation on owner account: store created; no actual item supplied; isolated scenarios previously passed",
+      "Share message transmission/deep-link round trip; chooser only opened and cancelled"
+    ],
+    "phone_remaining": [
+      "Mobile Telegram launch, keyboard/photo and viewport behavior",
+      "Product Share -> Saved Messages -> reopen product link",
+      "Connect Wallet -> wallet authorization -> return, without transaction"
+    ],
+    "owner_decisions_pending": [
+      "Ranking roster, large-deal chat/threshold and giveaway details",
+      "Admin password and offsite backups"
+    ],
+    "owner_market_registration": {
+      "date": "2026-11-01",
+      "requested_name": "TEST",
+      "requested_name_result": "Already taken: friendly validation; no duplicate created",
+      "approved_name": "TEST Market",
+      "result": "Created through real Telegram Mini App; cabinet and public storefront reopened successfully; empty product list; new-listing form and required-field validation checked; no listing, payment or gift created."
+    }
+  }
+}

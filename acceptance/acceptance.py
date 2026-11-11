@@ -20,6 +20,8 @@ from datetime import datetime, timedelta
 from urllib.parse import quote, urlencode
 
 import httpx
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from PIL import Image
 from sqlalchemy import text
 
@@ -125,7 +127,7 @@ async def main() -> int:
     r = await c.get("/health")
     check("среда", "бэкенд отвечает через nginx", r.status_code == 200, r.text[:80])
     rev = (await db_exec("select version_num from alembic_version"))[0][0]
-    check("среда", "схема базы на последней миграции", rev == "d5e6f7a8b9c0", rev)
+    check("среда", "схема базы на последней миграции", rev == ScriptDirectory.from_config(Config("/app/alembic.ini")).get_current_head(), rev)
     before = {t: (await db_exec(f"select count(*) from {t}"))[0][0]
               for t in ("users", "products", "orders", "deals", "reviews", "product_listings")}
     print("  данные в копии:", before)
@@ -214,9 +216,11 @@ async def main() -> int:
         ("GET", "/api/admin/p2p/deals"), ("GET", "/api/admin/p2p/deals/{deal_id}/messages"),
         ("POST", "/api/admin/p2p/deals/{deal_id}/messages"), ("POST", "/api/admin/p2p/deals/{deal_id}/resolve"),
         ("DELETE", "/api/admin/p2p/listings/{listing_id}/images/{image_id}"), ("DELETE", "/api/admin/p2p/sellers/{seller_id}/avatar"),
+        ("GET", "/api/admin/subscriptions/channel-photos"),
+        ("DELETE", "/api/admin/subscriptions/channels/{channel_id}/photos/{kind}"),
     }
     actual_staff = {(m, r.path) for r in staff_routes for m in r.methods - {"HEAD", "OPTIONS"}}
-    check("П.13–14", "модератору (и администратору) доступны ровно 11 действий: свой пароль и сессии, заявки, споры, удаление фото",
+    check("П.13–14", "модератору (и администратору) доступны ровно 13 действий: свой пароль и сессии, заявки, споры, удаление фото",
           actual_staff == expected_staff, f"лишнее: {sorted(actual_staff - expected_staff)}; пропало: {sorted(expected_staff - actual_staff)}")
 
     public_admin = {"/api/admin/auth/login", "/api/admin/auth/refresh", "/api/admin/auth/logout"}
@@ -720,7 +724,7 @@ async def main() -> int:
     seen, pages, times, sizes, skip, wrong_flag = [], 0, [], [], 0, 0
     while True:
         t = time.perf_counter()
-        r = await c.get("/api/products", params={"skip": skip, "limit": 40, "lang": "ru"})
+        r = await get_fresh("/api/products", params={"skip": skip, "limit": 40, "lang": "ru"})
         times.append((time.perf_counter() - t) * 1000)
         sizes.append(len(r.content))
         items = r.json()
@@ -743,7 +747,8 @@ async def main() -> int:
           f"~{METRICS['catalog_walk']['avg_page_kb']} КБ; прежняя выдача целиком была бы ~{METRICS['old_behaviour_kb']} КБ")
     check("П.16", f"страница каталога при {eligible} товарах отвечает быстро (p95 < 300 мс)", pct(times, .95) < 300, f"{pct(times, .95):.0f} мс")
     first = (await c.get("/api/products", params={"limit": 5, "lang": "ru"})).json()
-    check("П.16", "хиты идут первыми", all(p["is_top"] for p in first[:3]))
+    ordinary = [p for p in first if not p.get("is_promoted")]
+    check("П.16", "хиты идут первыми после оплаченного ПРОМО", len(ordinary) >= 3 and all(p["is_top"] for p in ordinary[:3]))
     over = await c.get("/api/products", params={"limit": 100000})
     check("П.16", "потолок размера страницы (100) не обойти параметром", len(over.json()) == 100)
     for term, label in (("Нагрузка 4999", "по названию"), ("load item description 123", "по описанию на английском")):
@@ -806,7 +811,9 @@ async def main() -> int:
 
     # --- микрокеш nginx
     head("П.16. Микрокеш публичных ответов (nginx)")
-    q = {"limit": 40, "lang": "ru", "skip": 120}
+    # A unique key isolates this cache assertion from catalog walks and a
+    # previous run's stale-while-revalidate response after restoring the DB.
+    q = {"limit": 40, "lang": "ru", "skip": 120, "_probe": uuid.uuid4().hex}
     first = await c.get("/api/products", params=q)
     second = await c.get("/api/products", params=q)
     check("П.16", "первый запрос каталога идёт в бэкенд (MISS), повторный — из кеша (HIT)",
@@ -856,8 +863,8 @@ async def main() -> int:
 
     # --- нагрузка
     head("П.16. Живые пользователи (предельные нагрузки — отдельным испытанием на k6)")
-    categories = [x["id"] for x in (await c.get("/api/categories?lang=ru")).json()]
-    product_ids = [p["id"] for p in (await c.get("/api/products", params={"limit": 100, "lang": "ru"})).json()]
+    categories = [x["id"] for x in (await get_fresh("/api/categories?lang=ru")).json()]
+    product_ids = [p["id"] for p in (await get_fresh("/api/products", params={"limit": 100, "lang": "ru"})).json()]
     shopper_tokens = [(await make_app_user(f"load{i}"))[1] for i in range(20)]
 
     async def load_profile(label: str, users: int, seconds: int, think: tuple[float, float]) -> dict:

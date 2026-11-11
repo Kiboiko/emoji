@@ -1,3 +1,4 @@
+import { MarketRanking, Publications, AdminGiveaways } from "./pages/Growth";
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
@@ -50,6 +51,9 @@ function App() {
               <Route path="audit" element={<AuditLog />} />
               <Route path="security" element={<Security />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="market-ranking" element={<MarketRanking />} />
+              <Route path="publications" element={<Publications />} />
+              <Route path="giveaways" element={<AdminGiveaways />} />
             </Route>
           </Routes>
         </BrowserRouter>

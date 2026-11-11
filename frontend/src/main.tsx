@@ -21,16 +21,21 @@ import '@fontsource/golos-text/latin-600.css'
 import '@fontsource/golos-text/latin-700.css'
 
 import './index.css'
+import { markStartup, captureStartupIntro } from './store/startupStore'
 
 // Манифест должен раздаваться по тому же origin, что и приложение, иначе
 // кошельки его не примут. Файл лежит в public/ и попадает в корень сборки.
-const MANIFEST_URL = `${window.location.origin}/tonconnect-manifest.json`
+const MANIFEST_URL = `${window.location.origin}/tonconnect-manifest-safedeal.json`
 
 // Внутри Telegram Mini App кошелёк открывается в отдельном приложении.
 // Без returnStrategy пользователь после подписи остаётся в кошельке и не
 // видит, что заказ оплачен.
 const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME
 
+markStartup('app')
+const telegramLaunch = Boolean(window.Telegram?.WebApp.initData
+    || new URLSearchParams(window.location.hash.slice(1)).has('tgWebAppData'))
+captureStartupIntro(document.getElementById('launch-video') as HTMLVideoElement | null, telegramLaunch)
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         <TonConnectUIProvider

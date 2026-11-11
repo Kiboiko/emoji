@@ -1,3 +1,11 @@
+import { Rankings, Giveaways } from "./pages/Growth/Growth";
+import { StartLinkGate } from './components/StartLinkGate/StartLinkGate';
+import { StartupScreen, StartupRouteReady } from './components/StartupScreen/StartupScreen';
+import { markStartup, finishStartupData, failStartup } from './store/startupStore';
+import { SalesFeed } from './pages/SalesFeed/SalesFeed';
+import { SubscriptionEditor } from './pages/SubscriptionEditor/SubscriptionEditor';
+import { InquiryChat } from './pages/InquiryChat/InquiryChat';
+import { startInquiries, useInquiryStore } from './store/inquiryStore';
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -52,15 +60,24 @@ export const App: React.FC = () => {
     useEffect(() => {
         if (accessToken) startDeals();
     }, [accessToken]);
+    useEffect(() => {
+        if (!accessToken) { useInquiryStore.setState({ rows: [] }); return; }
+        return startInquiries();
+    }, [accessToken]);
 
     useEffect(() => {
-        if (isReady && !isAuthenticated) {
+        // Кабинет не должен запрашивать профиль старым токеном, пока SDK
+        // готовит initData и идёт новый вход. Иначе 401 выглядит как отсутствие
+        // магазина, а запоздавший ответ может сбросить уже новую сессию.
+        if (!isReady) return;
+        markStartup('telegram');
+        if (!isAuthenticated) {
+            setIsAuthenticating(true);
             authenticate();
-        } else if (isReady && isAuthenticated) {
+        } else {
+            markStartup('auth');
             // Already authenticated (restored from storage), load data
             useCartStore.getState().fetchCart();
-            setIsAuthenticating(false);
-        } else {
             setIsAuthenticating(false);
         }
     }, [isReady]);
@@ -201,12 +218,15 @@ export const App: React.FC = () => {
                     const response = await authApi.authenticateDev();
                     setAccessToken(response.access_token);
                     setUser(response.user);
+                    markStartup('auth');
                     useCartStore.getState().fetchCart();
                     setIsAuthenticating(false);
                     return;
                 }
 
                 console.warn('No Telegram initData available');
+                markStartup('auth');
+                finishStartupData();
                 setIsAuthenticating(false);
                 return;
             }
@@ -220,12 +240,13 @@ export const App: React.FC = () => {
 
             setAccessToken(response.access_token);
             setUser(response.user);
+            markStartup('auth');
 
             // Sync cart with server immediately
             useCartStore.getState().fetchCart();
 
         } catch (error: any) {
-            console.error('Authentication failed:', error);
+            console.warn('Telegram sign-in failed', { status: error?.response?.status, code: error?.code });
             // Раньше неудачный вход молчал: приложение открывалось «гостем», а
             // человек видел невнятные ошибки в разных местах (например, при
             // регистрации магазина) и не понимал, что дело во входе.
@@ -240,41 +261,37 @@ export const App: React.FC = () => {
                     : (ru ? 'Не удалось войти через Telegram. Откройте приложение заново.'
                         : 'Sign-in failed. Reopen the app.');
             useToastStore.getState().show(text, 'error');
+            failStartup(text, () => { setIsAuthenticating(true); void authenticate(); });
         } finally {
             setIsAuthenticating(false);
         }
     };
 
-    if (isAuthenticating) {
-        return (
-            <div className="boot-screen">
-                <div className="skeleton boot-placeholder" />
-            </div>
-        );
-    }
-
-    if (!initData && !DEV_AUTH_ENABLED) {
+    if (!isAuthenticating && !initData && !DEV_AUTH_ENABLED) {
         // Цвета брались жёстко белым по тёмному: в тёмной теме этот экран
         // вспыхивал белым прямоугольником поверх тёмного Telegram
         return (
-            <div className="boot-screen boot-screen-message">
+            <><StartupScreen /><div className="boot-screen boot-screen-message">
                 <div className="boot-title">Откройте через Telegram</div>
                 <div className="boot-text">
                     Это приложение работает только внутри Telegram.
                     Откройте бота и нажмите кнопку запуска.
                 </div>
-            </div>
+            </div></>
         );
     }
 
     return (
-        <BrowserRouter>
+        <><StartupScreen />{!isAuthenticating && <BrowserRouter>
             <div className="app relative">
-                <AppContent />
-                <NavigationWrapper />
+                <StartLinkGate startParam={startParam}>
+                    <StartupRouteReady />
+                    <AppContent />
+                    <NavigationWrapper />
+                </StartLinkGate>
                 <ToastHost />
             </div>
-        </BrowserRouter>
+        </BrowserRouter>}</>
     );
 };
 
@@ -285,11 +302,20 @@ const AppContent: React.FC = () => {
     // у «/» и «/product/:id» он общий: раньше смена адреса пересоздавала
     // каталог под карточкой — он заново грузился, показывал заглушки и
     // мигал и при открытии товара, и при возврате
-    const screenKey = location.pathname.startsWith('/product/') ? '/' : location.pathname;
+    const screenKey = location.pathname.startsWith('/product/') ? '/'
+        : location.pathname.startsWith('/chats/seller/') ? '/chats/seller'
+        : location.pathname;
 
     return (
         <>
             <Routes location={location} key={screenKey}>
+                <Route path="/rankings" element={<PageTransition><Rankings /></PageTransition>} />
+                <Route path="/giveaways" element={<PageTransition><Giveaways /></PageTransition>} />
+                <Route path="/giveaways/:id" element={<PageTransition><Giveaways /></PageTransition>} />
+                <Route path="/sales" element={<PageTransition><SalesFeed /></PageTransition>} />
+                <Route path="/my/channels/new" element={<PageTransition><SubscriptionEditor /></PageTransition>} />
+                <Route path="/my/channels/:channelId" element={<PageTransition><SubscriptionEditor /></PageTransition>} />
+                <Route path="/chats/seller/:id" element={<PageTransition><InquiryChat /></PageTransition>} />
                 <Route path="/" element={
                     <PageTransition>
                         <HomeWithProductOverlay />
@@ -414,15 +440,19 @@ const PageTransition: React.FC<{ children: React.ReactNode }> = ({ children }) =
 const HomeWithProductOverlay: React.FC = () => {
     const location = useLocation();
     const isProductPage = location.pathname.startsWith('/product/');
+    const [hasCatalog, setHasCatalog] = React.useState(!isProductPage);
+    useEffect(() => {
+        if (!isProductPage) setHasCatalog(true);
+    }, [isProductPage]);
 
     return (
         <>
-            <Home />
+            {(!isProductPage || hasCatalog) && <Home />}
             <AnimatePresence>
                 {isProductPage && (
                     <motion.div
                         key="product-details-overlay"
-                        initial={{ x: '100%' }}
+                        initial={hasCatalog ? { x: '100%' } : false}
                         animate={{ x: 0 }}
                         exit={{ x: '100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
@@ -441,7 +471,7 @@ const NavigationWrapper: React.FC = () => {
     const isProductPage = location.pathname.startsWith('/product/');
     // В чате сделки снизу поле ввода, на странице сделки и в правке
     // объявления — своя панель действий: меню там только мешало бы
-    const ownBottomBar = ['/my/deals/', '/my/deal/', '/my/listings/']
+    const ownBottomBar = ['/my/deals/', '/my/deal/', '/my/listings/', '/chats/seller/']
         .some((prefix) => location.pathname.startsWith(prefix));
 
     if (isProductPage || ownBottomBar) return null;

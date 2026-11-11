@@ -4,7 +4,8 @@ import secrets
 import string
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError as JWTError
 from urllib.parse import parse_qs
 from config import settings
 
@@ -27,6 +28,19 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def _telegram_photo(value) -> str | None:
+    from urllib.parse import urlsplit
+    if not isinstance(value, str) or len(value) > 2048 or any(c.isspace() for c in value):
+        return None
+    try:
+        parsed = urlsplit(value)
+        if parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password and parsed.port in (None, 443):
+            return value
+    except ValueError:
+        pass
+    return None
+
 
 def validate_telegram_webapp_data(init_data: str) -> dict:
     # ... (existing code validation logic) ...
@@ -100,6 +114,7 @@ def validate_telegram_webapp_data(init_data: str) -> dict:
             "telegram_id": user_data.get("id"),
             "username": user_data.get("username"),
             "first_name": user_data.get("first_name"),
+            "photo_url": _telegram_photo(user_data.get("photo_url")),
             "language_code": user_data.get("language_code", "ru"),
         }
     
@@ -152,6 +167,10 @@ def decode_access_token(token: str) -> dict:
     """Decode and verify JWT token"""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        # Old access tokens have no type; refresh cookies must never act as
+        # bearer credentials for ordinary or administrator endpoints.
+        if payload.get("type") not in (None, "access"):
+            raise ValueError("Invalid token type")
         return payload
     except JWTError as e:
         raise ValueError(f"Invalid token: {str(e)}")

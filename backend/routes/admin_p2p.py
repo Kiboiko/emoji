@@ -433,6 +433,14 @@ async def set_seller_verified(
 # Сделки и споры
 # ---------------------------------------------------------------------------
 
+def _can_view_conversation(user: User, deal: Deal) -> bool:
+    return bool(user.is_admin or deal.status == DealStatus.DISPUTED or deal.dispute_opened_at)
+
+
+def _require_conversation_access(user: User, deal: Deal) -> None:
+    if not _can_view_conversation(user, deal):
+        raise HTTPException(status_code=403, detail="Переписка доступна модератору только после подачи жалобы")
+
 @router.get("/deals")
 async def list_deals(
     status: Optional[DealStatus] = Query(None),
@@ -442,6 +450,11 @@ async def list_deals(
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Deal).options(selectinload(Deal.buyer), selectinload(Deal.seller))
+    if not admin.is_admin:
+        allowed = (DealStatus.DISPUTED, DealStatus.PAID_ESCROW)
+        if status and status not in allowed:
+            raise HTTPException(status_code=403, detail="Модератору доступны только споры и сделки в эскроу")
+        stmt = stmt.where(Deal.status.in_(allowed))
     if status:
         stmt = stmt.where(Deal.status == status)
 
@@ -462,6 +475,7 @@ async def list_deals(
                 "buyer": d.buyer.username or str(d.buyer.telegram_id) if d.buyer else None,
                 "seller": d.seller.username or str(d.seller.telegram_id) if d.seller else None,
                 "dispute_reason": d.dispute_reason,
+                "can_view_conversation": _can_view_conversation(admin, d),
                 "confirm_deadline_at": (
                     d.confirm_deadline_at.isoformat() if d.confirm_deadline_at else None
                 ),
@@ -491,6 +505,8 @@ async def deal_conversation(
     deal = await db.get(Deal, deal_id)
     if deal is None:
         raise HTTPException(status_code=404, detail="Сделка не найдена")
+
+    _require_conversation_access(admin, deal)
 
     rows = (
         await db.execute(
@@ -539,6 +555,7 @@ async def moderator_message(
     deal = await db.get(Deal, deal_id)
     if deal is None:
         raise HTTPException(status_code=404, detail="Сделка не найдена")
+    _require_conversation_access(admin, deal)
     if deal.status in deal_service.FINAL:
         raise HTTPException(status_code=400, detail="Сделка завершена, переписка закрыта")
 

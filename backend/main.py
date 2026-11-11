@@ -26,6 +26,7 @@ from models import *
 # Import routers
 from routes import admin_staff
 from routes import auth, products, categories, cart, orders, payments, reviews, users, admin_auth, admin_stats, admin_orders, admin_finance, admin_subscriptions, admin_p2p, admin_referrals, admin_users, deals, internal, p2p, settings as settings_routes, stores, subscriptions, terms, withdrawals
+from routes import promotions
 
 
 from services.scheduler import start_scheduler, shutdown_scheduler
@@ -133,7 +134,7 @@ app.add_middleware(
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-Telegram-Init-Data"],
     max_age=3600,
 )
 
@@ -231,9 +232,12 @@ app.include_router(admin_orders.router)
 app.include_router(auth.router)
 app.include_router(products.router)
 app.include_router(categories.router)
+from routes import sales_feed
+app.include_router(sales_feed.router)
 app.include_router(cart.router)
 app.include_router(orders.router)
 app.include_router(payments.router, prefix="/api")
+app.include_router(promotions.router)
 app.include_router(reviews.router)
 app.include_router(users.router)
 app.include_router(internal.router)
@@ -241,6 +245,9 @@ app.include_router(p2p.router)
 app.include_router(deals.router)
 app.include_router(settings_routes.router)
 app.include_router(stores.router)
+from routes import inquiries, partner_links
+app.include_router(inquiries.router)
+app.include_router(partner_links.router)
 app.include_router(subscriptions.router)
 app.include_router(terms.router)
 app.include_router(withdrawals.router)
@@ -262,3 +269,11 @@ async def health_check():
         "app_name": settings.APP_NAME
     }
 
+
+# Growth modules: public projections and strictly administrator-only controls.
+from routes import market_rankings, admin_publications, giveaways
+app.include_router(market_rankings.router)
+app.include_router(market_rankings.admin_router)
+app.include_router(admin_publications.router)
+app.include_router(giveaways.router)
+app.include_router(giveaways.admin_router)

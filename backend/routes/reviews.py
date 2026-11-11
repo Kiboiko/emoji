@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 import uuid
 
 from database import get_db
@@ -34,26 +34,35 @@ from sqlalchemy.orm import joinedload
 
 @router.get("", response_model=list[ReviewResponse])
 async def get_reviews(
-    product_id: str = None,
-    skip: int = 0,
-    limit: int = 20,
+    product_id: uuid.UUID | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db)
 ):
     """Get reviews for a product with pagination"""
     stmt = select(Review).where(Review.is_hidden == False).options(joinedload(Review.user), joinedload(Review.product))
     
+    # Direct callers historically pass strings and omit pagination arguments.
+    skip = skip if isinstance(skip, int) else 0
+    limit = limit if isinstance(limit, int) else 20
     if product_id:
-        stmt = stmt.where(Review.product_id == uuid.UUID(product_id))
-
-        # Отзывы о товаре продавца показываются только за последние N дней:
-        # это отзывы о нём самом, а репутация — то, как он работает сейчас
-        product = await db.get(Product, uuid.UUID(product_id))
-        if product is not None and product.is_p2p:
-            cutoff = await review_service.window_cutoff(db)
-            if cutoff is not None:
-                stmt = stmt.where(Review.created_at >= cutoff)
-
-    stmt = stmt.order_by(Review.created_at.desc()).offset(skip).limit(limit)
+        product = await db.get(Product, uuid.UUID(str(product_id)))
+        if product is not None and product.owner_user_id:
+            ranked = review_service.ranked_seller_reviews([product.owner_user_id])
+            stmt = stmt.where(Review.id.in_(select(ranked.c.review_id).where(
+                ranked.c.position <= review_service.SELLER_REVIEW_LIMIT)))
+        else:
+            stmt = stmt.where(Review.product_id == uuid.UUID(str(product_id)))
+            if product is not None and product.is_p2p:
+                recent = (select(Review.id).where(Review.product_id == product.id, Review.is_hidden.is_(False))
+                    .order_by(Review.created_at.desc(), Review.id.desc()).limit(review_service.SELLER_REVIEW_LIMIT))
+                stmt = stmt.where(Review.id.in_(recent))
+    else:
+        ranked = review_service.ranked_seller_reviews()
+        owned = select(Product.id).where(Product.owner_user_id.is_not(None))
+        stmt = stmt.where(or_(Review.product_id.not_in(owned), Review.id.in_(
+            select(ranked.c.review_id).where(ranked.c.position <= review_service.SELLER_REVIEW_LIMIT))))
+    stmt = stmt.order_by(Review.created_at.desc(), Review.id.desc()).offset(skip).limit(limit)
     result = await db.execute(stmt)
     reviews = result.scalars().all()
     

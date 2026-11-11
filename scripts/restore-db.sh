@@ -15,6 +15,7 @@
 #   TARGET_DB=marketplace_restore_test ./scripts/restore-db.sh <файл>
 
 set -euo pipefail
+umask 077
 
 cd "$(dirname "$0")/.."
 
@@ -38,6 +39,7 @@ env_value() {
     local line
     line="$(grep -m1 "^$1=" .env || true)"
     line="${line#*=}"
+    line="${line%$'\r'}"
     line="${line%\"}"; line="${line#\"}"
     line="${line%\'}"; line="${line#\'}"
     printf '%s' "$line"
@@ -49,6 +51,8 @@ SOURCE_DB="${DB_NAME:-$(env_value DB_NAME)}"
 SOURCE_DB="${SOURCE_DB:-marketplace}"
 TARGET_DB="${TARGET_DB:-$SOURCE_DB}"
 SERVICE="postgres"
+[[ "$TARGET_DB" =~ ^[a-zA-Z0-9_]+$ && "$DB_USER" =~ ^[a-zA-Z0-9_]+$ ]] || { echo "Invalid database/user identifier" >&2; exit 1; }
+
 
 echo "Дамп:      $DUMP"
 echo "База:      $TARGET_DB"
@@ -62,16 +66,24 @@ read -r -p "Продолжить? Введите yes: " CONFIRM
 # Страховка: копия текущего состояния перед накатом
 SAFETY="backups/pre-restore_$(date +%Y%m%d_%H%M%S).sql.gz"
 mkdir -p backups
-echo "Сохраняю текущее состояние в $SAFETY"
-docker compose exec -T "$SERVICE" \
-    pg_dump -U "$DB_USER" -d "$TARGET_DB" --clean --if-exists 2>/dev/null \
-    | gzip -9 > "$SAFETY" || echo "  (база пуста или не существует — пропускаю)"
+if [[ "$TARGET_DB" == "$SOURCE_DB" ]]; then
+    echo "Сохраняю текущее состояние в $SAFETY"
+    TMP="${SAFETY}.part"
+    trap 'rm -f -- "$TMP"' EXIT
+    docker compose -f docker-compose.yml exec -T "$SERVICE" \
+        pg_dump -U "$DB_USER" -d "$TARGET_DB" --clean --if-exists < /dev/null \
+        | gzip -9 > "$TMP"
+    gzip -t "$TMP"
+    mv "$TMP" "$SAFETY"
+else
+    SAFETY="не создавалась: отдельная тестовая база"
+fi
 
 # Отдельная база для проверки создаётся на лету
 if [[ "$TARGET_DB" != "$SOURCE_DB" ]]; then
     echo "Создаю базу $TARGET_DB"
-    docker compose exec -T "$SERVICE" \
-        psql -U "$DB_USER" -d postgres \
+    docker compose -f docker-compose.yml exec -T "$SERVICE" \
+        psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 \
         -c "DROP DATABASE IF EXISTS \"$TARGET_DB\";" \
         -c "CREATE DATABASE \"$TARGET_DB\" OWNER \"$DB_USER\";"
 fi
@@ -79,12 +91,12 @@ fi
 echo "Восстанавливаю..."
 # ON_ERROR_STOP: без него psql проглатывает ошибки и заканчивает с кодом 0,
 # оставляя базу наполовину восстановленной
-gunzip -c "$DUMP" | docker compose exec -T "$SERVICE" \
+gunzip -c "$DUMP" | docker compose -f docker-compose.yml exec -T "$SERVICE" \
     psql -U "$DB_USER" -d "$TARGET_DB" -v ON_ERROR_STOP=1 --quiet
 
 echo
 echo "Готово. Проверка:"
-docker compose exec -T "$SERVICE" psql -U "$DB_USER" -d "$TARGET_DB" -t -c "
+docker compose -f docker-compose.yml exec -T "$SERVICE" psql -U "$DB_USER" -d "$TARGET_DB" -t -c "
     SELECT 'пользователей: ' || (SELECT count(*) FROM users)
         || ', заказов: '     || (SELECT count(*) FROM orders)
         || ', сделок: '      || (SELECT count(*) FROM deals)

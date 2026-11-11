@@ -48,6 +48,24 @@ def _bearer(user: User, **extra) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+async def test_telegram_login_preflight_accepts_init_data_only_from_allowed_origins(client):
+    from main import origins
+
+    headers = {
+        "Origin": origins[0],
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "authorization,content-type,x-telegram-init-data",
+    }
+    response = await client.options("/api/auth/telegram", headers=headers)
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origins[0]
+    assert "x-telegram-init-data" in response.headers["access-control-allow-headers"].lower()
+
+    response = await client.options("/api/auth/telegram", headers={**headers, "Origin": "https://untrusted.example"})
+    assert response.status_code == 400
+    assert "access-control-allow-origin" not in response.headers
+
+
 @pytest.fixture
 async def staff(db, user_factory):
     admin = await user_factory(username="wire_admin", is_admin=True)
@@ -62,6 +80,7 @@ async def test_moderator_reaches_only_the_moderator_sections(client, staff):
 
     allowed = [
         "/api/admin/p2p/listings", "/api/admin/p2p/deals",
+        "/api/admin/subscriptions/channel-photos",
     ]
     for path in allowed:
         assert (await client.get(path, headers=mod)).status_code == 200, path
@@ -84,7 +103,7 @@ async def test_moderator_reaches_only_the_moderator_sections(client, staff):
 async def test_regular_user_is_refused_everywhere_in_the_panel(client, staff):
     _, _, stranger = staff
     headers = _bearer(stranger)
-    for path in ("/api/admin/p2p/listings", "/api/admin/staff/moderators", "/api/admin/settings"):
+    for path in ("/api/admin/p2p/listings", "/api/admin/staff/moderators", "/api/admin/settings", "/api/admin/subscriptions/channel-photos"):
         assert (await client.get(path, headers=headers)).status_code == 403, path
     assert (await client.get("/api/admin/p2p/listings")).status_code == 401
 
@@ -258,3 +277,116 @@ async def test_terms_language_parameter_over_http(client, db):
 
     assert ru.json()["text"] == "Русский текст"
     assert en.json()["text"] == "English text" and en.json()["language"] == "en"
+
+
+@pytest.mark.parametrize("first_kind", ["avatar", "cover"])
+async def test_moderator_removes_channel_photos_everywhere(client, db, staff, tmp_path, monkeypatch, first_kind):
+    from unittest.mock import AsyncMock
+    from sqlalchemy import select
+    from models.subscription import Channel, ChannelStatus, SubscriptionPlan
+    from models.admin_log import AdminAuditLog
+    from routes import admin_subscriptions
+
+    admin, moderator, stranger = staff
+    headers = _bearer(moderator, role="moderator")
+    sent = AsyncMock()
+    monkeypatch.setattr(admin_subscriptions.telegram_service, "send_message", sent)
+    category = Category(id=uuid.uuid4(), name_ru="Подписки", name_en="Subscriptions")
+    db.add(category)
+    await db.flush()
+    channel = Channel(
+        id=uuid.uuid4(), owner_user_id=admin.id, title="Канал", telegram_chat_id=-100555,
+        status=ChannelStatus.ACTIVE, avatar_url="/uploads/channels/avatar.jpg?v=123",
+        cover_url="/uploads/channels/cover.jpg", payout_wallet="private-wallet",
+    )
+    product = Product(
+        id=uuid.uuid4(), name_ru="Тариф", name_en="Plan", description_ru="d", description_en="d",
+        price_usdt=Decimal("1"), image_url=channel.cover_url, category_id=category.id,
+        type="subscription", content_data={},
+    )
+    db.add_all([channel, product])
+    await db.flush()
+    db.add(SubscriptionPlan(
+        channel_id=channel.id, product_id=product.id, title_ru="Месяц", title_en="Month",
+        duration_days=30, price_usd=Decimal("1"),
+    ))
+    await db.flush()
+    for name in ("avatar.jpg", "cover.jpg"):
+        for rel in (f"channels/{name}", f"_web/uploads/channels/{name}.jpg", f"_thumb/uploads/channels/{name}.jpg"):
+            path = tmp_path / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"photo")
+    page = await client.get("/api/admin/subscriptions/channel-photos", headers=headers)
+    assert page.status_code == 200
+    assert set(page.json()["items"][0]) == {"id", "title", "avatar_url", "cover_url"}
+    for kind in (first_kind, "cover" if first_kind == "avatar" else "avatar"):
+        path = f"/api/admin/subscriptions/channels/{channel.id}/photos/{kind}"
+        assert (await client.delete(path)).status_code == 401
+        assert (await client.delete(path, headers=_bearer(stranger))).status_code == 403
+        assert (await client.delete(path, headers=headers)).status_code == 200
+        await db.refresh(channel)
+        await db.refresh(product)
+        assert getattr(channel, f"{kind}_url") is None
+        assert product.image_url == (channel.cover_url or channel.avatar_url or "/uploads/products/placeholder.png")
+        assert not (tmp_path / f"channels/{kind}.jpg").exists()
+        assert not (tmp_path / f"_web/uploads/channels/{kind}.jpg.jpg").exists()
+        assert not (tmp_path / f"_thumb/uploads/channels/{kind}.jpg.jpg").exists()
+        assert (await client.delete(path, headers=headers)).status_code == 400
+    assert sent.await_count == 2
+    entries = (await db.execute(select(AdminAuditLog).where(AdminAuditLog.target_id == str(channel.id)))).scalars().all()
+    assert {e.details["kind"] for e in entries} == {"channel_avatar", "channel_cover"}
+    assert all(e.actor_role == "moderator" for e in entries)
+    missing = f"/api/admin/subscriptions/channels/{uuid.uuid4()}/photos/avatar"
+    assert (await client.delete(missing, headers=headers)).status_code == 404
+    invalid = f"/api/admin/subscriptions/channels/{channel.id}/photos/invalid"
+    assert (await client.delete(invalid, headers=headers)).status_code == 422
+
+
+@pytest.mark.parametrize("reference", ["same_channel", "other_channel", "product", "gallery", "listing", "seller"])
+async def test_channel_photo_deletion_preserves_shared_file(client, db, staff, tmp_path, monkeypatch, reference):
+    from unittest.mock import AsyncMock
+    from models.subscription import Channel
+    from models.p2p import ListingImage, ProductListing, SellerProfile
+    from routes import admin_subscriptions
+
+    admin, moderator, _ = staff
+    monkeypatch.setattr(admin_subscriptions.telegram_service, "send_message", AsyncMock())
+    url = "/uploads/channels/shared.jpg"
+    channel = Channel(owner_user_id=admin.id, title="Канал", telegram_chat_id=-100556,
+                      avatar_url=url + "?v=1")
+    db.add(channel)
+    if reference == "same_channel":
+        channel.cover_url = url + "?v=2"
+    elif reference == "other_channel":
+        db.add(Channel(owner_user_id=admin.id, title="Другой канал", telegram_chat_id=-100557,
+                       avatar_url=url + "?v=2"))
+    elif reference in ("product", "gallery"):
+        category = Category(id=uuid.uuid4(), name_ru="Товары", name_en="Products")
+        db.add(category)
+        await db.flush()
+        db.add(Product(name_ru="Товар", name_en="Product", description_ru="d", description_en="d",
+                       price_usdt=Decimal("1"), category_id=category.id, type="service", content_data={},
+                       image_url=url if reference == "product" else "/uploads/products/placeholder.png",
+                       images=[url + "?v=2"] if reference == "gallery" else []))
+    else:
+        seller = SellerProfile(user_id=admin.id, display_name="Магазин", payout_wallet="",
+                               avatar_url=url if reference == "seller" else None)
+        db.add(seller)
+        await db.flush()
+        if reference == "listing":
+            listing = ProductListing(seller_id=seller.id, name="Товар", description="Описание",
+                                     price_usd=Decimal("1"))
+            db.add(listing)
+            await db.flush()
+            db.add(ListingImage(listing_id=listing.id, url=url + "?v=2"))
+    await db.flush()
+    paths = [tmp_path / rel for rel in ("channels/shared.jpg", "_web/uploads/channels/shared.jpg.jpg", "_thumb/uploads/channels/shared.jpg.jpg")]
+    for path in paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"shared")
+    response = await client.delete(f"/api/admin/subscriptions/channels/{channel.id}/photos/avatar",
+                                   headers=_bearer(moderator, role="moderator"))
+    assert response.status_code == 200
+    await db.refresh(channel)
+    assert channel.avatar_url is None
+    assert all(path.exists() for path in paths)

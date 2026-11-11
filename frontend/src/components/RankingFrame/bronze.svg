@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 120 136" fill="none">
+  <defs>
+    <linearGradient id="metal" x1="14" y1="18" x2="106" y2="123" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffdbb5"/><stop offset=".22" stop-color="#be8356"/>
+      <stop offset=".43" stop-color="#ffdbb5"/><stop offset=".57" stop-color="#68412b"/>
+      <stop offset=".8" stop-color="#be8356"/><stop offset="1" stop-color="#efbc8b"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="49" y1="107" x2="70" y2="133" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#be8356"/><stop offset="1" stop-color="#68412b"/>
+    </linearGradient>
+    <g id="branch">
+      <path d="M15 76C10 98 25 116 47 121" stroke-width="1.2"/>
+      <path transform="rotate(0 60 70)" d="M16 78C8 76 6 68 8 63C15 67 19 72 16 78ZM16 78C17 70 22 67 26 67C26 74 22 79 16 78Z"/>
+      <path transform="rotate(-14 60 70)" d="M16 78C8 76 6 68 8 63C15 67 19 72 16 78ZM16 78C17 70 22 67 26 67C26 74 22 79 16 78Z"/>
+      <path transform="rotate(-28 60 70)" d="M16 78C8 76 6 68 8 63C15 67 19 72 16 78ZM16 78C17 70 22 67 26 67C26 74 22 79 16 78Z"/>
+      <path transform="rotate(-42 60 70)" d="M16 78C8 76 6 68 8 63C15 67 19 72 16 78ZM16 78C17 70 22 67 26 67C26 74 22 79 16 78Z"/>
+      <path transform="rotate(-56 60 70)" d="M16 78C8 76 6 68 8 63C15 67 19 72 16 78ZM16 78C17 70 22 67 26 67C26 74 22 79 16 78Z"/>
+      <path transform="rotate(-70 60 70)" d="M16 78C8 76 6 68 8 63C15 67 19 72 16 78ZM16 78C17 70 22 67 26 67C26 74 22 79 16 78Z"/>
+    </g>
+  </defs>
+  <circle cx="60" cy="69" r="46" stroke="#68412b" stroke-width="5"/>
+  <circle cx="60" cy="69" r="46" stroke="url(#metal)" stroke-width="3"/>
+  <circle cx="60" cy="69" r="41.5" stroke="url(#metal)" stroke-width="1.2"/>
+  <path d="M22 45A46 46 0 0 1 45 26M100 48A46 46 0 0 1 106 65" stroke="#ffdbb5" stroke-width="1.5" stroke-linecap="round"/>
+  <g fill="url(#metal)" stroke="#68412b" stroke-width=".5">
+    <use xlink:href="#branch"/>
+    <use xlink:href="#branch" transform="translate(120 0) scale(-1 1)"/>
+  </g>
+  <g fill="url(#metal)" stroke="#68412b" stroke-width=".7">
+    <path d="M60 16L68 25L60 34L52 25Z"/>
+    <path d="M60 16V34M52 25H68" stroke="#ffdbb5"/>
+    <path d="M14 62L19 69L14 76L9 69ZM106 62L111 69L106 76L101 69Z"/>
+  </g>
+  <path d="M60 105L75 110L73 123Q68 130 60 134Q52 130 47 123L45 110Z" fill="url(#shield)" stroke="url(#metal)" stroke-width="2"/>
+  <path d="M60 109L71 113L69 122Q65 127 60 130Q55 127 51 122L49 113Z" stroke="#efbc8b" stroke-width=".6"/>
+  <text x="60" y="125" text-anchor="middle" fill="#ffdbb5" font-size="17" font-weight="700" font-family="Georgia, serif">3</text>
+</svg>

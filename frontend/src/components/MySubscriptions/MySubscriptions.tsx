@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Lock, ExternalLink, RefreshCw, Clock } from 'lucide-react';
 import { subscriptionsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
@@ -11,17 +11,26 @@ export const MySubscriptions: React.FC = () => {
     const { haptic } = useTelegram();
     const [items, setItems] = useState<MySubscription[]>([]);
     const [loading, setLoading] = useState(true);
+    const [failed, setFailed] = useState(false);
     const [reissuing, setReissuing] = useState<string | null>(null);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
-    useEffect(() => {
-        subscriptionsApi
-            .getMySubscriptions()
-            .then(setItems)
-            .catch(() => setItems([]))
-            .finally(() => setLoading(false));
+    const load = useCallback(async () => {
+        setLoading(true);
+        setFailed(false);
+        try {
+            setItems(await subscriptionsApi.getMySubscriptions());
+        } catch {
+            setFailed(true);
+        } finally {
+            setLoading(false);
+        }
     }, []);
+
+    useEffect(() => {
+        void load();
+    }, [load]);
 
     const openLink = (link: string) => {
         haptic.impact('light');
@@ -46,8 +55,22 @@ export const MySubscriptions: React.FC = () => {
         }
     };
 
-    // Блок не занимает место, пока подписок нет
-    if (loading || items.length === 0) return null;
+    if (loading) return <p role="status">{t('Загружаем подписки…', 'Loading subscriptions…')}</p>;
+
+    if (failed) return (
+        <div className="subscriptions-section glass-card" role="alert">
+            <p>{t('Не удалось загрузить подписки. Проверьте соединение и повторите попытку.', 'Could not load subscriptions. Check your connection and try again.')}</p>
+            <button className="subscription-btn" type="button" onClick={() => void load()}>
+                <RefreshCw size={14} />{t('Повторить', 'Retry')}
+            </button>
+        </div>
+    );
+
+    if (items.length === 0) return (
+        <p className="subscriptions-section glass-card">
+            {t('У вас пока нет подписок. После покупки доступа в канал они появятся здесь.', 'You have no subscriptions yet. They will appear here after you purchase access to a channel.')}
+        </p>
+    );
 
     return (
         <div className="subscriptions-section glass-card">

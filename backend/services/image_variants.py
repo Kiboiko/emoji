@@ -8,18 +8,19 @@ PNG остаётся PNG. Сгенерированная картинка 2000×
 
 Оригинал не трогаем: на него ссылаются товары, объявления и снимки сделок, и
 переписывать адреса в базе ради веса файла — риск без пользы. Рядом кладём
-две копии, путь которых повторяет адрес оригинала на сайте:
+две WebP-копии, путь которых повторяет адрес оригинала на сайте:
 
-    _web/uploads/listings/<имя>.png.jpg    до 1280 px — страница товара;
-    _thumb/uploads/listings/<имя>.png.jpg  до 600 px — каталог и списки.
+    _web/uploads/listings/<имя>.png.v3.webp    до 1024 px — страница товара;
+    _thumb/uploads/listings/<имя>.png.v3.webp  до 384 px — каталог и списки;
+    _cart/uploads/listings/<имя>.png.v3.webp   до 160 px — корзина.
 
 nginx (nginx/nginx.conf) по адресу оригинала отдаёт копию, если она есть, и
 сам оригинал, если нет, — адреса в базе и в коде прежние, а без копий всё
 работает как раньше. Картинка с настоящей прозрачностью сохраняется в WebP:
 JPEG залил бы прозрачное чёрным.
 
-Если копия выходит не легче оригинала (небольшой JPEG), вместо неё кладётся
-пустая метка .skip — чтобы не пережимать файл на каждом проходе. Копия и
+Если копия выходит не легче оригинала, вместо неё кладётся
+пустая метка .v2.skip. Версия отличает их от ранее созданных JPEG-копий. Копия и
 метка считаются годными, пока они не старше оригинала: аватар канала
 перезаписывается под тем же именем, и копия от прошлой картинки иначе так бы
 и отдавалась.
@@ -35,11 +36,13 @@ from PIL import Image, ImageOps
 
 logger = logging.getLogger(__name__)
 
-VARIANTS = {"_web": 1280, "_thumb": 600}
-QUALITY = 82
+VARIANTS = {"_web": 1024, "_thumb": 384, "_cart": 160}
+QUALITY = {"_web": 80, "_thumb": 76, "_cart": 76}
 SOURCE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
-OUTPUT_SUFFIXES = (".jpg", ".webp")
-SKIP_SUFFIX = ".skip"
+CURRENT_SUFFIX = ".v3.webp"
+# Retain legacy suffixes for removal of already uploaded files.
+OUTPUT_SUFFIXES = (CURRENT_SUFFIX, ".v2.webp", ".v2.skip", ".jpg", ".webp", ".skip")
+SKIP_SUFFIX = ".v3.skip"
 # Копия легче оригинала меньше чем на десятую часть не стоит лишнего файла
 MIN_SAVING = 0.9
 
@@ -54,15 +57,16 @@ def _with_suffix(base: Path, suffix: str) -> Path:
 
 
 def _is_fresh(base: Path, source_mtime: float) -> bool:
-    for suffix in (*OUTPUT_SUFFIXES, SKIP_SUFFIX):
+    for suffix in (CURRENT_SUFFIX, SKIP_SUFFIX):
         path = _with_suffix(base, suffix)
         if path.exists() and path.stat().st_mtime >= source_mtime:
             return True
     return False
 
 
-def _drop(base: Path) -> None:
-    for suffix in (*OUTPUT_SUFFIXES, SKIP_SUFFIX):
+def _drop(base: Path, legacy: bool = True) -> None:
+    suffixes = (*OUTPUT_SUFFIXES, SKIP_SUFFIX) if legacy else (CURRENT_SUFFIX, SKIP_SUFFIX)
+    for suffix in suffixes:
         _with_suffix(base, suffix).unlink(missing_ok=True)
 
 
@@ -85,7 +89,7 @@ def build(root: Path, source: Path, force: bool = False) -> int:
     for variant, side in VARIANTS.items():
         base = variant_base(root, variant, source)
         if force or not _is_fresh(base, source_mtime):
-            pending.append((base, side))
+            pending.append((base, side, QUALITY[variant]))
     if not pending:
         return 0
 
@@ -97,18 +101,14 @@ def build(root: Path, source: Path, force: bool = False) -> int:
         alpha = _has_alpha(image)
         image = image.convert("RGBA" if alpha else "RGB")
 
-        for base, side in pending:
+        for base, side, quality in pending:
             copy = image.copy()
             copy.thumbnail((side, side), Image.Resampling.LANCZOS)
             out = io.BytesIO()
-            if alpha:
-                copy.save(out, "WEBP", quality=QUALITY, method=4)
-                suffix = ".webp"
-            else:
-                copy.save(out, "JPEG", quality=QUALITY, optimize=True, progressive=True)
-                suffix = ".jpg"
+            copy.save(out, "WEBP", quality=quality, method=4)
+            suffix = CURRENT_SUFFIX
 
-            _drop(base)
+            _drop(base, legacy=False)
             base.parent.mkdir(parents=True, exist_ok=True)
             if out.tell() >= original_size * MIN_SAVING:
                 _with_suffix(base, SKIP_SUFFIX).touch()

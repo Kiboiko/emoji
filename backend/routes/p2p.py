@@ -21,6 +21,7 @@ from fastapi import (
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
 
@@ -401,8 +402,11 @@ async def register_seller(
     if not payload.accept_terms:
         raise HTTPException(status_code=400, detail="Необходимо принять условия площадки")
 
+    user_id = user.id
+    # A double tap/retry must see the profile committed by the first request.
+    await db.execute(select(User.id).where(User.id == user_id).with_for_update())
     existing = (
-        await db.execute(select(SellerProfile).where(SellerProfile.user_id == user.id))
+        await db.execute(select(SellerProfile).where(SellerProfile.user_id == user_id))
     ).scalars().first()
     if existing is not None:
         raise HTTPException(status_code=400, detail="Вы уже зарегистрированы как продавец")
@@ -423,7 +427,16 @@ async def register_seller(
         terms_accepted_at=datetime.utcnow(),
     )
     db.add(profile)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        # Another owner can reserve this case-insensitive name between the
+        # friendly check and INSERT. Preserve the unique index and explain it.
+        if await db.scalar(select(SellerProfile.id).where(SellerProfile.user_id == user_id)):
+            raise HTTPException(status_code=400, detail="Вы уже зарегистрированы как продавец")
+        await _assert_name_is_free(db, name)
+        raise
 
     return {"registered": True, "status": profile.status.value}
 

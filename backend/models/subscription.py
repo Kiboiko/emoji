@@ -52,6 +52,7 @@ class Channel(Base):
     """
     __tablename__ = "channels"
 
+
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     owner_user_id: Mapped[uuid.UUID] = mapped_column(

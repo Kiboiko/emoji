@@ -52,6 +52,7 @@ class LedgerRefType(str, PyEnum):
     WITHDRAWAL = "withdrawal"
     MIGRATION = "migration"
     MANUAL = "manual"
+    PROMOTION = "promotion"
 
 
 class Account(Base):

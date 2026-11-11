@@ -4,23 +4,29 @@ from __future__ import annotations
 
 import logging
 import uuid
+from pathlib import Path
+from typing import Literal
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database import get_db
+from config import settings
 from models.subscription import (
     Channel, ChannelStatus, Subscription, SubscriptionAccessLog,
     SubscriptionStatus,
 )
 from models.user import User
-from services import subscription_service
-from utils.auth import require_admin
+from models.product import Product
+from models.p2p import ListingImage, SellerProfile
+from services import subscription_service, audit_service, image_variants
+from services.telegram_service import telegram_service
+from utils.auth import require_admin, require_staff
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +40,81 @@ class ModerationDecision(BaseModel):
 
 class VerificationDecision(BaseModel):
     verified: bool
+
+
+async def _photo_is_referenced(db: AsyncSession, url: str) -> bool:
+    """Query versions refer to the same disk file and must not break other cards."""
+    path = url.split("?", 1)[0]
+    same_file = lambda column: func.split_part(column, "?", 1) == path
+    images = func.jsonb_array_elements_text(Product.images).table_valued("value")
+    image_in_gallery = select(1).select_from(images).where(same_file(images.c.value)).correlate(Product).exists()
+    references = (
+        select(Channel.id).where(or_(same_file(Channel.avatar_url), same_file(Channel.cover_url))),
+        select(Product.id).where(or_(same_file(Product.image_url), image_in_gallery)),
+        select(ListingImage.id).where(same_file(ListingImage.url)),
+        select(SellerProfile.id).where(same_file(SellerProfile.avatar_url)),
+    )
+    for statement in references:
+        if (await db.execute(statement.limit(1))).first() is not None:
+            return True
+    return False
+
+
+@router.get("/channel-photos")
+async def list_channel_photos(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    admin: User = Depends(require_staff),
+    db: AsyncSession = Depends(get_db),
+):
+    """Минимальный список для удаления фото без доступа к данным подписок."""
+    total = (await db.execute(select(func.count(Channel.id)))).scalar() or 0
+    channels = (await db.execute(
+        select(Channel).order_by(Channel.created_at.desc(), Channel.id)
+        .offset(skip).limit(limit)
+    )).scalars().all()
+    return {"items": [{"id": str(c.id), "title": c.title,
+                       "avatar_url": c.avatar_url, "cover_url": c.cover_url}
+                      for c in channels], "total": total}
+
+
+@router.delete("/channels/{channel_id}/photos/{kind}")
+async def delete_channel_photo(
+    channel_id: uuid.UUID,
+    kind: Literal["avatar", "cover"],
+    admin: User = Depends(require_staff),
+    db: AsyncSession = Depends(get_db),
+):
+    channel = await db.get(Channel, channel_id)
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Канал не найден")
+    url = getattr(channel, f"{kind}_url")
+    if not url:
+        raise HTTPException(status_code=400, detail="У канала нет этого фото")
+    setattr(channel, f"{kind}_url", None)
+    await subscription_service.sync_plan_products(db, channel)
+    audit_service.log_action(
+        db, admin, "photo.delete", target_type="channel", target_id=channel.id,
+        details={"kind": f"channel_{kind}", "name": channel.title, "url": url},
+    )
+    owner = await db.get(User, channel.owner_user_id)
+    await db.commit()
+    try:
+        if not await _photo_is_referenced(db, url):
+            image_variants.remove(Path(settings.UPLOAD_DIR), url)
+    except Exception as exc:
+        logger.warning("[ADMIN] Файл канала не удалён: %s", exc)
+    if owner and owner.telegram_id:
+        label = "аватарку" if kind == "avatar" else "обложку"
+        try:
+            await telegram_service.send_message(
+                owner.telegram_id,
+                f"Модератор удалил {label} канала «{channel.title}». Добавьте другое фото.",
+                parse_mode=None,
+            )
+        except Exception as exc:
+            logger.warning("[ADMIN] Уведомление владельцу канала не отправлено: %s", exc)
+    return {"deleted": True}
 
 
 @router.get("/channels")

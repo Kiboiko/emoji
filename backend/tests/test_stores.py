@@ -22,6 +22,26 @@ from routes import stores
 pytestmark = pytest.mark.asyncio
 
 
+async def test_author_rating_does_not_bind_the_entire_inventory(db, user_factory, product_factory):
+    from sqlalchemy import event
+    owner = await user_factory()
+    seller = SellerProfile(user_id=owner.id, display_name="Large rating shop", payout_wallet="")
+    db.add(seller)
+    await db.flush()
+    for i in range(40):
+        await product_factory(owner=owner, name=f"Inventory {i}")
+    sizes = []
+    engine = db.get_bind().engine
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        sizes.append(len(parameters))
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        assert await stores.rating_for_author(db, "seller", seller.id) == (None, 0)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+    assert max(sizes) < 10, "Author rating binds every product ID instead of aggregating in the DB"
+
+
 @pytest.fixture
 async def category(db):
     row = Category(id=uuid.uuid4(), name_ru="Разное", name_en="Misc")

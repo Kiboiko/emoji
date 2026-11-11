@@ -20,7 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from database import get_db
-from models.order import Order, OrderStatus
+from models.order import Order, OrderItem, OrderStatus
+from models.product import Product
 from models.payment import Payment, PaymentStatus
 from models.user import User
 from schemas.payment import PaymentStatusResponse
@@ -69,6 +70,12 @@ async def init_ton_payment(
     зафиксированный курс — тогда выдаётся новый счёт с актуальным курсом.
     """
     order = await _get_own_order(db, order_id, user)
+
+    own_product = await db.scalar(select(Product.id).join(OrderItem, OrderItem.product_id == Product.id).where(
+        OrderItem.order_id == order.id, Product.owner_user_id == order.user_id,
+    ).limit(1))
+    if own_product is not None:
+        raise HTTPException(status_code=400, detail="Нельзя оплачивать собственный товар")
 
     try:
         payment = await payment_service.create_or_refresh_payment(db, order)

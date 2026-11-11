@@ -52,6 +52,7 @@ class TelegramService:
         # Parse comma-separated list of channel IDs/usernames
         print(f"[TELEGRAM] Raw ADMIN_CHAT_ID from settings: '{settings.ADMIN_CHAT_ID}'")
         self.channel_ids = [c.strip() for c in settings.REVIEWS_CHANNEL_ID.split(",") if c.strip()]
+        self.review_thread_id = settings.REVIEWS_THREAD_ID
         # Support multiple admin chats too
         self.admin_chat_ids = [c.strip() for c in settings.ADMIN_CHAT_ID.split(",") if c.strip()]
         print(f"[TELEGRAM] Initialized. Admin chat IDs to notify: {self.admin_chat_ids}")
@@ -184,13 +185,16 @@ class TelegramService:
         async with httpx.AsyncClient() as client:
             for channel in self.channel_ids:
                 try:
+                    payload = {
+                        "chat_id": channel,
+                        "text": message,
+                        "parse_mode": "HTML",
+                    }
+                    if self.review_thread_id:
+                        payload["message_thread_id"] = self.review_thread_id
                     response = await client.post(
                         f"{self.api_url}/sendMessage",
-                        json={
-                            "chat_id": channel,
-                            "text": message,
-                            "parse_mode": "HTML"
-                        }
+                        json=payload,
                     )
                     response.raise_for_status()
                     result = response.json()
@@ -303,10 +307,11 @@ telegram_service = TelegramService()
 class TelegramApiError(Exception):
     """Ошибка Bot API с сохранённым описанием — его пишем в журнал доступа."""
 
-    def __init__(self, method: str, description: str, error_code: int | None = None):
+    def __init__(self, method: str, description: str, error_code: int | None = None, retry_after: int | None = None):
         self.method = method
         self.description = description
         self.error_code = error_code
+        self.retry_after = retry_after
         super().__init__(f"{method}: {description}")
 
 
@@ -326,6 +331,7 @@ async def _call(method: str, payload: dict) -> dict:
             method,
             data.get("description", "unknown error"),
             data.get("error_code"),
+            (data.get("parameters") or {}).get("retry_after"),
         )
     return data["result"]
 

@@ -42,6 +42,43 @@
     position: relative;
     display: flex;
     align-items: center;
+    flex: 1;
+    min-width: 0;
+}
+
+.header-search-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.header-sales-button {
+    flex: 0 0 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    height: 44px;
+    padding: 3px 4px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.header-sales-button:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+.header-sales-button:active {
+    background: var(--bg-tertiary);
+    color: var(--accent-primary);
 }
 
 .search-icon {
@@ -72,6 +109,19 @@
 .search-input:focus {
     border-color: var(--accent-primary);
     background: var(--bg-primary);
+}
+
+.search-with-actions .search-input {
+    padding-right: 54px;
+}
+
+.search-actions {
+    position: absolute;
+    top: 0;
+    right: 4px;
+    left: 4px;
+    height: 44px;
+    pointer-events: none;
 }
 
 /* --- Переключатель вида каталога ---------------------------------------

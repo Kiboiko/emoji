@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
+from decimal import Decimal
 import uuid
 from datetime import datetime
 
@@ -54,45 +55,50 @@ async def get_cart(
     db: AsyncSession = Depends(get_db)
 ):
     """Get user's cart with product details"""
-    stmt = select(CartItem).where(CartItem.user_id == user.id)
+    stmt = (
+        select(CartItem, Product)
+        .join(Product, Product.id == CartItem.product_id)
+        .where(CartItem.user_id == user.id)
+        .order_by(CartItem.created_at, CartItem.id)
+    )
     result = await db.execute(stmt)
-    cart_items = result.scalars().all()
+    rows = result.all()
+    if not rows:
+        return CartResponse(items=[], total_usdt=0, total_ton=None)
 
     # Позиции, которые человек уже оплатил, из корзины уходят при оплате
     # (routes/orders.complete_order). Здесь подчищаются остатки от заказов,
     # оплаченных до этого исправления: купленный товар возвращался в корзину
     # с «макс. 0» и ценой 0 на кнопке.
     paid = (await db.execute(
-        select(OrderItem.product_id, Order.paid_at)
+        select(OrderItem.product_id, func.max(Order.paid_at))
         .join(Order, Order.id == OrderItem.order_id)
         .where(
             Order.user_id == user.id,
             Order.status.in_([OrderStatus.PAID, OrderStatus.COMPLETED]),
             Order.paid_at.is_not(None),
+            OrderItem.product_id.in_([item.product_id for item, _ in rows]),
         )
+        .group_by(OrderItem.product_id)
     )).all()
-    last_paid: dict[uuid.UUID, datetime] = {}
-    for product_id, paid_at in paid:
-        if product_id not in last_paid or paid_at > last_paid[product_id]:
-            last_paid[product_id] = paid_at
-    stale = [c for c in cart_items
+    last_paid: dict[uuid.UUID, datetime] = dict(paid)
+    stale = [c for c, _ in rows
              if c.product_id in last_paid and c.created_at <= last_paid[c.product_id]]
     if stale:
         for c in stale:
             await db.delete(c)
         await db.commit()
         stale_ids = {c.id for c in stale}
-        cart_items = [c for c in cart_items if c.id not in stale_ids]
+        rows = [(c, product) for c, product in rows if c.id not in stale_ids]
 
     items_with_products = []
-    total_usdt = 0.0
-    total_ton = 0.0
+    total_usdt = Decimal(0)
+    total_ton = Decimal(0)
     
-    for cart_item in cart_items:
-        product = await db.get(Product, cart_item.product_id)
+    for cart_item, product in rows:
         if product:
-            item_total_usdt = float(product.price_usdt) * cart_item.quantity
-            item_total_ton = float(product.price_ton or 0) * cart_item.quantity if product.price_ton else None
+            item_total_usdt = product.price_usdt * cart_item.quantity
+            item_total_ton = product.price_ton * cart_item.quantity if product.price_ton else None
             
             total_usdt += item_total_usdt
             if item_total_ton:
@@ -112,8 +118,8 @@ async def get_cart(
                 # заранее. Без него корзина рисовала новое число и сумму до
                 # ответа сервера, а сервер отказывал — цифра успевала мигнуть.
                 "max_quantity": _quantity_ceiling(product),
-                "subtotal_usdt": item_total_usdt,
-                "subtotal_ton": item_total_ton
+                "subtotal_usdt": float(item_total_usdt),
+                "subtotal_ton": float(item_total_ton) if item_total_ton is not None else None
             })
     
     return CartResponse(
@@ -134,6 +140,8 @@ async def add_to_cart(
     product = await db.get(Product, item_data.product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    if product.owner_user_id == user.id:
+        raise HTTPException(status_code=400, detail="Нельзя покупать собственный товар")
 
     # Снятый с продажи в корзину не кладём. Каталог такие не показывает, но
     # ссылка на товар могла остаться открытой, а карточка — висеть в чужой
@@ -222,6 +230,8 @@ async def update_cart_item(
     # Validate quantity limits
     product = await db.get(Product, cart_item.product_id)
     if product:
+        if product.owner_user_id == user.id:
+            raise HTTPException(status_code=400, detail="Нельзя покупать собственный товар")
         if product.min_quantity and item_data.quantity < product.min_quantity:
             raise HTTPException(
                 status_code=400,

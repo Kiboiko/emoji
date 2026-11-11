@@ -5,6 +5,7 @@ import { DataTable, type Column } from '../components/ui/DataTable';
 import { Pagination } from '../components/ui/Pagination';
 import { Badge } from '../components/ui/Badge';
 import { errorText } from '../components/ui/Toast';
+import { PartnerLinks } from './PartnerLinks';
 
 const LIMIT = 50;
 
@@ -15,7 +16,7 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 export const Referrals: React.FC = () => {
-    const [tab, setTab] = useState<'history' | 'top'>('history');
+    const [tab, setTab] = useState<'history' | 'top' | 'partners'>('history');
 
     return (
         <div>
@@ -38,9 +39,10 @@ export const Referrals: React.FC = () => {
                 >
                     Топ рефереров
                 </button>
+                <button type="button" onClick={() => setTab('partners')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'partners' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Специальные ссылки</button>
             </div>
 
-            {tab === 'history' ? <HistoryTab /> : <TopTab />}
+            {tab === 'history' ? <HistoryTab /> : tab === 'top' ? <TopTab /> : <PartnerLinks />}
         </div>
     );
 };

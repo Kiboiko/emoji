@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check } from 'lucide-react';
+import { RankingFrame } from '@/components/RankingFrame/RankingFrame';
 import type { StoreCard } from '@/types';
 import { thumb } from '@/lib/image';
 import './StoreStrip.css';
@@ -38,9 +39,11 @@ export const StoreStrip: React.FC<StoreStripProps> = ({ stores }) => {
                     onClick={() => open(store)}
                 >
                     <span className="storestrip-avatar">
+                        <RankingFrame medal={store.medal} rank={store.rank}>
                         {store.avatar_url
                             ? <img src={thumb(store.avatar_url)} alt="" loading="lazy" decoding="async" />
                             : <span aria-hidden="true">{store.name.trim().charAt(0).toUpperCase()}</span>}
+                        </RankingFrame>
 
                         {store.is_verified && (
                             <span className="storestrip-check" aria-hidden="true">

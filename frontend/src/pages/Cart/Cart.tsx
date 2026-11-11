@@ -1,127 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
-import { cartApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
-import { errorText, useToastStore } from '@/store/toastStore';
+import { useToastStore } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { thumb } from '@/lib/image';
 import './Cart.css';
 
 export const Cart: React.FC = () => {
     const navigate = useNavigate();
-    const { language } = useAuthStore();
-    const { cart, setCart } = useCartStore();
+    const language = useAuthStore(state => state.language);
+    const { cart, isLoading, isSaving, fetchCart, updateQuantity: saveQuantity, removeItem: deleteItem } = useCartStore();
     const showToast = useToastStore((s) => s.show);
     const { haptic } = useTelegram();
-    // Корзина загружается при старте приложения и живёт в общем хранилище.
-    // Раньше экран на каждом заходе всё равно показывал заглушку и грузил
-    // её заново — вкладка мигала: заглушка, потом товары. Теперь заглушка
-    // только когда корзины ещё нет, а свежая версия подтягивается молча
-    const [isLoading, setIsLoading] = useState(!cart);
+    useEffect(() => { void fetchCart(); }, [language, fetchCart]);
 
-    useEffect(() => {
-        loadCart();
-    }, [language]);
-
-    const loadCart = async () => {
-        try {
-            const data = await cartApi.getCart(language);
-            setCart(data);
-        } catch (error) {
-            console.error('Failed to load cart:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const updateQuantity = async (itemId: string, newQuantity: number) => {
-        if (newQuantity < 1) return;
-
-        // Optimistic update - update UI immediately
-        const oldCart = cart;
-        if (!cart) return;
-
-        // Страж ДО оптимистичного обновления. Без него корзина успевала
-        // нарисовать новое число и пересчитать сумму, сервер отказывал, и
-        // всё откатывалось — цифра мигала.
-        const target = cart.items.find((item) => item.id === itemId);
-        const ceiling = target?.max_quantity ?? null;
-
-        if (ceiling !== null && newQuantity > ceiling) {
-            haptic.notification('error');
-            showToast(
-                language === 'ru'
-                    ? `Больше ${ceiling} шт. этого товара взять нельзя`
-                    : `You cannot take more than ${ceiling} of this item`,
-                'error',
-            );
+    const updateQuantity = (itemId: string, delta: number) => {
+        const item = useCartStore.getState().cart?.items.find(item => item.id === itemId);
+        if (!item) return;
+        const quantity = item.quantity + delta;
+        if (quantity < 1) return;
+        if (item.max_quantity != null && quantity > item.max_quantity) {
+            showToast(language === 'ru' ? `Максимум ${item.max_quantity} шт.` : `Maximum ${item.max_quantity}`, 'error');
             return;
         }
-
-        const updatedItems = cart.items.map(item =>
-            item.id === itemId ? { ...item, quantity: newQuantity, subtotal_usdt: item.price_usdt * newQuantity } : item
-        );
-        const newTotalUsdt = updatedItems.reduce((sum, item) => sum + item.subtotal_usdt, 0);
-
-        setCart({
-            ...cart,
-            items: updatedItems,
-            total_usdt: newTotalUsdt
-        });
-
-        try {
-            haptic.selection();
-            await cartApi.updateCartItem(itemId, newQuantity);
-            // Silent reload to sync with backend (without showing loading)
-            const data = await cartApi.getCart(language);
-            setCart(data);
-        } catch (error) {
-            console.error('Failed to update quantity:', error);
-            haptic.notification('error');
-            // Откат без объяснения выглядит как глюк: число прыгает обратно, и
-            // непонятно почему. Чаще всего это товар пользователя — он штучный,
-            // и сервер отвечает «максимум 1».
-            showToast(
-                errorText(error, language === 'ru'
-                    ? 'Не удалось изменить количество'
-                    : 'Failed to update quantity'),
-                'error',
-            );
-            // Revert on error (oldCart is guaranteed non-null because of check above)
-            if (oldCart) setCart(oldCart);
-        }
+        haptic.selection();
+        saveQuantity(itemId, quantity);
     };
 
-    const removeItem = async (itemId: string) => {
-        // Optimistic update - remove from UI immediately
-        const oldCart = cart;
-        if (!cart) return;
-
-        const updatedItems = cart.items.filter(item => item.id !== itemId);
-        const newTotalUsdt = updatedItems.reduce((sum, item) => sum + item.subtotal_usdt, 0);
-
-        setCart({
-            ...cart,
-            items: updatedItems,
-            total_usdt: newTotalUsdt
-        });
-
-        try {
-            haptic.impact('medium');
-            await cartApi.removeFromCart(itemId);
-            // Silent reload to sync with backend
-            const data = await cartApi.getCart(language);
-            setCart(data);
-            haptic.notification('success');
-        } catch (error) {
-            console.error('Failed to remove item:', error);
-            haptic.notification('error');
-            // Revert on error (oldCart is guaranteed non-null because of check above)
-            if (oldCart) setCart(oldCart);
-        }
+    const removeItem = (itemId: string) => {
+        haptic.impact('medium');
+        deleteItem(itemId);
     };
 
     const proceedToCheckout = () => {
@@ -129,7 +39,7 @@ export const Cart: React.FC = () => {
         navigate('/checkout');
     };
 
-    if (isLoading) {
+    if (isLoading && !cart) {
         return (
             <div className="cart-page">
                 <div className="container">
@@ -170,80 +80,73 @@ export const Cart: React.FC = () => {
                 <h1 className="cart-title">{language === 'ru' ? 'Корзина' : 'Cart'}</h1>
 
                 <div className="cart-items">
-                    {/* initial={false}: при открытии корзины товары стоят на
-                        месте сразу, анимируется только удаление */}
-                    <AnimatePresence initial={false}>
-                        {cart.items.map((item) => (
-                            <motion.div
-                                key={item.id}
-                                className="cart-item"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 20 }}
-                                layout
+                    {cart.items.map((item) => (
+                        <div
+                            key={item.id}
+                            className="cart-item"
+                        >
+                            <img src={thumb(item.image_url, 'cart')} alt="" className="item-image" loading="lazy" decoding="async" />
+
+                            <h3 className="item-name">{item.name}</h3>
+
+                            <button
+                                className="btn-remove"
+                                onClick={() => removeItem(item.id)}
+                                aria-label={language === 'ru'
+                                    ? `Убрать «${item.name}» из корзины`
+                                    : `Remove ${item.name} from cart`}
                             >
-                                <img src={thumb(item.image_url)} alt="" className="item-image" decoding="async" />
+                                <Trash2 size={17} />
+                            </button>
 
-                                <h3 className="item-name">{item.name}</h3>
-
-                                <button
-                                    className="btn-remove"
-                                    onClick={() => removeItem(item.id)}
-                                    aria-label={language === 'ru'
-                                        ? `Убрать «${item.name}» из корзины`
-                                        : `Remove ${item.name} from cart`}
-                                >
-                                    <Trash2 size={17} />
-                                </button>
-
-                                <div className="item-price">
-                                    <span className="item-total">${item.subtotal_usdt.toFixed(2)}</span>
-                                    {/* Потолок называем только когда в него упёрлись:
-                                        иначе погасший «плюс» ничего не объясняет */}
-                                    {item.max_quantity != null
-                                        && item.quantity >= item.max_quantity && (
-                                        <span className="item-limit">
-                                            {language === 'ru'
-                                                ? `макс. ${item.max_quantity}`
-                                                : `max ${item.max_quantity}`}
-                                        </span>
-                                    )}
-                                    {/* Цена за штуку — только когда штук больше одной:
-                                        иначе непонятно, откуда взялась сумма */}
-                                    {item.quantity > 1 && (
-                                        <span className="item-each">
-                                            {item.quantity} &#215; ${item.price_usdt}
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div className="quantity-control">
-                                    <button
-                                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                        disabled={item.quantity === 1}
-                                        aria-label={language === 'ru' ? 'Меньше' : 'Decrease'}
-                                    >
-                                        <Minus size={15} />
-                                    </button>
-                                    <span className="quantity-value">{item.quantity}</span>
-                                    <button
-                                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                        disabled={item.max_quantity != null
-                                            && item.quantity >= item.max_quantity}
-                                        aria-label={language === 'ru' ? 'Больше' : 'Increase'}
-                                    >
-                                        <Plus size={15} />
-                                    </button>
-                                </div>
-
-                                {/* Ссылка, которую спросили при заказе услуги — третьим
-                                    рядом во всю ширину, а не внутри колонки с названием */}
-                                {item.user_data?.link && (
-                                    <span className="item-link">{item.user_data.link}</span>
+                            <div className="item-price">
+                                <span className="item-total">${item.subtotal_usdt.toFixed(2)}</span>
+                                {/* Потолок называем только когда в него упёрлись:
+                                    иначе погасший «плюс» ничего не объясняет */}
+                                {item.max_quantity != null
+                                    && item.quantity >= item.max_quantity && (
+                                    <span className="item-limit">
+                                        {language === 'ru'
+                                            ? `макс. ${item.max_quantity}`
+                                            : `max ${item.max_quantity}`}
+                                    </span>
                                 )}
-                            </motion.div>
-                        ))}
-                    </AnimatePresence>
+                                {/* Цена за штуку — только когда штук больше одной:
+                                    иначе непонятно, откуда взялась сумма */}
+                                {item.quantity > 1 && (
+                                    <span className="item-each">
+                                        {item.quantity} &#215; ${item.price_usdt}
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="quantity-control">
+                                <button
+                                    onClick={() => updateQuantity(item.id, -1)}
+                                    disabled={item.quantity === 1}
+                                    aria-label={language === 'ru' ? 'Меньше' : 'Decrease'}
+                                >
+                                    <Minus size={15} />
+                                </button>
+                                <span className="quantity-value">{item.quantity}</span>
+                                <button
+                                    onClick={() => updateQuantity(item.id, 1)}
+                                    disabled={item.max_quantity != null
+                                        && item.quantity >= item.max_quantity}
+                                    aria-label={language === 'ru' ? 'Больше' : 'Increase'}
+                                >
+                                    <Plus size={15} />
+                                </button>
+                            </div>
+
+                            {/* Ссылка, которую спросили при заказе услуги — третьим
+                                рядом во всю ширину, а не внутри колонки с названием */}
+                            {item.user_data?.link && (
+                                <span className="item-link">{item.user_data.link}</span>
+                            )}
+                        </div>
+                    ))}
+
                 </div>
 
                 <div className="cart-summary">
@@ -262,8 +165,8 @@ export const Cart: React.FC = () => {
                         <span className="summary-amount">${cart.total_usdt.toFixed(2)}</span>
                     </div>
 
-                    <button className="btn-checkout" onClick={proceedToCheckout}>
-                        {language === 'ru' ? 'Оформить заказ' : 'Checkout'}
+                    <button className="btn-checkout" disabled={isSaving} onClick={proceedToCheckout}>
+                        {isSaving ? (language === 'ru' ? 'Сохраняем…' : 'Saving…') : (language === 'ru' ? 'Оформить заказ' : 'Checkout')}
                     </button>
                 </div>
             </div>

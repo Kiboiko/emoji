@@ -14,7 +14,7 @@ ENV VITE_BOT_USERNAME=$VITE_BOT_USERNAME
 
 # Install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -22,9 +22,10 @@ COPY . .
 # Манифест TON Connect должен указывать на реальный домен приложения:
 # кошелёк скачивает его сам и сверяет origin. Зашивать localhost в образ
 # нельзя, поэтому подставляем домен на сборке.
-# Иконка — PNG 180×180: SVG кошельки не показывают, а прежний vite.svg в
-# сборке и не существовал — при подключении кошелёк видел пустое место.
-RUN echo "{\"url\":\"$SITE_URL\",\"name\":\"$APP_NAME\",\"iconUrl\":\"$SITE_URL/wallet-icon.png\"}" > public/tonconnect-manifest.json
+# Новый адрес манифеста и PNG обновляет закешированную иконку в кошельке.
+# Прежний путь манифеста обслуживает клиентов, открывших приложение раньше.
+RUN echo "{\"url\":\"$SITE_URL\",\"name\":\"$APP_NAME\",\"iconUrl\":\"$SITE_URL/wallet-safedeal.png\"}" > public/tonconnect-manifest.json \
+    && cp public/tonconnect-manifest.json public/tonconnect-manifest-safedeal.json
 
 # Build app
 RUN npm run build

@@ -145,6 +145,10 @@ export const p2pApi = {
         api.delete(`/api/admin/p2p/listings/${listingId}/images/${imageId}`).then((r) => r.data),
     deleteSellerAvatar: (sellerId: string) =>
         api.delete(`/api/admin/p2p/sellers/${sellerId}/avatar`).then((r) => r.data),
+    channelPhotos: (skip: number, limit: number) =>
+        api.get('/api/admin/subscriptions/channel-photos', { params: { skip, limit } }).then((r) => r.data),
+    deleteChannelPhoto: (id: string, kind: 'avatar' | 'cover') =>
+        api.delete(`/api/admin/subscriptions/channels/${id}/photos/${kind}`).then((r) => r.data),
 };
 
 export type StaffRole = 'admin' | 'moderator';

@@ -238,6 +238,11 @@ class TestTokens:
         assert payload["type"] == "refresh"
         assert payload["user_id"] == "abc"
 
+    def test_refresh_token_is_not_accepted_as_access(self):
+        refresh = auth.create_refresh_token({"user_id": "abc"})
+        with pytest.raises(ValueError):
+            auth.decode_access_token(refresh)
+
     def test_referral_codes_are_unique_enough(self):
         codes = {auth.generate_referral_code() for _ in range(500)}
 
@@ -368,3 +373,15 @@ def test_signature_does_not_let_a_forged_hash_through():
 
     with pytest.raises(ValueError):
         auth.validate_telegram_webapp_data(forged)
+
+
+@pytest.mark.parametrize("refresh", [False, True])
+def test_legacy_hs256_token_compatibility(monkeypatch, refresh):
+    # Minted by python-jose 3.5.0 using this test key; expires in 2100.
+    monkeypatch.setattr(settings, "SECRET_KEY", "compatibility-test-key-32-characters")
+    legacy = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoibGVnYWN5LXVzZXIiLCJ0ZWxlZ3JhbV9pZCI6MTIzLCJleHAiOjQxMDI0NDQ4MDB9.FG6fn34P4JFvC5sPKbvDe9te1RNx0KSJiecDQvlZVgc"
+    if refresh:
+        with pytest.raises(ValueError):
+            auth.decode_refresh_token(legacy)
+    else:
+        assert auth.decode_access_token(legacy)["user_id"] == "legacy-user"

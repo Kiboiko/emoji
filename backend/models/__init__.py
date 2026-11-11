@@ -19,6 +19,7 @@ from .category import Category
 from .cart import CartItem
 from .order import Order, OrderItem, OrderStatus, CurrencyType
 from .payment import Payment, PaymentStatus
+from .promotion import ProductPromotion, PromotionInvoice
 from .review import Review
 from .digital_item import DigitalItem
 from .referral import ReferralTransaction
@@ -48,6 +49,8 @@ __all__ = [
     "CurrencyType",
     "Payment",
     "PaymentStatus",
+    "ProductPromotion",
+    "PromotionInvoice",
     "Review",
     "DigitalItem",
     "ReferralTransaction",
@@ -79,3 +82,14 @@ __all__ = [
     "MessageDirection",
     "TermsAcceptance",
 ]
+
+from .market_ranking import RankingPeriod, RankingEntry
+__all__ += ["RankingPeriod", "RankingEntry"]
+
+from .telegram_publication import LargeDealConfig, TelegramPublication
+from .giveaway import Giveaway, GiveawayChat, GiveawayEntry, GiveawayDrawAttempt, GiveawayPostCleanup
+__all__ += ["LargeDealConfig", "TelegramPublication", "Giveaway", "GiveawayChat", "GiveawayEntry", "GiveawayDrawAttempt", "GiveawayPostCleanup"]
+
+from .inquiry import Inquiry, InquiryMessage, InquiryMediaCleanup
+from .partner import PartnerLink, PartnerAttribution, PartnerCommission
+__all__ += ["Inquiry", "InquiryMessage", "InquiryMediaCleanup", "PartnerLink", "PartnerAttribution", "PartnerCommission"]

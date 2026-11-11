@@ -60,6 +60,8 @@ function summary(entry: AuditEntry): string {
     if (d.status) parts.push(`→ ${d.status}`);
     if (d.decision) parts.push(String(d.decision));
     if (d.kind === 'store_avatar') parts.push('логотип магазина');
+    if (d.kind === 'channel_avatar') parts.push('аватарка канала');
+    if (d.kind === 'channel_cover') parts.push('обложка канала');
     if (d.kind === 'listing_image') parts.push('фото объявления');
     if (d.value !== undefined) parts.push(`${entry.target_id} = ${String(d.value)}`);
     const note = d.comment ?? d.reason ?? d.text;

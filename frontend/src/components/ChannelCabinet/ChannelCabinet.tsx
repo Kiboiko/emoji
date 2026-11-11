@@ -7,13 +7,15 @@ import {
     Radio, Plus, Send, ShieldCheck, ShieldAlert, RefreshCw, Image as ImageIcon,
     ChevronDown, ChevronUp, Check, Wallet, Pencil, Trash2, EyeOff, BadgeCheck, X,
 } from 'lucide-react';
-import { subscriptionsApi, termsApi, withdrawalsApi } from '@/api/client';
+import { subscriptionsApi, withdrawalsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
-import { useToastStore, errorText } from '@/store/toastStore';
+import { useToastStore } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { CommissionNote } from '@/components/CommissionNote/CommissionNote';
 import { usePublicSettings } from '@/hooks/usePublicSettings';
 import type { AuthorChannel, ChannelPlan, ChannelStatus } from '@/types';
+import { thumb } from '@/lib/image';
+import '@/components/SellerCabinet/ListingsList.css';
 import './ChannelCabinet.css';
 
 /** Статусы, в которых канал ещё можно отправить на модерацию */
@@ -38,26 +40,22 @@ const STATUS_LABEL: Record<ChannelStatus, [string, string]> = {
  */
 export const ChannelCabinet: React.FC<{ standalone?: boolean }> = ({ standalone = false }) => {
     const { language } = useAuthStore();
-    const { haptic } = useTelegram();
-    const showToast = useToastStore((s) => s.show);
 
     // На своём экране сворачивать нечего — см. SellerCabinet
     const [open, setOpen] = useState(standalone);
     const [channels, setChannels] = useState<AuthorChannel[] | null>(null);
-    const [connecting, setConnecting] = useState(false);
+    const [query, setQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [failed, setFailed] = useState(false);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
-    const fail = useCallback((e: unknown, fallback: string) => {
-        haptic.notification('error');
-        showToast(errorText(e, fallback), 'error');
-    }, [haptic, showToast]);
-
     const load = useCallback(async () => {
+        setFailed(false);
         try {
             setChannels(await subscriptionsApi.getMyChannels());
         } catch {
-            setChannels([]);
+            setFailed(true);
         }
     }, []);
 
@@ -81,40 +79,40 @@ export const ChannelCabinet: React.FC<{ standalone?: boolean }> = ({ standalone 
                 </button>
             )}
 
-            {open && channels !== null && (
+            {open && failed && <div role="alert"><p>{t('Не удалось загрузить подписки.', 'Could not load subscriptions.')}</p><button type="button" className="channel-btn-secondary" onClick={() => void load()}>{t('Повторить', 'Retry')}</button></div>}
+            {open && channels === null && !failed && <p role="status">{t('Загрузка…', 'Loading…')}</p>}
+            {open && channels !== null && !failed && (
                 <>
                     {hasChannels && <AuthorPayout language={language} />}
 
-                    {channels.map((channel) => (
-                        <ChannelCard
-                            key={channel.id}
-                            channel={channel}
-                            language={language}
-                            reload={load}
-                            onError={fail}
-                        />
-                    ))}
+                    <div className="channel-list-head">
+                        <h3>{t('Подписки на каналы', 'Channel subscriptions')} <span>{channels.length}</span></h3>
+                        <Link className="channel-btn" to="/my/channels/new"><Plus size={16} />{t('Создать', 'New')}</Link>
+                    </div>
+                    {channels.length > 5 && <input className="channel-input" aria-label={t('Поиск каналов', 'Search channels')} placeholder={t('Поиск каналов', 'Search channels')} value={query} onChange={e => setQuery(e.target.value)} />}
+                    {hasChannels && <div className="channel-filters">{[['all',t('Все','All')],['active',t('В продаже','On sale')],['pending',t('На модерации','In review')],['draft',t('Черновики','Drafts')],['rejected',t('Отклонены','Rejected')],['suspended',t('Сняты','Suspended')]].filter(([id])=>id==='all'||channels.some(c=>c.status===id)).map(([id,label])=><button key={id} type="button" aria-pressed={statusFilter===id} className={statusFilter===id?'is-active':''} onClick={()=>setStatusFilter(id ?? 'all')}>{label} · {id==='all'?channels.length:channels.filter(c=>c.status===id).length}</button>)}</div>}
+                    {!hasChannels && <p className="llist-empty">{t('Подписок пока нет. Создайте первую: добавьте обложку, описание, цену и срок доступа в одной форме.', 'No subscriptions yet. Create one with its cover, description, price and access duration in a single form.')}</p>}
+                    <div className="llist-rows">
+                        {channels.filter(c => (statusFilter === 'all' || c.status === statusFilter) && `${c.title} ${c.title_en ?? ''} ${c.username ?? ''}`.toLowerCase().includes(query.trim().toLowerCase())).map(channel => (
+                            <div className="llist-row channel-row" key={channel.id}>
+                                <Link className="llist-row-main" to={`/my/channels/${channel.id}`}>
+                                    <span className="llist-thumb">
+                                        {channel.cover_url || channel.avatar_url
+                                            ? <img src={thumb(channel.cover_url || channel.avatar_url)} alt="" loading="lazy" />
+                                            : <Radio size={22} />}
+                                    </span>
+                                    <span className="llist-text">
+                                        <span className="llist-name">{language === 'en' ? channel.title_en || channel.title : channel.title}</span>
+                                        <span className="llist-price">{channel.plans[0] ? `$${channel.plans[0].price_usd} · ${channel.plans[0].duration_days} ${t('дн.', 'days')}` : t('Тариф пока не задан', 'No plan yet')}</span>
+                                        <span className="llist-meta"><span className={`channel-badge channel-badge--${channel.status}`}>{STATUS_LABEL[channel.status][language === 'ru' ? 0 : 1]}</span><span className="llist-meta-text">{channel.plans.length} {t('тарифов', 'plans')}</span></span>
+                                    </span>
+                                </Link>
+                                <Link className="llist-edit" to={`/my/channels/${channel.id}`} aria-label={t('Редактировать подписку', 'Edit subscription')}><Pencil size={18} /></Link>
+                            </div>
+                        ))}
+                    </div>
+                    {hasChannels && !channels.some(c => (statusFilter === 'all' || c.status === statusFilter) && `${c.title} ${c.title_en ?? ''} ${c.username ?? ''}`.toLowerCase().includes(query.trim().toLowerCase())) && <p className="llist-empty">{t('Ничего не нашлось.', 'Nothing found.')}</p>}
 
-                    {(!hasChannels || connecting) && (
-                        <ConnectForm
-                            language={language}
-                            onDone={async () => {
-                                setConnecting(false);
-                                await load();
-                            }}
-                            onError={fail}
-                        />
-                    )}
-
-                    {hasChannels && !connecting && (
-                        <button
-                            className="channel-btn-secondary"
-                            onClick={() => setConnecting(true)}
-                        >
-                            <Plus size={16} />
-                            {t('Подключить ещё канал', 'Connect another channel')}
-                        </button>
-                    )}
                 </>
             )}
         </div>
@@ -169,150 +167,10 @@ const AuthorPayout: React.FC<{ language: string }> = ({ language }) => {
     );
 };
 /* ------------------------------------------------------------------ */
-/* Подключение канала                                                  */
-/* ------------------------------------------------------------------ */
-
-const ConnectForm: React.FC<{
-    language: string;
-    onDone: () => Promise<void>;
-    onError: (e: unknown, fallback: string) => void;
-}> = ({ language, onDone, onError }) => {
-    const { haptic } = useTelegram();
-    const [identifier, setIdentifier] = useState('');
-    const [description, setDescription] = useState('');
-    const [descriptionEn, setDescriptionEn] = useState('');
-    const [accepted, setAccepted] = useState(false);
-    const [termsOpen, setTermsOpen] = useState(false);
-    const [termsText, setTermsText] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
-
-    const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
-
-    const showTerms = async () => {
-        setTermsOpen(!termsOpen);
-        if (termsText === null) {
-            try {
-                const data = await termsApi.get(language);
-                setTermsText(data.is_empty ? '' : data.text);
-            } catch {
-                setTermsText('');
-            }
-        }
-    };
-
-    const submit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setBusy(true);
-        try {
-            await subscriptionsApi.connectChannel({
-                chat_identifier: identifier.trim(),
-                description: description.trim() || undefined,
-                description_en: descriptionEn.trim() || undefined,
-                accept_terms: accepted,
-            });
-            haptic.notification('success');
-            await onDone();
-        } catch (err) {
-            onError(err, t('Не удалось подключить канал', 'Failed to connect the channel'));
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    return (
-        <form className="channel-form" onSubmit={submit}>
-            <p className="channel-intro">
-                {t(
-                    'Продавайте доступ в свой закрытый канал. Бот сам выдаёт приглашение после оплаты и сам закрывает доступ по окончании срока.',
-                    'Sell access to your private channel. The bot issues the invite after payment and revokes access when the subscription ends.',
-                )}
-            </p>
-
-            <div className="channel-hint">
-                <strong>{t('Перед подключением', 'Before you connect')}</strong>
-                <ol>
-                    <li>{t('Добавьте бота в канал администратором', 'Add the bot to your channel as an admin')}</li>
-                    <li>{t('Включите права «Пригласительные ссылки» и «Блокировка участников»', 'Enable “Invite links” and “Ban users” permissions')}</li>
-                </ol>
-                <span className="channel-hint-note">
-                    {t(
-                        'Без этих прав бот не сможет ни выдать доступ, ни отозвать его — канал не получится опубликовать.',
-                        'Without these the bot can neither grant nor revoke access — the channel cannot be published.',
-                    )}
-                </span>
-            </div>
-
-            <label className="channel-label">
-                {t('Канал', 'Channel')}
-                <input
-                    className="channel-input"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder={t('@username или -1001234567890', '@username or -1001234567890')}
-                    minLength={2}
-                    maxLength={100}
-                    required
-                />
-            </label>
-
-            <label className="channel-label">
-                {t('Описание по-русски', 'Description in Russian')}
-                <AutoTextarea
-                    className="channel-input channel-textarea"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    maxLength={2000}
-                />
-            </label>
-
-            {/* Описание канала становится описанием подписки в каталоге, а
-                каталог двуязычный: без английского текста покупатель с
-                английским языком читал русский */}
-            <label className="channel-label">
-                {t('Описание по-английски', 'Description in English')}
-                <AutoTextarea
-                    className="channel-input channel-textarea"
-                    value={descriptionEn}
-                    onChange={(e) => setDescriptionEn(e.target.value)}
-                    maxLength={2000}
-                />
-            </label>
-
-            <div className="channel-terms">
-                <label className="channel-check">
-                    <input
-                        type="checkbox"
-                        checked={accepted}
-                        onChange={(e) => setAccepted(e.target.checked)}
-                    />
-                    <span>
-                        {t('Я принимаю ', 'I accept the ')}
-                        <button type="button" className="channel-link" onClick={showTerms}>
-                            {t('условия площадки', 'platform terms')}
-                        </button>
-                    </span>
-                </label>
-                {termsOpen && (
-                    <div className="channel-terms-text">
-                        {termsText
-                            ? termsText
-                            : t('Текст условий пока не заполнен.', 'The terms text is not filled in yet.')}
-                    </div>
-                )}
-            </div>
-
-            <button className="channel-btn" type="submit" disabled={busy || !accepted}>
-                {busy ? t('Подключаем...', 'Connecting...') : t('Подключить канал', 'Connect channel')}
-            </button>
-        </form>
-    );
-};
-
-/* ------------------------------------------------------------------ */
 /* Карточка канала                                                     */
 /* ------------------------------------------------------------------ */
 
-const ChannelCard: React.FC<{
+export const ChannelCard: React.FC<{
     channel: AuthorChannel;
     language: string;
     reload: () => Promise<void>;
@@ -411,7 +269,8 @@ const ChannelCard: React.FC<{
                     {t(labelRu, labelEn)}
                 </span>
             </div>
-
+            <div className="channel-summary"><span>{channel.username ? `@${channel.username} · ` : ''}{channel.plans.length} {t('тарифов', 'plans')}</span></div>
+            <div className="channel-details">
             {channel.username && <span className="channel-username">@{channel.username}</span>}
 
             {channel.moderation_comment && (
@@ -652,6 +511,7 @@ const ChannelCard: React.FC<{
                     {t('Подписки продаются в каталоге.', 'Subscriptions are on sale in the catalog.')}
                 </span>
             )}
+            </div>
         </div>
     );
 };

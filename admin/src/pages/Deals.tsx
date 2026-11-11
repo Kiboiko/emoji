@@ -5,6 +5,7 @@ import { DataTable, type Column } from '../components/ui/DataTable';
 import { Pagination } from '../components/ui/Pagination';
 import { StatusBadge } from '../components/ui/Badge';
 import { useToast, errorText } from '../components/ui/Toast';
+import { useAuth } from '../context/AuthContext';
 
 const LIMIT = 25;
 
@@ -19,6 +20,9 @@ const STATUSES = [
 ];
 
 export const Deals: React.FC = () => {
+    const { role } = useAuth();
+    const isAdmin = role === 'admin';
+    const statuses = isAdmin ? STATUSES : STATUSES.filter(s => ['disputed', 'paid_escrow'].includes(s.value));
     const [rows, setRows] = useState<any[]>([]);
     const [total, setTotal] = useState(0);
     const [skip, setSkip] = useState(0);
@@ -77,15 +81,16 @@ export const Deals: React.FC = () => {
         {
             key: 'actions',
             title: '',
-            render: (d) => (
+            render: (d) => (isAdmin || d.can_view_conversation) ? (
                 <button
                     onClick={(e) => { e.stopPropagation(); setOpenId(d.id); }}
                     className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300"
                     title="Переписка и разбор"
+                    aria-label="Переписка и разбор"
                 >
                     <MessageSquare size={14} />
                 </button>
-            ),
+            ) : <span className="text-xs text-gray-500">Переписка доступна после жалобы</span>,
             className: 'text-right',
         },
     ];
@@ -95,7 +100,7 @@ export const Deals: React.FC = () => {
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Сделки</h1>
 
             <div className="flex gap-2 mb-5 flex-wrap">
-                {STATUSES.map((s) => (
+                {statuses.map((s) => (
                     <button
                         key={s.value}
                         onClick={() => { setStatus(s.value); setSkip(0); }}

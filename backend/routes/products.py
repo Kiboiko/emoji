@@ -17,6 +17,8 @@ from schemas.product import ProductCreate, ProductUpdate, ProductResponse, Produ
 from utils.auth import require_admin
 from config import settings
 from services import image_variants, review_service
+from services.promotion_service import active_promotion_expression
+from services.catalog_service import CatalogSort, category_filter, catalog_page
 from utils.websockets import manager
 
 router = APIRouter(prefix="/api/products", tags=["Products"])
@@ -38,8 +40,9 @@ async def save_image(image: UploadFile) -> str:
 
 @router.get("", response_model=List[ProductLocalized])
 async def get_products(
-    category_id: Optional[str] = None,
+    category_id: Optional[uuid.UUID] = None,
     search: Optional[str] = None,
+    sort: CatalogSort = CatalogSort.DEFAULT,
     lang: str = Query("ru"),
     skip: int = 0,
     limit: int = 40,
@@ -64,7 +67,7 @@ async def get_products(
     stmt = select(Product).where(Product.is_active.is_(True))
     
     if category_id:
-        stmt = stmt.where(Product.category_id == uuid.UUID(category_id))
+        stmt = stmt.where(category_filter(category_id))
         
     # For digital products, we need to check actual available digital_items
     # For other products, check stock field
@@ -117,15 +120,11 @@ async def get_products(
     # Хиты первыми, дальше порядок и дата. id последним: без него у товаров
     # с одинаковыми полями порядок между страницами плавает, и товар мог
     # выпасть из выдачи или показаться дважды
-    stmt = stmt.order_by(
-        Product.is_top.desc(), Product.sort_order.desc(), Product.created_at.desc(), Product.id,
-    )
-    stmt = stmt.offset(skip).limit(limit + 1)
+    cutoff = None
 
     # Здесь на КАЖДЫЙ запрос каталога печатался скомпилированный SQL и строка
     # по каждому товару, и лог забивался мгновенно. Убрано.
-    result = await db.execute(stmt)
-    products = list(result.scalars().all())
+    products = await catalog_page(db, stmt, sort, cutoff, skip, limit + 1)
 
     has_more = len(products) > limit
     products = products[:limit]
@@ -139,10 +138,12 @@ async def get_products(
     platform = await _platform_store(db)
     ratings = await _ratings_by_product(db, products)
 
+    promoted = await _promoted_product_ids(db, products)
     localized = []
     for p in products:
         item = ProductLocalized(
             id=p.id,
+            owner_user_id=p.owner_user_id,
             name=p.name_ru if lang == "ru" else p.name_en,
             description=p.description_ru if lang == "ru" else p.description_en,
             price_usdt=p.price_usdt,
@@ -152,6 +153,7 @@ async def get_products(
             stock=p.stock,
             category_id=p.category_id,
             is_top=p.is_top,
+            is_promoted=p.id in promoted,
             type=p.type,
             min_quantity=p.min_quantity,
             max_quantity=p.max_quantity,
@@ -234,9 +236,11 @@ async def _ratings_by_product(db: AsyncSession, products: list) -> dict:
     """
     from models.review import Review
 
-    product_ids = [p.id for p in products]
-    if not product_ids:
+    if not products:
         return {}
+    # Owned products use the shared seller rating below. Only calculate
+    # per-product averages for items without an owner.
+    product_ids = [p.id for p in products if p.owner_user_id is None]
 
     stmt = (
         select(
@@ -252,29 +256,24 @@ async def _ratings_by_product(db: AsyncSession, products: list) -> dict:
         .group_by(Review.product_id)
     )
 
-    # Отзыв о товаре продавца — это отзыв о продавце, и он действует только
-    # в окне давности (services/review_service.py). Товары площадки и каналов
-    # под окно не попадают
-    cutoff = await review_service.window_cutoff(db)
-    if cutoff is not None:
-        seller_product_ids = [p.id for p in products if p.is_p2p]
-        if seller_product_ids:
-            stmt = stmt.where(
-                or_(
-                    Review.product_id.not_in(seller_product_ids),
-                    Review.created_at >= cutoff,
-                )
-            )
-
-    rows = (await db.execute(stmt)).all()
-
-    return {
+    rows = []
+    if product_ids:
+        rows = (await db.execute(stmt)).all()
+    ratings = {
         product_id: {
             "rating": round(float(average), 1),
             "reviews_count": count,
         }
         for product_id, average, count in rows
     }
+    seller_ratings = await review_service.seller_ratings(db, list({
+        product.owner_user_id for product in products if product.owner_user_id
+    }))
+    for product in products:
+        if product.owner_user_id:
+            rating, count = seller_ratings.get(product.owner_user_id, (None, 0))
+            ratings[product.id] = {"rating": round(rating, 1) if rating is not None else None, "reviews_count": count}
+    return ratings
 
 
 def _author_fields(product, sellers: dict, channels: dict, platform=None) -> dict:
@@ -395,12 +394,12 @@ async def get_admin_products(
 
 @router.get("/{product_id}", response_model=ProductLocalized)
 async def get_product(
-    product_id: str,
+    product_id: uuid.UUID,
     lang: str = Query("ru"),
     db: AsyncSession = Depends(get_db)
 ):
     """Get product by ID with localization"""
-    product = await db.get(Product, uuid.UUID(product_id))
+    product = await db.get(Product, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
@@ -431,6 +430,7 @@ async def get_product(
 
     return ProductLocalized(
         id=product.id,
+        owner_user_id=product.owner_user_id,
         name=product.name_ru if lang == "ru" else product.name_en,
         description=product.description_ru if lang == "ru" else product.description_en,
         price_usdt=product.price_usdt,
@@ -440,6 +440,7 @@ async def get_product(
         stock=product.stock,
         category_id=product.category_id,
         is_top=product.is_top,
+        is_promoted=product.id in await _promoted_product_ids(db, [product]),
         type=product.type,
         min_quantity=product.min_quantity,
         max_quantity=product.max_quantity,
@@ -457,7 +458,7 @@ async def create_product(
     description_ru: str = Form(...),
     description_en: str = Form(...),
     price_usdt: float = Form(...),
-    category_id: str = Form(...),
+    category_id: uuid.UUID = Form(...),
     type: str = Form("digital"),
     is_top: bool = Form(False),
     min_quantity: int = Form(1),
@@ -489,7 +490,7 @@ async def create_product(
         description_ru=description_ru,
         description_en=description_en,
         price_usdt=price_usdt,
-        category_id=uuid.UUID(category_id),
+        category_id=category_id,
         type=type,
         is_top=is_top,
         min_quantity=min_quantity,
@@ -531,13 +532,13 @@ async def create_product(
 
 @router.put("/{product_id}")
 async def update_product(
-    product_id: str,
+    product_id: uuid.UUID,
     name_ru: Optional[str] = Form(None),
     name_en: Optional[str] = Form(None),
     description_ru: Optional[str] = Form(None),
     description_en: Optional[str] = Form(None),
     price_usdt: Optional[float] = Form(None),
-    category_id: Optional[str] = Form(None),
+    category_id: Optional[uuid.UUID] = Form(None),
     is_top: Optional[bool] = Form(None),
     is_active: Optional[bool] = Form(None),
     type: Optional[str] = Form(None),
@@ -547,7 +548,7 @@ async def update_product(
     admin = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    product = await db.get(Product, uuid.UUID(product_id))
+    product = await db.get(Product, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
         
@@ -556,7 +557,7 @@ async def update_product(
     if description_ru: product.description_ru = description_ru
     if description_en: product.description_en = description_en
     if price_usdt is not None: product.price_usdt = price_usdt
-    if category_id: product.category_id = uuid.UUID(category_id)
+    if category_id: product.category_id = category_id
     if is_top is not None: product.is_top = is_top
     if is_active is not None: product.is_active = is_active
     if type: product.type = type
@@ -613,11 +614,11 @@ async def update_product(
 
 @router.delete("/{product_id}")
 async def delete_product(
-    product_id: str,
+    product_id: uuid.UUID,
     admin = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    product = await db.get(Product, uuid.UUID(product_id))
+    product = await db.get(Product, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
         
@@ -647,7 +648,16 @@ async def delete_product(
     
     await manager.broadcast({
         "type": "product_deleted",
-        "data": {"id": product_id}
+        "data": {"id": str(product_id)}
     })
     
     return {"message": "Product deleted"}
+
+
+async def _promoted_product_ids(db: AsyncSession, products: list) -> set:
+    ids = [product.id for product in products]
+    if not ids:
+        return set()
+    return set((await db.execute(select(Product.id).where(
+        Product.id.in_(ids), active_promotion_expression(),
+    ))).scalars().all())

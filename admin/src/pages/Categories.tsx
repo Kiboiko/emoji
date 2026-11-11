@@ -19,6 +19,7 @@ export const Categories: React.FC = () => {
     // Form inputs
     const [nameRu, setNameRu] = useState('');
     const [nameEn, setNameEn] = useState('');
+    const [parentId, setParentId] = useState('');
     const [sortOrder, setSortOrder] = useState<number>(0);
 
     const { data: categories, isLoading } = useQuery({
@@ -57,6 +58,7 @@ export const Categories: React.FC = () => {
         setNameRu('');
         setNameEn('');
         setSortOrder(0);
+        setParentId('');
         setIsModalOpen(true);
     };
 
@@ -65,6 +67,7 @@ export const Categories: React.FC = () => {
         setNameRu(category.name_ru);
         setNameEn(category.name_en);
         setSortOrder(category.sort_order);
+        setParentId(category.parent_id ?? '');
         setIsModalOpen(true);
     };
 
@@ -78,7 +81,8 @@ export const Categories: React.FC = () => {
         const data = {
             name_ru: nameRu,
             name_en: nameEn,
-            sort_order: sortOrder
+            sort_order: sortOrder,
+            parent_id: parentId || null
         };
 
         if (editingCategory) {
@@ -100,7 +104,7 @@ export const Categories: React.FC = () => {
             title: 'Название (RU)',
             wide: true,
             render: (category) => (
-                <span className="font-medium">{category.name_ru}</span>
+                <span className="font-medium">{category.parent_id ? `${categories?.find(c => c.id === category.parent_id)?.name_ru ?? ''} / ` : ''}{category.name_ru}</span>
             ),
         },
         {
@@ -181,6 +185,9 @@ export const Categories: React.FC = () => {
                         </h2>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
+<label className="block text-sm text-gray-400">Родительская категория<select value={parentId} onChange={e => setParentId(e.target.value)} disabled={!!editingCategory && !!categories?.some(c => c.parent_id === editingCategory.id)} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 mt-1"><option value="">Основная категория</option>{categories?.filter(c => !c.parent_id && c.id !== editingCategory?.id).map(c => <option key={c.id} value={c.id}>{c.name_ru}</option>)}</select></label>
+{(createMutation.error || updateMutation.error) && <p role="alert" className="text-red-400">Не удалось сохранить категорию. Проверьте название и уровень категории.</p>}
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-1">
                                     Название (RU)

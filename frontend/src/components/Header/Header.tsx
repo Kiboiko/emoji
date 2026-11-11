@@ -4,12 +4,16 @@ import { useAuthStore } from '@/store/authStore';
 import './Header.css';
 
 interface HeaderProps {
-    searchQuery: string;
-    onSearchChange: (query: string) => void;
+    searchQuery?: string;
+    onSearchChange?: (query: string) => void;
     /** Заголовок экрана */
     pageTitle?: string;
     /** Правый край строки заголовка — переключатель вида каталога */
     actions?: React.ReactNode;
+    /** Кнопки внутри правого края поля поиска. */
+    searchActions?: React.ReactNode;
+    /** Отдельная кнопка рядом с полем поиска. */
+    searchAside?: React.ReactNode;
 }
 
 /**
@@ -24,6 +28,8 @@ export const Header: React.FC<HeaderProps> = ({
     onSearchChange,
     pageTitle,
     actions,
+    searchActions,
+    searchAside,
 }) => {
     const { language } = useAuthStore();
 
@@ -40,22 +46,26 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
             )}
 
-            <div className="search-container">
-                <Search className="search-icon" size={18} />
-                {/* Плейсхолдер подписью не считается: он пропадает, как только
-                    начали печатать, и поле для диктора становится безымянным */}
-                <label htmlFor="catalog-search" className="visually-hidden">
-                    {searchLabel}
-                </label>
-                <input
-                    id="catalog-search"
-                    type="text"
-                    className="search-input"
-                    placeholder={searchLabel}
-                    value={searchQuery}
-                    onChange={(e) => onSearchChange(e.target.value)}
-                />
-            </div>
+            {onSearchChange && <div className="header-search-row">
+                <div className={`search-container ${searchActions ? 'search-with-actions' : ''}`}>
+                    <Search className="search-icon" size={18} />
+                    {/* Плейсхолдер подписью не считается: он пропадает, как только
+                        начали печатать, и поле для диктора становится безымянным */}
+                    <label htmlFor="catalog-search" className="visually-hidden">
+                        {searchLabel}
+                    </label>
+                    <input
+                        id="catalog-search"
+                        type="text"
+                        className="search-input"
+                        placeholder={searchLabel}
+                        value={searchQuery}
+                        onChange={(e) => onSearchChange(e.target.value)}
+                    />
+                    {searchActions && <div className="search-actions">{searchActions}</div>}
+                </div>
+                {searchAside}
+            </div>}
         </header>
     );
 };

@@ -202,3 +202,10 @@
     background: rgba(239, 68, 68, 0.16);
     color: var(--accent-error);
 }
+
+.listing-promotion { display:flex; flex-direction:column; gap:7px; max-width:210px; font-size:12px; color:var(--text-secondary); }
+.listing-promotion button { border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--accent-primary); padding:8px 10px; border-radius:10px; font:inherit; cursor:pointer; }
+.listing-promotion button:disabled { opacity:.5;cursor:default; }
+.listing-promotion [role=alert] {color:var(--accent-error);}
+.promotion-terms-link { color: var(--accent-primary); text-decoration: underline; padding: 8px 0; }
+@media(max-width:520px){.llist-row{flex-wrap:wrap}.listing-promotion{order:3;max-width:none;width:100%;padding-left:76px;box-sizing:border-box}}

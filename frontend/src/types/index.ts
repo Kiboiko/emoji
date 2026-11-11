@@ -13,6 +13,7 @@ export interface User {
 }
 
 export interface Category {
+    parent_id?: string | null;
     id: string;
     name: string;
     sort_order: number;
@@ -20,6 +21,7 @@ export interface Category {
 
 export interface Product {
     id: string;
+    owner_user_id?: string | null;
     name: string;
     description: string;
     price_usdt: number;
@@ -31,6 +33,7 @@ export interface Product {
     stock?: number | null;
     category_id: string;
     is_top: boolean;
+    is_promoted?: boolean;
     type?: 'digital' | 'service' | 'instruction' | 'subscription' | 'p2p';
     min_quantity?: number;
     max_quantity?: number;
@@ -74,6 +77,8 @@ export interface PublicSettings {
  * Полная витрина — Store ниже.
  */
 export interface StoreCard {
+    rank?: number;
+    medal?: 'gold' | 'silver' | 'bronze' | null;
     kind: StoreKind;
     id: string;
     name: string;
@@ -85,6 +90,8 @@ export interface StoreCard {
 }
 
 export interface Store {
+    rank?: number;
+    medal?: 'gold' | 'silver' | 'bronze' | null;
     kind: StoreKind;
     id: string;
     name: string;
@@ -357,6 +364,7 @@ export interface Deal {
     } | null;
     last_activity_at: string;
     counterpart_read_at: string | null;
+    counterpart_avatar_url?: string | null;
     /** null — сделка закрыта, «в сети» не показывается */
     counterpart_online: boolean | null;
     counterpart_last_seen_at: string | null;

@@ -65,6 +65,7 @@ class ProductResponse(ProductBase):
     image_url: str
     created_at: datetime
     is_active: bool = True
+    is_promoted: bool = False
 
 
 class ProductBroadcast(ProductResponse):
@@ -80,6 +81,7 @@ class ProductBroadcast(ProductResponse):
     карточку на месте.
     """
     content_data: dict = Field(default_factory=dict, exclude=True)
+    owner_user_id: Optional[UUID] = None
 
 
 class ProductLocalized(BaseModel):
@@ -87,6 +89,7 @@ class ProductLocalized(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     
     id: UUID
+    owner_user_id: Optional[UUID] = None
     name: str  # name_ru or name_en based on language
     description: str  # description_ru or description_en
     price_usdt: Decimal
@@ -102,6 +105,7 @@ class ProductLocalized(BaseModel):
     stock: Optional[int] = None
     category_id: UUID
     is_top: bool
+    is_promoted: bool = False
     type: str = "digital"
     min_quantity: int = 1
     max_quantity: Optional[int] = None

@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 from typing import Optional, List
 
 
@@ -19,6 +20,8 @@ class Settings(BaseSettings):
     # сборке; бэкенд сверяет с ним токен при старте (services/bot_identity.py)
     VITE_BOT_USERNAME: str = ""
     REVIEWS_CHANNEL_ID: str = ""
+    # 0 keeps ordinary channel/chat posting; a positive ID routes reviews to a forum topic.
+    REVIEWS_THREAD_ID: int = Field(default=0, ge=0)
     ADMIN_CHAT_ID: str = ""
     
     # --- TON Connect -----------------------------------------------------

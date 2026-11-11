@@ -44,6 +44,10 @@ class SettingDef:
 
 
 SETTING_DEFS: tuple[SettingDef, ...] = (
+    SettingDef("promotion_price_nano", "int", 300_000_000,
+               "Стоимость продвижения в нанотонах (1e9 = 1 Gram)", 1, 1_000_000_000_000),
+    SettingDef("promotion_duration_hours", "int", 24,
+               "Срок одного продвижения в часах", 1, 8760),
     # --- Комиссии ---------------------------------------------------------
     SettingDef("commission_p2p_bp", "int", 200,
                "Комиссия платформы с P2P-сделки, базисные пункты (200 = 2%)",

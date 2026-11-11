@@ -39,7 +39,7 @@ class Product(Base):
     # Category
     category_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("categories.id", ondelete="CASCADE"),
+        ForeignKey("categories.id", ondelete="RESTRICT"),
         nullable=False
     )
     

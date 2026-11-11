@@ -18,11 +18,33 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 import pytest
+import logging
 
 from models.category import Category
 from models.order import CurrencyType, Order, OrderItem, OrderStatus
 from models.product import Product
 from services import scheduler as sched
+
+
+async def test_promotion_outage_escalates_then_resets(use_test_session, monkeypatch, caplog):
+    from services import promotion_service, ton_service
+    monkeypatch.setattr(sched, '_promotion_poll_failures', 0)
+    async def unavailable(db): raise ton_service.TonTemporaryError('HTTP 500')
+    async def recovered(db): return 0
+    monkeypatch.setattr(promotion_service, 'poll_invoices', unavailable)
+    with caplog.at_level(logging.WARNING, logger=sched.__name__):
+        await sched.poll_promotions()
+        await sched.poll_promotions()
+        assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+        await sched.poll_promotions()
+        assert any(record.levelno == logging.ERROR for record in caplog.records)
+        monkeypatch.setattr(promotion_service, 'poll_invoices', recovered)
+        await sched.poll_promotions()
+        assert sched._promotion_poll_failures == 0
+        caplog.clear()
+        monkeypatch.setattr(promotion_service, 'poll_invoices', unavailable)
+        await sched.poll_promotions()
+        assert not any(record.levelno >= logging.ERROR for record in caplog.records)
 
 pytestmark = pytest.mark.asyncio
 
@@ -106,7 +128,7 @@ class TestJobRegistration:
 
     async def test_all_jobs_are_registered(self):
         """
-        Все семь задач попадают в планировщик.
+        Все одиннадцать задач попадают в планировщик.
 
         Написать функцию и забыть `add_job` — ошибка без единого симптома:
         приложение стартует, логи чистые, задача просто никогда не выполняется.
@@ -119,6 +141,8 @@ class TestJobRegistration:
             assert registered == {
                 "cleanup_reservations",
                 "poll_ton_payments",
+                "poll_promotions",
+                "market_rankings", "publications", "giveaways", "giveaway_maintenance", "inquiry_cleanup",
                 "notify_deal_messages",
                 "confirm_payouts",
                 "auto_confirm_deals",
@@ -163,7 +187,7 @@ class TestJobRegistration:
             sched.start_scheduler()
             sched.start_scheduler()
 
-            assert len(sched.scheduler.get_jobs()) == 7
+            assert len(sched.scheduler.get_jobs()) == 13
         finally:
             sched.shutdown_scheduler()
 

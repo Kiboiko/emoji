@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import sys
+import uuid
 
 import httpx
 from aiogram import Bot, Dispatcher, types
@@ -103,7 +104,9 @@ async def command_start_handler(message: types.Message, command: CommandObject):
     builder.button(text="Открыть магазин", web_app=WebAppInfo(url=app_url))
 
     await message.answer(
-        "Добро пожаловать в интернет магазин цифровых товаров!",
+        "Welcome to SafeDeal!\n"
+        "Buy and sell products, services, freelance work, and digital goods safely.\n"
+        "SafeDeal acts as a trusted guarantor, protecting your deals from start to finish.",
         reply_markup=builder.as_markup(),
     )
 
@@ -187,6 +190,8 @@ async def on_chat_member_update(update: types.ChatMemberUpdated):
         "chat_id": update.chat.id,
         "telegram_user_id": update.new_chat_member.user.id,
         "new_status": update.new_chat_member.status,
+        "is_member": getattr(update.new_chat_member, "is_member", None),
+        "occurred_at": update.date.isoformat(),
     }
 
     try:
@@ -212,13 +217,16 @@ async def on_deal_action(callback: types.CallbackQuery):
     """Нажатие кнопки действия по сделке."""
     try:
         _, action, number = callback.data.split(":", 2)
-    except ValueError:
+        number = int(number)
+        if action not in ("delivered", "confirm", "dispute") or number <= 0:
+            raise ValueError()
+    except (ValueError, AttributeError):
         await callback.answer("Некорректная кнопка")
         return
 
     result = await call_backend("deal-action", {
         "telegram_user_id": callback.from_user.id,
-        "deal_number": int(number),
+        "deal_number": number,
         "action": action,
     })
 
@@ -239,7 +247,10 @@ async def on_moderation_action(callback: types.CallbackQuery):
     """
     try:
         _, action, listing_id = callback.data.split(":", 2)
-    except ValueError:
+        uuid.UUID(listing_id)
+        if action not in ("approve", "reject"):
+            raise ValueError()
+    except (ValueError, AttributeError):
         await callback.answer("Некорректная кнопка")
         return
 
@@ -307,7 +318,7 @@ async def on_relay_message(message: types.Message):
 async def main():
     logger.info("Bot starting, WebApp URL: %s", WEBAPP_URL)
 
-    await bot.delete_webhook(drop_pending_updates=True)
+    await bot.delete_webhook(drop_pending_updates=False)
 
     # resolve_used_update_types() собирает типы по зарегистрированным
     # хендлерам. Без явного списка Telegram не присылает chat_member вовсе,

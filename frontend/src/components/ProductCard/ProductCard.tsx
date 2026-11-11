@@ -1,14 +1,16 @@
 import React from 'react';
+import { useAuthStore } from '@/store/authStore';
 import { ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types';
 import { Stars } from '@/components/Stars/Stars';
-import { thumb } from '@/lib/image';
+import { ProductImage } from '@/components/ProductImage/ProductImage';
 import './ProductCard.css';
 
 interface ProductCardProps {
     product: Product;
     onClick: () => void;
     onAddToCart: () => void;
+    priority?: boolean;
 }
 
 /**
@@ -27,12 +29,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     product,
     onClick,
     onAddToCart,
+    priority = false,
 }) => {
+    const language = useAuthStore(s => s.language);
+    const userId = useAuthStore(s => s.user?.id);
+    const isOwnProduct = !!userId && product.owner_user_id === userId;
     const rating = product.rating ?? null;
 
     const handleBuy = (e: React.MouseEvent) => {
         e.stopPropagation();
-        onAddToCart();
+        if (!isOwnProduct) onAddToCart();
     };
 
     return (
@@ -46,11 +52,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 onClick={onClick}
             >
                 <span className="product-image">
-                    <img src={thumb(product.image_url)} alt="" loading="lazy" decoding="async" />
+                    <ProductImage key={product.image_url} url={product.image_url} priority={priority} />
 
                     {/* Без огонька: иконка мельче подписи, на фотографии
                         превращалась в жёлтую кляксу и клиенту не нравилась */}
-                    {product.is_top && <span className="product-tag">Хит</span>}
+                    {product.is_promoted && <span className="product-tag">{language === 'ru' ? 'Промо' : 'Promoted'}</span>}
+                    {!product.is_promoted && product.is_top && <span className="product-tag">Хит</span>}
 
                     {/* Оценка лежит на картинке, а не под названием.
                         Под названием она встречалась не у всех товаров, и
@@ -73,10 +80,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 type="button"
                 className="product-buy"
                 onClick={handleBuy}
-                aria-label={`Добавить «${product.name}» в корзину за $${product.price_usdt}`}
+                disabled={isOwnProduct}
+                aria-label={isOwnProduct ? (language === 'ru' ? 'Ваш товар' : 'Your product') : `Добавить «${product.name}» в корзину за $${product.price_usdt}`}
             >
-                <ShoppingCart size={16} />
-                ${product.price_usdt}
+                {isOwnProduct ? (language === 'ru' ? 'Ваш товар' : 'Your product') : <><ShoppingCart size={16} /> ${product.price_usdt}</>}
             </button>
         </div>
     );

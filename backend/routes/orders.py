@@ -374,6 +374,15 @@ async def create_order(
     if not cart_items:
         raise HTTPException(status_code=400, detail="Cart is empty")
 
+    # Check before reusing an earlier invoice or reserving any stock. Legacy
+    # cart rows must not bypass the restriction on adding one's own product.
+    own_product = await db.scalar(select(Product.id).where(
+        Product.id.in_([item.product_id for item in cart_items]),
+        Product.owner_user_id == user.id,
+    ).limit(1))
+    if own_product is not None:
+        raise HTTPException(status_code=400, detail="Уберите собственный товар из корзины")
+
     # Условия площадки принимаются до оплаты. 409 с кодом, а не просто 400 —
     # фронт по коду понимает, что надо показать галочку, а не текст ошибки.
     try:
@@ -697,6 +706,8 @@ async def complete_order(order: Order, db: AsyncSession, received_nano: int = 0)
     deals = await deal_service.create_deals_for_order(
         db, order=order, buyer=user, items=items, received_nano=received_nano,
     )
+    from services.inquiry_service import attach_order
+    await attach_order(db, order, items, deals)
 
     # Цифровые товары и инструкции выдаются мгновенно — такой заказ закрывается сразу
     if not has_pending_fulfillment:

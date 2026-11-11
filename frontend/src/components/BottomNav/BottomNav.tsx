@@ -4,6 +4,7 @@ import { Home, MessageCircle, ShoppingCart, User } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useDealsStore, selectUnreadTotal } from '@/store/dealsStore';
+import { useInquiryStore, selectInquiryUnread } from '@/store/inquiryStore';
 import './BottomNav.css';
 
 export const BottomNav: React.FC = () => {
@@ -23,6 +24,7 @@ export const BottomNav: React.FC = () => {
     // Непрочитанное в переписке по сделкам — на вкладке «Чаты». Раньше
     // значок висел на «Профиле»: переписка была спрятана внутри него
     const unreadDeals = useDealsStore(selectUnreadTotal);
+    const unreadInquiries = useInquiryStore(selectInquiryUnread);
     const navigate = useNavigate();
     const { pathname } = useLocation();
 
@@ -46,7 +48,7 @@ export const BottomNav: React.FC = () => {
             to: '/chats',
             icon: MessageCircle,
             label: language === 'ru' ? 'Чаты' : 'Chats',
-            badge: unreadDeals,
+            badge: unreadDeals + unreadInquiries,
         },
         {
             to: '/profile',

@@ -1,0 +1,32 @@
+.subscription-editor {
+    padding-top: calc(var(--tg-chrome-top, 0px) + 16px);
+    padding-bottom: calc(110px + var(--safe-area-bottom, 0px));
+    color: var(--text-primary);
+}
+.subscription-editor h1 { font-size: 22px; margin: 16px 0 24px; overflow-wrap: anywhere; }
+.subscription-editor .btn-back { text-decoration: none; }
+.subscription-create { max-width: 640px; margin: 0 auto; }
+.subscription-create fieldset { display: flex; flex-direction: column; gap: 18px; padding: 0; margin: 0; border: 0; min-width: 0; }
+.subscription-create label:not(.subscription-editor-terms) { display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 600; min-width: 0; }
+.subscription-create input:not([type='checkbox']), .subscription-create textarea {
+    width: 100%; min-width: 0; padding: 14px; border: 1px solid var(--border-color);
+    border-radius: 14px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-weight: 400;
+}
+.subscription-create textarea { resize: vertical; min-height: 110px; }
+.subscription-cover-picker { position: relative; }
+.subscription-cover-button { width: 100%; height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 0; overflow: hidden; border: 1px dashed var(--border-color); border-radius: 20px; background: var(--bg-secondary); color: var(--text-secondary); font: inherit; cursor: pointer; }
+.subscription-cover-button img { width: 100%; height: 100%; object-fit: cover; }
+.subscription-cover-remove { position: absolute; right: 10px; top: 10px; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--border-color); border-radius: 50%; background: var(--bg-primary); color: var(--text-primary); cursor: pointer; }
+.subscription-editor-hint { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+.subscription-editor-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.subscription-editor-translations { color: var(--text-secondary); }
+.subscription-editor-translations summary { cursor: pointer; }
+.subscription-editor-translations label { margin-top: 16px; }
+.subscription-editor-terms { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.5; }
+.subscription-editor-terms input { margin-top: 4px; }
+.subscription-editor-terms button { padding: 0; border: 0; background: none; font: inherit; color: var(--accent-primary); cursor: pointer; text-align: start; }
+.subscription-editor-save { width: 100%; min-height: 48px; }
+.subscription-create button:focus-visible, .subscription-create input:focus-visible, .subscription-create textarea:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.subscription-editor .channel-card { margin: 0; }
+.channel-list-head .channel-btn { text-decoration: none; }
+.channel-row .channel-badge { font-size: 11px; }

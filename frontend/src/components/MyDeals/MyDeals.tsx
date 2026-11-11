@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Package } from 'lucide-react';
+import { ChatAvatar } from '@/components/ChatAvatar/ChatAvatar';
 import { useAuthStore } from '@/store/authStore';
 import { useDealsStore } from '@/store/dealsStore';
 import { errorText } from '@/store/toastStore';
@@ -63,8 +64,8 @@ export const MyDeals: React.FC<{
             <p className="mydeals-empty">
                 {mode === 'chats'
                     ? t(
-                        'Чатов пока нет. Когда вы купите или продадите товар, здесь появится переписка с другой стороной.',
-                        'No chats yet. When you buy or sell an item, the conversation with the other side appears here.',
+                        'Переписок по сделкам пока нет. Они появятся после покупки или продажи товара.',
+                        'No deal conversations yet. They will appear after you buy or sell an item.',
                     )
                     : t(
                         'Сделок пока нет. Здесь появятся покупки и продажи товаров с рук — у каждой своя переписка.',
@@ -107,11 +108,11 @@ export const MyDeals: React.FC<{
                         className="mydeals-row"
                         onClick={() => navigate(`/my/deals/${deal.id}`)}
                     >
-                        <span className="mydeals-thumb">
+                        {mode === 'chats' ? <ChatAvatar src={deal.counterpart_avatar_url || (deal.role === 'buyer' ? deal.store?.avatar_url : null)} /> : <span className="mydeals-thumb">
                             {deal.product_image
                                 ? <img src={thumb(deal.product_image)} alt="" loading="lazy" decoding="async" />
                                 : <Package size={22} />}
-                        </span>
+                        </span>}
 
                         <span className="mydeals-main">
                             <span className="mydeals-name">{deal.product_name}</span>

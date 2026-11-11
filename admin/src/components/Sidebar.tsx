@@ -64,6 +64,9 @@ export const NAV_ITEMS: NavItem[] = [
     { path: '/audit', icon: ScrollText, label: 'Журнал действий' },
     { path: '/security', icon: KeyRound, label: 'Безопасность', roles: BOTH },
     { path: '/settings', icon: SettingsIcon, label: 'Настройки' },
+    { path: '/market-ranking', icon: Scale, label: 'Рейтинг маркетов' },
+    { path: '/publications', icon: Share2, label: 'Крупные сделки' },
+    { path: '/giveaways', icon: Package, label: 'Розыгрыши' },
 ];
 
 /** Раздел виден роли? */

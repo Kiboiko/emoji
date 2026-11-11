@@ -1,0 +1,25 @@
+.inquiry-chat { position: fixed; inset: 0; z-index: var(--z-overlay); max-height: var(--tg-viewport-height, none); display: flex; flex-direction: column; padding: var(--tg-content-top, var(--tg-chrome-top, 0px)) 16px 0; color: var(--text-primary); background: var(--bg-primary); }
+.inquiry-chat-head { display: flex; flex: none; gap: 12px; align-items: center; z-index: 3; padding: 12px 0; background: var(--bg-primary); }
+.inquiry-chat-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; overflow-anchor: none; }
+.inquiry-chat-head a { color: var(--text-primary); display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; }
+.inquiry-chat-head h1 { font-size: 20px; overflow-wrap: anywhere; margin: 0; }
+.inquiry-policy { padding: 12px; border-radius: 12px; background: var(--bg-secondary); color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.inquiry-messages { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px 0; }
+.inquiry-message-row { width: 100%; display: flex; align-items: flex-end; gap: 8px; }
+.inquiry-message-row.is-mine { flex-direction: row-reverse; }
+.inquiry-message-row .chat-avatar { width: 28px; height: 28px; }
+.inquiry-bubble { min-width: 0; max-width: calc(100% - 36px); padding: 10px 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px 14px 14px 3px; overflow-wrap: anywhere; }
+.inquiry-bubble.is-mine { align-self: flex-end; background: var(--bg-tertiary); border-radius: 14px 14px 3px 14px; }
+.inquiry-bubble p { margin: 0; white-space: pre-wrap; line-height: 1.5; }
+.inquiry-bubble img { max-width: 100%; max-height: 300px; display: block; border-radius: 8px; }
+.inquiry-bubble time { display: block; margin-top: 5px; text-align: right; color: var(--text-secondary); font-size: 11px; }
+.inquiry-composer { display: flex; flex: none; align-items: flex-end; gap: 8px; flex-wrap: wrap; z-index: 4; margin: 0 -16px; padding: 10px 12px calc(10px + var(--safe-area-bottom, 0px)); background: var(--bg-primary); border-top: 1px solid var(--border-color); }
+.inquiry-composer > button { width: 44px; height: 44px; display: grid; place-items: center; flex-shrink: 0; padding: 0; border: 0; border-radius: 12px; background: var(--bg-secondary); color: var(--accent-primary); cursor: pointer; }
+.inquiry-composer button:disabled { opacity: .5; cursor: default; }
+.inquiry-composer textarea { flex: 1; min-width: 0; resize: vertical; min-height: 44px; max-height: 160px; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-primary); background: var(--bg-secondary); font: inherit; }
+.inquiry-photo-preview { flex-basis: 100%; display: flex; gap: 8px; align-items: flex-start; }
+.inquiry-photo-preview img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+.inquiry-photo-preview button { padding: 5px; color: var(--text-primary); background: var(--bg-secondary); border: 0; border-radius: 50%; }
+.inquiry-list h2 { margin: 0 0 12px; font-size: 18px; }
+.inquiry-list { margin-bottom: 24px; }
+.inquiry-unread { align-self: center; padding: 4px 8px; border-radius: 20px; color: var(--accent-contrast); background: var(--accent-primary); font-size: 12px; }

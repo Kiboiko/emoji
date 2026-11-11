@@ -14,7 +14,7 @@ from __future__ import annotations
 import hmac
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
@@ -49,6 +49,8 @@ class ChatMemberEvent(BaseModel):
     telegram_user_id: int
     # "member" — вошёл, "left"/"kicked" — вышел или удалён
     new_status: str
+    is_member: bool | None = None
+    occurred_at: datetime | None = None
 
 
 @router.post("/chat-member", dependencies=[Depends(require_internal_token)])
@@ -63,6 +65,13 @@ async def handle_chat_member(
     ссылке» от «пользуется каналом», а при разборе жалоб непонятно, был ли
     доступ вообще.
     """
+    if event.new_status in ("left", "kicked") or (event.new_status == "restricted" and event.is_member is False):
+        from services.giveaway_service import membership_left
+        occurred = event.occurred_at
+        if occurred and occurred.tzinfo:
+            occurred = occurred.astimezone(timezone.utc).replace(tzinfo=None)
+        await membership_left(db, event.chat_id, event.telegram_user_id, occurred)
+        await db.commit()
     channel = (
         await db.execute(select(Channel).where(Channel.telegram_chat_id == event.chat_id))
     ).scalars().first()

@@ -442,7 +442,7 @@ export const Products: React.FC = () => {
                                             >
                                                 <option value="" disabled>Выберите категорию</option>
                                                 {categories?.map((c: Category) => (
-                                                    <option key={c.id} value={c.id}>{c.name_ru}</option>
+                                                    <option key={c.id} value={c.id}>{c.parent_id ? `${categories?.find(parent => parent.id === c.parent_id)?.name_ru ?? ''} / ` : ''}{c.name_ru}</option>
                                                 ))}
                                             </select>
                                         </div>

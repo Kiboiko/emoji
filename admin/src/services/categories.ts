@@ -1,6 +1,7 @@
 import api from '../api/axios';
 
 export interface Category {
+    parent_id?: string | null;
     id: string;
     name_ru: string;
     name_en: string;
@@ -9,6 +10,7 @@ export interface Category {
 }
 
 export interface CategoryCreate {
+    parent_id?: string | null;
     name_ru: string;
     name_en: string;
     sort_order: number;

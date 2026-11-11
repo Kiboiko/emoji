@@ -177,8 +177,7 @@ async def sync_plan_products(db: AsyncSession, channel: Channel) -> None:
         # Обложка главнее аватара: её автор загрузил сам, а аватар подтянут
         # из Telegram и у канала без фотографии его просто нет
         picture = channel.cover_url or channel.avatar_url
-        if picture:
-            product.image_url = picture
+        product.image_url = picture or "/uploads/products/placeholder.png"
 
 
 # ---------------------------------------------------------------------------
@@ -372,28 +371,35 @@ async def split_subscription_payment(
     bp = await settings_service.get_int(db, "commission_subscription_bp")
     commission_nano, author_nano = split_by_bp(amount_nano, bp)
 
-    if author_nano <= 0:
-        return
-
     platform = await finance_service.platform_account(db, CURRENCY)
     author = await finance_service.user_account(db, channel.owner_user_id, CURRENCY)
 
-    await finance_service.post(
-        db,
-        ref_type=LedgerRefType.ORDER,
-        ref_id=order_id,
-        comment=f"Подписка на «{channel.title}», комиссия {bp / 100:g}%",
-        postings=[
-            finance_service.Posting(
-                account=platform, entry_type=LedgerEntryType.AUTHOR_ACCRUAL,
-                amount_minor=-author_nano, key_suffix=f"{key_suffix}:src",
-            ),
-            finance_service.Posting(
-                account=author, entry_type=LedgerEntryType.AUTHOR_ACCRUAL,
-                amount_minor=author_nano, key_suffix=f"{key_suffix}:dst",
-            ),
-        ],
-    )
+    if author_nano > 0:
+        await finance_service.post(
+            db,
+            ref_type=LedgerRefType.ORDER,
+            ref_id=order_id,
+            comment=f"Подписка на «{channel.title}», комиссия {bp / 100:g}%",
+            postings=[
+                finance_service.Posting(
+                    account=platform, entry_type=LedgerEntryType.AUTHOR_ACCRUAL,
+                    amount_minor=-author_nano, key_suffix=f"{key_suffix}:src",
+                ),
+                finance_service.Posting(
+                    account=author, entry_type=LedgerEntryType.AUTHOR_ACCRUAL,
+                    amount_minor=author_nano, key_suffix=f"{key_suffix}:dst",
+                ),
+            ],
+        )
+
+    from models.order import Order
+    from services.partner_service import pay_commission
+    paid_order = await db.get(Order, order_id)
+    if paid_order:
+        try: source_id = uuid.UUID(key_suffix)
+        except ValueError: source_id = uuid.uuid5(order_id, key_suffix)
+        await pay_commission(db, buyer_id=paid_order.user_id, order_id=order_id,
+            source_kind="subscription", source_id=source_id, amount_nano=commission_nano)
 
     logger.info(
         "[SUB] Сплит по каналу %s: автору %d, комиссия %d нанотон",

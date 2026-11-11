@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, BadgeCheck, Link2, Store as StoreIcon, Users } from 'lucide-react';
-import { cartApi, storesApi } from '@/api/client';
+import { cartApi, storesApi, subscriptionsApi, usersApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
 import { useToastStore, errorText } from '@/store/toastStore';
 import { useTelegram } from '@/hooks/useTelegram';
 import { ProductCard } from '@/components/ProductCard/ProductCard';
 import { Stars } from '@/components/Stars/Stars';
+import { RankingFrame } from '@/components/RankingFrame/RankingFrame';
 import { monthYear, pluralRu } from '@/lib/format';
 import type { Store as StoreData } from '@/types';
 import './Store.css';
@@ -22,13 +23,16 @@ import './Store.css';
 export const Store: React.FC = () => {
     const { kind, id } = useParams<{ kind: string; id: string }>();
     const navigate = useNavigate();
-    const { language } = useAuthStore();
+    const { language, user, accessToken } = useAuthStore();
     const { setCart } = useCartStore();
     const { haptic } = useTelegram();
     const showToast = useToastStore((s) => s.show);
 
     const [store, setStore] = useState<StoreData | null>(null);
     const [failed, setFailed] = useState(false);
+    const [contactTarget, setContactTarget] = useState<string | null>(null);
+    const userId = user?.id;
+    const contactKey = `${userId}:${kind}:${id}`;
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
@@ -46,6 +50,21 @@ export const Store: React.FC = () => {
     }, [id, kind, language, showToast]);
 
     useEffect(() => { load(); }, [load]);
+
+    useEffect(() => {
+        if (!id || !userId || !accessToken) return;
+        let live = true;
+        // Ownership comes from private account APIs; public storefronts stay cacheable.
+        const check = kind === 'channel'
+            ? subscriptionsApi.getMyChannels().then(channels => !channels.some(channel => channel.id === id))
+            : usersApi.getSummary().then(summary => summary.seller_id !== id);
+        check.then(allowed => {
+            if (live) setContactTarget(allowed ? contactKey : null);
+        }).catch(() => {
+            if (live) setContactTarget(null);
+        });
+        return () => { live = false; };
+    }, [id, kind, userId, accessToken, contactKey]);
 
     const addToCart = async (product: StoreData['products'][number]) => {
         // Услуге нужна ссылка на аккаунт или пост, а её спрашивают на
@@ -111,10 +130,6 @@ export const Store: React.FC = () => {
         ? pluralRu(n, ['отзыв', 'отзыва', 'отзывов'])
         : (n === 1 ? 'review' : 'reviews'));
 
-    const dealsWord = (n: number) => (language === 'ru'
-        ? pluralRu(n, ['сделка', 'сделки', 'сделок'])
-        : (n === 1 ? 'deal' : 'deals'));
-
     const subscribersWord = (n: number) => (language === 'ru'
         ? pluralRu(n, ['подписчик', 'подписчика', 'подписчиков'])
         : (n === 1 ? 'subscriber' : 'subscribers'));
@@ -131,15 +146,15 @@ export const Store: React.FC = () => {
                     карточка вокруг неё отбирала 32px ширины и ещё раз
                     повторяла границу, которую и так рисует край экрана. */}
                 <header className="store-head">
-                    <div className="store-avatar">
+                    <RankingFrame medal={store.medal} rank={store.rank} className="store-emblem">
                         {store.avatar_url
                             ? <img src={store.avatar_url} alt="" />
                             : <span aria-hidden="true">{initial || <StoreIcon size={32} />}</span>}
-                    </div>
+                    </RankingFrame>
 
                     <div className="store-ident">
-                        <h1 className="store-name">
-                            {name}
+                        <h1 className={`store-name ${store.medal ? `store-name-ornament medal-${store.medal}` : ''}`}>
+                            <span>{name}</span>
                             {store.is_verified && (
                                 <BadgeCheck
                                     className="store-verified"
@@ -171,14 +186,7 @@ export const Store: React.FC = () => {
                             </div>
                         )}
 
-                        {(since || store.deals_completed > 0) && (
-                            <div className="store-since">
-                                {since && t(`на площадке с ${since}`, `on the marketplace since ${since}`)}
-                                {since && store.deals_completed > 0 && ' · '}
-                                {store.deals_completed > 0
-                                    && `${store.deals_completed} ${dealsWord(store.deals_completed)}`}
-                            </div>
-                        )}
+                        {since && <div className="store-since">{t(`на площадке с ${since}`, `on the marketplace since ${since}`)}</div>}
 
                         {store.link && (
                             <a
@@ -193,6 +201,11 @@ export const Store: React.FC = () => {
                         )}
                     </div>
                 </header>
+
+                {store.kind !== 'platform' && contactTarget === contactKey && <button type="button" className="store-contact"
+                    onClick={() => navigate(`/chats/seller/new?store=${encodeURIComponent(id!)}&kind=${kind === 'channel' ? 'channel' : 'seller'}`,
+                        { state: { storeName: store.name, storeAvatar: store.avatar_url } })}>
+                    {t('Написать продавцу', 'Message the seller')}</button>}
 
                 {store.description && (
                     <p className="store-description">{store.description}</p>

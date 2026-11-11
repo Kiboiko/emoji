@@ -9,6 +9,7 @@ class CategoryBase(BaseModel):
     name_ru: str = Field(..., min_length=1, max_length=255)
     name_en: str = Field(..., min_length=1, max_length=255)
     sort_order: int = 0
+    parent_id: Optional[UUID] = None
 
 
 class CategoryCreate(CategoryBase):
@@ -21,6 +22,7 @@ class CategoryUpdate(BaseModel):
     name_ru: Optional[str] = Field(None, min_length=1, max_length=255)
     name_en: Optional[str] = Field(None, min_length=1, max_length=255)
     sort_order: Optional[int] = None
+    parent_id: Optional[UUID] = None
 
 
 class CategoryResponse(CategoryBase):
@@ -38,3 +40,4 @@ class CategoryLocalized(BaseModel):
     id: UUID
     name: str  # name_ru or name_en based on language
     sort_order: int
+    parent_id: Optional[UUID] = None

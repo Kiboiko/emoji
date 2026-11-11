@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
     Store, Star, Pencil, Camera, ChevronRight, AlertTriangle, ChevronDown, ChevronUp, Check,
@@ -11,6 +11,7 @@ import { formatTon } from '@/lib/ton';
 import { pluralRu } from '@/lib/format';
 import { GramIcon } from '@/components/Gram/Gram';
 import { AutoTextarea } from '@/components/AutoTextarea/AutoTextarea';
+import { PhotoFileInput, photoFileError } from '@/components/PhotoFileInput/PhotoFileInput';
 import type { Listing, SellerProfile } from '@/types';
 import { ListingsList } from './ListingsList';
 import './SellerCabinet.css';
@@ -278,7 +279,6 @@ const SellerSummary: React.FC<{
     const [nameWarn, setNameWarn] = useState(false);
     const [about, setAbout] = useState(profile.description ?? '');
     const [saving, setSaving] = useState(false);
-    const avatarInput = useRef<HTMLInputElement | null>(null);
 
     const t = (ru: string, en: string) => (language === 'ru' ? ru : en);
 
@@ -302,12 +302,13 @@ const SellerSummary: React.FC<{
         }
     };
 
-    const pickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        // Сбрасываем сразу: иначе повторный выбор того же файла
-        // не даст события
-        e.target.value = '';
+    const pickAvatar = async ([file]: File[]) => {
         if (!file) return;
+        const invalid = photoFileError(file, t);
+        if (invalid) {
+            onError(null, invalid);
+            return;
+        }
 
         setSaving(true);
         try {
@@ -326,14 +327,10 @@ const SellerSummary: React.FC<{
             {/* Логотип грузится вручную, а не тянется из Telegram, как у
                 каналов: с личным аватаром магазин выглядит аккаунтом */}
             <div className="seller-brand">
-                <button
-                    className="seller-logo"
-                    onClick={() => avatarInput.current?.click()}
-                    disabled={saving}
-                    aria-label={profile.avatar_url
+                <div className="seller-logo photo-file-target">
+                    <PhotoFileInput disabled={saving} onFiles={pickAvatar} label={profile.avatar_url
                         ? t('Заменить логотип магазина', 'Replace the store logo')
-                        : t('Загрузить логотип магазина', 'Upload a store logo')}
-                >
+                        : t('Загрузить логотип магазина', 'Upload a store logo')} />
                     {profile.avatar_url
                         ? <img src={profile.avatar_url} alt="" />
                         : <span aria-hidden="true">
@@ -344,7 +341,7 @@ const SellerSummary: React.FC<{
                     <span className="seller-logo-edit" aria-hidden="true">
                         <Camera size={13} />
                     </span>
-                </button>
+                </div>
 
                 <div className="seller-brand-text">
                     <div className="seller-brand-name">{profile.display_name}</div>
@@ -367,14 +364,6 @@ const SellerSummary: React.FC<{
                         рядом дублировала его */}
                 </div>
             </div>
-
-            <input
-                ref={avatarInput}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                hidden
-                onChange={pickAvatar}
-            />
 
             <div className="seller-stats">
                 <div className="seller-stat">

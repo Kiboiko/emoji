@@ -1,0 +1,112 @@
+.category-filter {
+    position: relative;
+    min-width: 0;
+    padding-bottom: 16px;
+}
+
+.category-filter-row,
+.category-filter-scroll {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.category-filter-scroll {
+    flex: 1;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.category-filter-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.category-filter .category-chip {
+    flex: 0 0 auto;
+    height: 44px;
+    padding: 0 16px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.category-filter .category-chip.active {
+    background: var(--accent-primary);
+    color: var(--accent-contrast);
+    font-weight: var(--weight-semibold);
+}
+
+.category-filter .category-picker-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 10px;
+}
+
+.category-filter-reset {
+    display: grid;
+    place-items: center;
+    flex: 0 0 44px;
+    height: 44px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.category-picker {
+    position: absolute;
+    top: calc(100% - 8px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    max-width: 360px;
+    max-height: min(360px, 50dvh);
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    background: var(--bg-secondary);
+    box-shadow: 0 8px 28px #0003;
+}
+
+.category-picker button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-primary);
+    text-align: start;
+    font: inherit;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+
+.category-picker button[aria-pressed='true'] {
+    background: var(--bg-tertiary);
+    color: var(--accent-primary);
+}
+
+.category-picker svg {
+    flex-shrink: 0;
+}
+
+.category-filter button:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+}

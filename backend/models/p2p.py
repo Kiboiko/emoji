@@ -5,7 +5,7 @@ from enum import Enum as PyEnum
 
 from sqlalchemy import (
     BigInteger, Boolean, DateTime, Enum, ForeignKey, Identity, Index, Integer,
-    Numeric, String, Text, UniqueConstraint, text,
+    Numeric, String, Text, UniqueConstraint, text, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -58,6 +58,9 @@ class MessageDirection(str, PyEnum):
 class SellerProfile(Base):
     """Профиль продавца. Заводится при первой заявке на размещение."""
     __tablename__ = "seller_profiles"
+
+    home_visible: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), nullable=False)
+    ranking_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"), nullable=False)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     # Пустой у магазина площадки: за ним не стоит человек. Уникальности это
@@ -134,6 +137,9 @@ class SellerProfile(Base):
 
     def __repr__(self) -> str:
         return f"<SellerProfile({self.display_name}, {self.status.value})>"
+
+    # Already created by migration 0018; test-created schemas must preserve it too.
+    __table_args__ = (Index("ix_seller_profiles_name_ci", func.lower(display_name), unique=True),)
 
 
 class ProductListing(Base):

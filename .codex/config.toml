@@ -1,0 +1,8 @@
+# Work directly with Sol; no automatic subagents.
+model = "gpt-6.1-sol"
+model_reasoning_effort = "low"
+
+[agents]
+enabled = false
+default_subagent_model = "gpt-6.1-sol"
+default_subagent_reasoning_effort = "low"

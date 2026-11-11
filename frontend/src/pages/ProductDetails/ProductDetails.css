@@ -337,6 +337,17 @@
     margin-bottom: 8px;
 }
 
+.reviews-loading {
+    min-height: 28px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.reviews-list .review-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
 .review-user {
     display: flex;
     align-items: center;
@@ -659,3 +670,9 @@
     cursor: not-allowed;
     box-shadow: none;
 }
+
+.product-title-row { display: flex; align-items: flex-start; gap: 12px; }
+.product-title-row h1 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.product-share { flex: 0 0 44px; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 10px; color: var(--text-secondary); background: transparent; cursor: pointer; }
+.product-share:active { color: var(--accent-primary); background: var(--bg-secondary); }
+.product-share:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: -2px; }

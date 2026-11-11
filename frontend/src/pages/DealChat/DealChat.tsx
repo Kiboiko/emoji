@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
-    AlertTriangle, ArrowLeft, ArrowUp, BadgeCheck, Lock, Paperclip, User as UserIcon, X,
+    AlertTriangle, ArrowLeft, ArrowUp, BadgeCheck, Lock, Paperclip, X,
 } from 'lucide-react';
 import { p2pApi } from '@/api/client';
 import { realtime } from '@/lib/realtime';
+import { ChatAvatar } from '@/components/ChatAvatar/ChatAvatar';
 import { isAppActive, onAppActiveChange } from '@/lib/appActive';
 import { useAuthStore } from '@/store/authStore';
 import { useDealsStore, selectIsTyping } from '@/store/dealsStore';
@@ -218,6 +219,16 @@ export const DealChat: React.FC = () => {
         if (box && stickToBottom.current) box.scrollTop = box.scrollHeight;
     }, [messages, deal?.status]);
 
+    useEffect(() => {
+        const box = listRef.current;
+        if (!box) return;
+        const observer = new ResizeObserver(() => {
+            if (stickToBottom.current) box.scrollTop = box.scrollHeight;
+        });
+        observer.observe(box);
+        return () => observer.disconnect();
+    }, [deal?.id]);
+
     // --- Отправка ------------------------------------------------------------
 
     const localMessage = (extra: Partial<ChatMessage>): ChatMessage => {
@@ -260,7 +271,7 @@ export const DealChat: React.FC = () => {
         const message = localMessage({ text });
         setMessages((prev) => [...prev, message]);
         setDraft('');
-        fieldRef.current?.focus();
+        fieldRef.current?.focus({ preventScroll: true });
         deliver(message);
     };
 
@@ -383,15 +394,7 @@ export const DealChat: React.FC = () => {
 
                 {deal && (
                     <span className="dchat-ava-wrap">
-                        {buyer ? (
-                            <span className="dchat-ava">
-                                {deal.store?.avatar_url
-                                    ? <img src={deal.store.avatar_url} alt="" />
-                                    : name.trim().charAt(0).toUpperCase()}
-                            </span>
-                        ) : (
-                            <span className="dchat-ava anon"><UserIcon size={20} /></span>
-                        )}
+                        <ChatAvatar src={deal.counterpart_avatar_url || (buyer ? deal.store?.avatar_url : null)} />
                         {deal.counterpart_online && <span className="dchat-online-dot" />}
                     </span>
                 )}
@@ -437,7 +440,11 @@ export const DealChat: React.FC = () => {
                 )}
             </div>
 
-            <div className="dchat-msgs" ref={listRef} onScroll={onScroll} role="log" aria-live="polite">
+            <div className="dchat-msgs" ref={listRef} onScroll={onScroll} role="log" aria-live="polite"
+                onLoadCapture={() => {
+                    const box = listRef.current;
+                    if (box && stickToBottom.current) box.scrollTop = box.scrollHeight;
+                }}>
                 {deal?.chat_expired ? (
                     <div className="dchat-day">
                         {/* Без числа дней: срок меняется в настройках админки */}
@@ -526,6 +533,7 @@ export const DealChat: React.FC = () => {
                         <button
                             type="button"
                             className="dchat-send"
+                            onPointerDown={event => event.preventDefault()}
                             onClick={sendText}
                             disabled={!draft.trim() || !deal}
                             aria-label={t('Отправить', 'Send')}

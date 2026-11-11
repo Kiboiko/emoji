@@ -13,6 +13,8 @@ class User(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True, nullable=False)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     first_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Refresh only from verified Telegram initData; absent when photo is private.
+    photo_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     language_code: Mapped[str] = mapped_column(String(10), default="ru", nullable=False)
     
     # Admin

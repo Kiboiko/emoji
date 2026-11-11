@@ -283,6 +283,11 @@ async def _release_to_seller(db: AsyncSession, deal: Deal, *, reason: str) -> No
 
     deal.status = DealStatus.RELEASED
     deal.released_at = datetime.utcnow()
+    from services.partner_service import pay_commission
+    await pay_commission(db, buyer_id=deal.buyer_id, order_id=deal.order_id, source_kind="deal",
+                         source_id=deal.id, amount_nano=deal.commission_nano)
+    from services.telegram_publication_service import enqueue
+    await enqueue(db, deal)
     _close_chat(deal)
 
     profile = (

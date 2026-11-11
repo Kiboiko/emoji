@@ -3,44 +3,6 @@
     padding-bottom: 80px;
 }
 
-.categories-scroll {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding: 0 16px 16px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-
-.categories-scroll::-webkit-scrollbar {
-    display: none;
-}
-
-/* Чипс — заливка без рамки. Рамка вокруг серой плашки давала двойной
-   контур, а у выбранной категории ещё и спорила с заливкой. */
-.category-chip {
-    flex-shrink: 0;
-    height: 34px;
-    padding: 0 16px;
-    border: none;
-    border-radius: var(--radius-pill);
-    background: var(--bg-tertiary);
-    color: var(--text-secondary);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast);
-    white-space: nowrap;
-}
-
-/* Плоская заливка без свечения: тем же приёмом покрашена кнопка покупки,
-   и градиент с ореолом рядом с ней выглядел как другая кнопка. */
-.category-chip.active {
-    background: var(--accent-primary);
-    color: var(--accent-contrast);
-    font-weight: var(--weight-semibold);
-}
-
 /* --- Заголовок раздела -------------------------------------------------
    Разделы появились, когда на главную вышли магазины и хиты: до этого весь
    экран был одной сеткой и подписывать было нечего. */
@@ -50,6 +12,58 @@
     font-size: var(--font-lg);
     font-weight: var(--weight-semibold);
     color: var(--text-primary);
+}
+
+.home-stores-heading {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-4);
+    margin-bottom: var(--space-2-5);
+}
+
+.home-stores-heading .home-section {
+    margin: 0;
+    padding: 0;
+}
+
+.home-ranking-info {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.home-ranking-info[aria-expanded='true'] {
+    color: var(--accent-primary);
+}
+
+.home-ranking-info:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -4px;
+}
+
+.home-ranking-tooltip {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: var(--space-4);
+    z-index: 20;
+    width: max-content;
+    max-width: min(300px, calc(100% - 2 * var(--space-4)));
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-md);
+    font-size: 14px;
+    line-height: 1.5;
 }
 
 /* Отметка конца каталога: к ней подходит экран — подгружается следующая

@@ -1,7 +1,10 @@
+import { productShareLink } from '@/lib/productLink';
+import { webImage } from '@/lib/image';
+import { markStartup, readyStartupImages, failStartup } from '@/store/startupStore';
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ShoppingCart, Plus, Minus } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ArrowLeft, ShoppingCart, Plus, Minus, Share2 } from 'lucide-react';
 import { productsApi, cartApi, reviewsApi } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
@@ -29,19 +32,24 @@ const maxUnits = (p: Product): number => Math.min(
 export const ProductDetails: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { language } = useAuthStore();
+    const { language, user } = useAuthStore();
     const { cart, setCart } = useCartStore();
     const { haptic } = useTelegram();
     const showToast = useToastStore((state) => state.show);
 
     const [product, setProduct] = useState<Product | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+    const [reload, setReload] = useState(0);
     const [reviews, setReviews] = useState<Review[]>([]);
     const [isReviewsExpanded, setIsReviewsExpanded] = useState(false);
     const [isLoadingReviews, setIsLoadingReviews] = useState(false);
     const [hasMoreReviews, setHasMoreReviews] = useState(true);
-    const [reviewsSkip, setReviewsSkip] = useState(0);
-    const reviewsLimit = 5;
+    const reviewsSkip = useRef(0);
+    const reviewsBusy = useRef(false);
+    const reviewsGeneration = useRef(0);
+    const reviewsLimit = 10;
+    const maxReviews = 50;
 
     const reviewsRef = useRef<HTMLDivElement>(null);
     const [serviceInput, setServiceInput] = useState('');
@@ -49,12 +57,18 @@ export const ProductDetails: React.FC = () => {
     const [quantity, setQuantity] = useState(1);
     /** Какая фотография сейчас на экране — по ней подсвечивается точка */
     const [shot, setShot] = useState(0);
+    const isOwnProduct = !!user && product?.owner_user_id === user.id;
+    const goBack = () => {
+        const index = window.history.state?.idx;
+        if (Number.isInteger(index) && index > 0) navigate(-1);
+        else navigate('/', { replace: true });
+    };
 
     useWebSocket((message) => {
         if (!id) return;
 
         if (message.type === 'product_updated' && message.data.id === id) {
-            setProduct(message.data);
+            setProduct(current => current ? { ...current, ...message.data } : current);
         } else if (message.type === 'product_deleted' && message.data.id === id) {
             setProduct(null);
         }
@@ -69,69 +83,90 @@ export const ProductDetails: React.FC = () => {
 
     useEffect(() => {
         if (id) {
-            loadProduct(id);
-            fetchInitialReviews(id);
+            const generation = ++reviewsGeneration.current;
+            reviewsSkip.current = 0;
+            reviewsBusy.current = false;
+            setReviews([]);
+            setIsReviewsExpanded(false);
+            setHasMoreReviews(true);
+            fetchInitialReviews(id, generation);
         }
+        return () => { reviewsGeneration.current += 1; };
     }, [id]);
 
-    const loadProduct = async (productId: string) => {
-        try {
-            setIsLoading(true);
-            const data = await productsApi.getProduct(productId, language);
-            setProduct(data);
-        } catch (error) {
-            console.error('Failed to load product:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    useEffect(() => {
+        if (!id) return;
+        let current = true;
+        const controller = new AbortController();
+        setIsLoading(true);
+        setProduct(null);
+        setLoadError(false);
+        productsApi.getProduct(id, language, controller.signal)
+            .then(data => {
+                if (!current) return;
+                setProduct(data);
+                markStartup('products');
+                const image = data.images?.[0] || data.image_url;
+                void readyStartupImages(image ? [webImage(image)] : []);
+            })
+            .catch(error => {
+                if (!current) return;
+                setLoadError(error?.response?.status !== 404);
+                if (error?.response?.status === 404) {
+                    markStartup('products'); markStartup('images');
+                } else failStartup(language === 'ru' ? 'Не удалось загрузить товар. Повторите попытку.' : 'Could not load the product. Please try again.', () => setReload(value => value + 1));
+            })
+            .finally(() => { if (current) setIsLoading(false); });
+        return () => { current = false; controller.abort(); };
+    }, [id, language, reload]);
 
-    const fetchInitialReviews = async (productId: string) => {
+    const fetchInitialReviews = async (productId: string, generation: number) => {
+        reviewsBusy.current = true;
         try {
             setIsLoadingReviews(true);
-            const data = await reviewsApi.getReviews(productId, 0, 10);
+            const data = await reviewsApi.getReviews(productId, 0, reviewsLimit);
+            if (generation !== reviewsGeneration.current) return;
 
             if (data && data.length > 0) {
                 setReviews(data);
-                setReviewsSkip(data.length);
-                setHasMoreReviews(data.length >= 10);
+                reviewsSkip.current = data.length;
+                setHasMoreReviews(data.length >= reviewsLimit);
             } else {
                 setReviews([]);
                 setHasMoreReviews(false);
             }
         } catch (error) {
+            if (generation !== reviewsGeneration.current) return;
             console.error('Failed to load reviews:', error);
             setReviews([]);
             setHasMoreReviews(false);
         } finally {
-            setIsLoadingReviews(false);
+            if (generation === reviewsGeneration.current) {
+                reviewsBusy.current = false;
+                setIsLoadingReviews(false);
+            }
         }
     };
 
     const fetchMoreReviews = async () => {
-        if (!id || isLoadingReviews || !hasMoreReviews) return;
+        if (!id || reviewsBusy.current || !hasMoreReviews || reviewsSkip.current >= maxReviews) return;
+        reviewsBusy.current = true;
+        const generation = reviewsGeneration.current;
 
         try {
             setIsLoadingReviews(true);
-            const data = await reviewsApi.getReviews(id, reviewsSkip, reviewsLimit);
-            setReviews(prev => [...prev, ...data]);
-            setReviewsSkip(prev => prev + data.length);
-            setHasMoreReviews(data.length >= reviewsLimit);
+            const data = await reviewsApi.getReviews(id, reviewsSkip.current, reviewsLimit);
+            if (generation !== reviewsGeneration.current) return;
+            setReviews(prev => [...prev, ...data.filter((item: Review) => !prev.some(existing => existing.id === item.id))]);
+            reviewsSkip.current += data.length;
+            setHasMoreReviews(data.length >= reviewsLimit && reviewsSkip.current < maxReviews);
         } catch (error) {
             console.error('Failed to fetch more reviews:', error);
         } finally {
-            setIsLoadingReviews(false);
-        }
-    };
-
-    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        if (!isReviewsExpanded) return;
-
-        const target = e.currentTarget;
-        const reachedBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 100;
-
-        if (reachedBottom && hasMoreReviews && !isLoadingReviews) {
-            fetchMoreReviews();
+            if (generation === reviewsGeneration.current) {
+                reviewsBusy.current = false;
+                setIsLoadingReviews(false);
+            }
         }
     };
 
@@ -140,15 +175,7 @@ export const ProductDetails: React.FC = () => {
         setIsReviewsExpanded(nextState);
         haptic.impact('light');
 
-        if (nextState) {
-            // Wait a bit more for the expansion animation to start
-            setTimeout(() => {
-                reviewsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 150);
-        } else {
-            // Smooth scroll back up when hiding
-            reviewsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        if (!nextState) reviewsRef.current?.scrollIntoView({ block: 'start' });
     };
 
     const handleBadgeClick = () => {
@@ -158,7 +185,7 @@ export const ProductDetails: React.FC = () => {
     };
 
     const handleAddToCart = async () => {
-        if (!product) return;
+        if (!product || isOwnProduct) return;
 
         // Validation for service type products
         if (product.type === 'service') {
@@ -230,6 +257,9 @@ export const ProductDetails: React.FC = () => {
     if (isLoading) {
         return (
             <div className="product-details-page">
+                <button type="button" className="back-button" onClick={goBack} aria-label={language === 'ru' ? 'Назад' : 'Back'}>
+                    <ArrowLeft size={24} />
+                </button>
                 <div className="skeleton details-skeleton-image" />
                 <div className="container details-skeleton-body">
                     <div className="skeleton details-skeleton-title" />
@@ -245,8 +275,13 @@ export const ProductDetails: React.FC = () => {
         return (
             <div className="product-details-page">
                 <div className="container">
-                    <p>{language === 'ru' ? 'Товар не найден' : 'Product not found'}</p>
-                    <button className="btn-notfound" onClick={() => navigate(-1)}>
+                    <p role={loadError ? 'alert' : undefined}>{loadError
+                        ? (language === 'ru' ? 'Не удалось загрузить товар. Проверьте подключение и повторите попытку.' : 'Could not load the product. Check your connection and try again.')
+                        : (language === 'ru' ? 'Товар не найден' : 'Product not found')}</p>
+                    {loadError && <button type="button" className="btn-notfound" onClick={() => setReload(value => value + 1)}>
+                        {language === 'ru' ? 'Повторить загрузку' : 'Retry'}
+                    </button>}
+                    <button className="btn-notfound" onClick={goBack}>
                         {language === 'ru' ? 'Вернуться назад' : 'Go back'}
                     </button>
                 </div>
@@ -289,9 +324,8 @@ export const ProductDetails: React.FC = () => {
     return (
         <motion.div
             className="product-details-page"
-            onScroll={handleScroll}
         >
-            <button className="back-button" onClick={() => navigate(-1)}>
+            <button type="button" className="back-button" onClick={goBack} aria-label={language === 'ru' ? 'Назад' : 'Back'}>
                 <ArrowLeft size={24} />
             </button>
 
@@ -316,7 +350,8 @@ export const ProductDetails: React.FC = () => {
                     }}
                 >
                     {gallery.map((url, index) => (
-                        <img key={`${url}-${index}`} src={url} alt={product.name} />
+                        <img key={`${url}-${index}`} src={webImage(url)} alt={product.name}
+                            loading={index === 0 ? 'eager' : 'lazy'} fetchPriority={index === 0 ? 'high' : 'auto'} decoding="async" />
                     ))}
                 </div>
 
@@ -346,7 +381,15 @@ export const ProductDetails: React.FC = () => {
                 transition={{ delay: 0.2, duration: 0.4 }}
             >
                 <div className="product-header">
-                    <h1>{product.name}</h1>
+                    <div className="product-title-row">
+                        <h1>{product.name}</h1>
+                        {productShareLink(product.id) && <button type="button" className="product-share"
+                            aria-label={language === 'ru' ? 'Поделиться товаром' : 'Share product'} onClick={() => {
+                            const url = `https://t.me/share/url?url=${encodeURIComponent(productShareLink(product.id)!)}&text=${encodeURIComponent(product.name)}`;
+                            const tg = (window as any).Telegram?.WebApp;
+                            if (tg?.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank', 'noopener,noreferrer');
+                        }}><Share2 size={20} aria-hidden="true" /></button>}
+                    </div>
 
                     {/* Продавец теперь отдельным блоком после описания:
                         короткой строке негде было рассказать про эскроу,
@@ -393,7 +436,7 @@ export const ProductDetails: React.FC = () => {
                     доверять тому, кто его продаёт. */}
                 <SellerBlock product={product} />
 
-                {product.type === 'service' && (
+                {product.type === 'service' && !isOwnProduct && (
                     <div className="service-details-block">
                         <div className="service-input-block">
                             <label className="service-label">
@@ -425,7 +468,7 @@ export const ProductDetails: React.FC = () => {
                     а товар продавца всегда продавался ровно по одной штуке —
                     выбирать было нечего. Теперь продавец указывает, сколько
                     у него есть, и выбор нужен обоим. */}
-                {showQuantity && (
+                {showQuantity && !isOwnProduct && (
                     <div className="quantity-block">
                         <div className="quantity-selector">
                             <span className="quantity-label">
@@ -467,7 +510,7 @@ export const ProductDetails: React.FC = () => {
 
                 <div className="product-reviews-block" ref={reviewsRef}>
                     <div className="reviews-header">
-                        <h3>{language === 'ru' ? 'Отзывы' : 'Reviews'}</h3>
+                        <h3>{product.author_kind === 'seller' ? (language === 'ru' ? 'Отзывы о продавце' : 'Seller reviews') : (language === 'ru' ? 'Отзывы' : 'Reviews')}</h3>
                         {!isReviewsExpanded && reviews.length > 2 && (
                             <button className="btn-text" onClick={toggleReviews}>
                                 {language === 'ru' ? 'Показать все' : 'Show all'}
@@ -495,49 +538,30 @@ export const ProductDetails: React.FC = () => {
                             </div>
                         ))}
 
-                        {/* Dynamic: Additional reviews with smooth fade + glide */}
-                        <AnimatePresence initial={false}>
-                            {isReviewsExpanded && reviews.slice(2).map((review, index) => (
-                                <motion.div
-                                    key={review.id}
-                                    className="review-card glass-card review-item"
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{
-                                        opacity: 1,
-                                        y: 0,
-                                        transition: {
-                                            duration: 0.4,
-                                            ease: "easeOut",
-                                            delay: index * 0.05
-                                        }
-                                    }}
-                                    exit={{
-                                        opacity: 0,
-                                        transition: { duration: 0.2 }
-                                    }}
-                                >
-                                    <div className="review-header">
-                                        <div className="review-user">
-                                            <div className="user-avatar-small">
-                                                {(review.fake_username || review.user?.first_name || 'U').charAt(0).toUpperCase()}
-                                            </div>
-                                            <span className="user-name">{review.fake_username || review.user?.first_name || 'User'}</span>
+                        {isReviewsExpanded && reviews.slice(2).map((review) => (
+                            <div
+                                key={review.id}
+                                className="review-card glass-card review-item"
+                            >
+                                <div className="review-header">
+                                    <div className="review-user">
+                                        <div className="user-avatar-small">
+                                            {(review.fake_username || review.user?.first_name || 'U').charAt(0).toUpperCase()}
                                         </div>
-                                        <Stars value={review.rating || 0} size={12} />
+                                        <span className="user-name">{review.fake_username || review.user?.first_name || 'User'}</span>
                                     </div>
-                                    <p className="review-text">{review.text}</p>
-                                    <span className="review-date">
-                                        {new Date(review.created_at).toLocaleDateString()}
-                                    </span>
-                                </motion.div>
-                            ))}
-                        </AnimatePresence>
+                                    <Stars value={review.rating || 0} size={12} />
+                                </div>
+                                <p className="review-text">{review.text}</p>
+                                <span className="review-date">
+                                    {new Date(review.created_at).toLocaleDateString()}
+                                </span>
+                            </div>
+                        ))}
 
                         {isLoadingReviews && (
-                            <div className="reviews-skeleton">
-                                {[1, 2].map(i => (
-                                    <div key={i} className="review-card-skeleton shimmer" />
-                                ))}
+                            <div className="reviews-loading" role="status">
+                                {language === 'ru' ? 'Загружаем отзывы…' : 'Loading reviews…'}
                             </div>
                         )}
 
@@ -577,9 +601,9 @@ export const ProductDetails: React.FC = () => {
                     /* Снятый с продажи товар открывается по старой ссылке, но
                        корзина его всё равно не примет — кнопку гасим здесь,
                        чтобы человек не упирался в ошибку после нажатия */
-                    disabled={product.is_active === false || soldOut}
+                    disabled={isOwnProduct || product.is_active === false || soldOut}
                 >
-                    {soldOut ? (
+                    {isOwnProduct ? (language === 'ru' ? 'Ваш товар' : 'Your product') : soldOut ? (
                         language === 'ru' ? 'Нет в наличии' : 'Out of stock'
                     ) : (
                         <>

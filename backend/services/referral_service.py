@@ -2,7 +2,7 @@ import logging
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.finance import LedgerEntryType, LedgerRefType
@@ -167,6 +167,10 @@ async def process_referral_commission(
     db.commit() отсюда не делается: функция вызывается из complete_order()
     внутри его транзакции, и коммитить чужую транзакцию на середине нельзя.
     """
+    from services import partner_service
+    if await partner_service.attribution(db, referral_user.id):
+        await partner_service.platform_products(db, order, referral_user, received_nano)
+        return
     if not referral_user.referrer_id:
         return
 
@@ -277,6 +281,10 @@ async def get_referral_statistics(db: AsyncSession, user: User) -> dict:
         commission_by_user[tx.referral_id] = (
             commission_by_user.get(tx.referral_id, Decimal(0)) + Decimal(str(tx.amount))
         )
+
+    from models.partner import PartnerCommission
+    earned_ton_minor += int(await db.scalar(select(func.coalesce(func.sum(PartnerCommission.amount_nano), 0))
+        .where(PartnerCommission.beneficiary_id == user.id)))
 
     referral_details = []
     for referral in referrals:

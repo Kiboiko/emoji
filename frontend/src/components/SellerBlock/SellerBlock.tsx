@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BadgeCheck, Check, ChevronRight, MessageCircle, ShieldCheck, Store } from 'lucide-react';
+import { BadgeCheck, Check, ChevronRight, ShieldCheck, Store } from 'lucide-react';
 import type { Product } from '@/types';
 import { Stars } from '@/components/Stars/Stars';
 import { useAuthStore } from '@/store/authStore';
@@ -136,15 +136,6 @@ export const SellerBlock: React.FC<SellerBlockProps> = ({ product }) => {
                 </ul>
             </div>
 
-            {/* Чат живёт внутри сделки, а сделка заводится только под товар
-                продавца: у товара площадки писать некому */}
-            {escrow && (
-                <p className="sellerblock-chat">
-                    <MessageCircle size={14} aria-hidden="true" />
-                    {t('После покупки будет доступен чат с продавцом',
-                       'A chat with the seller opens after the purchase')}
-                </p>
-            )}
         </section>
     );
 };

@@ -17,6 +17,12 @@ from services.telegram_service import telegram_service  # noqa: E402
 
 OUTBOX = os.environ.get("OUTBOX", "/outbox/telegram.jsonl")
 
+# Opt-in only in the isolated stage, including new getChatMember/sendPhoto
+# and TON calls. The application has no route or production flag for this.
+if os.environ.get("CAPTURE_EXTERNAL_API") == "1":
+    from captured_transport import install
+    install(OUTBOX, os.environ.get("MOCK_CONTROLS", "/outbox/mock-controls.json"))
+
 
 async def capture(chat_id, text, parse_mode="HTML", reply_markup=None):
     with open(OUTBOX, "a", encoding="utf-8") as fh:

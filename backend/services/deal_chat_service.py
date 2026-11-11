@@ -539,6 +539,7 @@ def deal_dto(
         "last_message": None if expired else _last_dto(last, role),
         "last_activity_at": iso(deal.last_message_at or deal.created_at),
         "counterpart_read_at": iso(read_at(deal, other(role))),
+        "counterpart_avatar_url": (store.avatar_url if role == "buyer" and store else None) or (counterpart.photo_url if counterpart else None),
         "counterpart_online": online,
         "counterpart_last_seen_at": last_seen,
         "created_at": iso(deal.created_at),
@@ -556,7 +557,7 @@ async def deal_dtos(
     unread = await unread_counts(db, user)
     latest = await _latest_messages(db, [d.id for d in deals])
     retention = await retention_days(db)
-    other_ids = {_counterpart_id(d, user) for d in deals if is_open(d)}
+    other_ids = {_counterpart_id(d, user) for d in deals}
     others = {
         u.id: u
         for u in (await db.execute(select(User).where(User.id.in_(other_ids)))).scalars().all()

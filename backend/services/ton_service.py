@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 import secrets
 import time
 from dataclasses import dataclass
@@ -46,6 +47,11 @@ class TonError(Exception):
 
 
 class TonNotConfigured(TonError):
+    pass
+
+
+class TonTemporaryError(TonError):
+    """A transient indexer failure after bounded read-only retries."""
     pass
 
 
@@ -212,32 +218,7 @@ async def fetch_incoming_transactions(limit: int | None = None) -> list[OnChainT
         "address": address,
         "limit": limit or settings.TON_TX_FETCH_LIMIT,
     }
-    if settings.TON_API_KEY:
-        params["api_key"] = settings.TON_API_KEY
-
-    url = f"{settings.ton_api_base}/getTransactions"
-
-    # Любая проблема с индексером должна выглядеть как TonError, а не утекать
-    # наружу httpx-исключением: вызывающий код отличает «индексер недоступен»
-    # (отдать 503 и попробовать позже) от «оплаты не было» (обычный ответ).
-    # Иначе временная недоступность индексера превращается в 500 у клиента и,
-    # что хуже, может быть истолкована как «не оплачено».
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.get(url, params=params)
-            resp.raise_for_status()
-            payload = resp.json()
-    except httpx.HTTPStatusError as e:
-        raise TonError(
-            f"Индексер ответил {e.response.status_code} для адреса {address}"
-        ) from e
-    except httpx.HTTPError as e:
-        raise TonError(f"Индексер недоступен: {e}") from e
-    except ValueError as e:  # некорректный JSON
-        raise TonError(f"Индексер вернул не-JSON: {e}") from e
-
-    if not payload.get("ok"):
-        raise TonError(f"Индексер вернул ошибку: {payload.get('error')!r}")
+    payload = await _get("getTransactions", params)
 
     result: list[OnChainTx] = []
     for tx in payload.get("result", []):
@@ -275,23 +256,34 @@ class OutTransfer:
 
 
 async def _get(method: str, params: dict) -> dict:
-    """Запрос к toncenter v2 с теми же правилами ошибок, что и у входящих."""
-    if settings.TON_API_KEY:
-        params = {**params, "api_key": settings.TON_API_KEY}
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.get(f"{settings.ton_api_base}/{method}", params=params)
-            resp.raise_for_status()
-            payload = resp.json()
-    except httpx.HTTPStatusError as e:
-        raise TonError(f"Индексер ответил {e.response.status_code} на {method}") from e
-    except httpx.HTTPError as e:
-        raise TonError(f"Индексер недоступен: {e}") from e
-    except ValueError as e:
-        raise TonError(f"Индексер вернул не-JSON: {e}") from e
-    if not payload.get("ok"):
-        raise TonError(f"Индексер вернул ошибку: {payload.get('error')!r}")
-    return payload
+    """Retry read-only indexer calls, keeping credentials out of URLs/logs."""
+    headers = {"X-API-Key": settings.TON_API_KEY} if settings.TON_API_KEY else {}
+    retryable = {408, 429, 500, 502, 503, 504}
+    async with httpx.AsyncClient(timeout=10) as client:
+        for attempt in range(3):
+            try:
+                response = await client.get(f"{settings.ton_api_base}/{method}", params=params, headers=headers)
+                if response.status_code in retryable:
+                    raise TonTemporaryError(f"Индексер временно недоступен: HTTP {response.status_code}")
+                response.raise_for_status()
+                payload = response.json()
+                if not isinstance(payload, dict):
+                    raise TonTemporaryError("Индексер вернул некорректный ответ")
+                if not payload.get("ok"):
+                    if str(payload.get("code")) in {str(code) for code in retryable}:
+                        raise TonTemporaryError("Индексер временно отклонил запрос")
+                    raise TonError(f"Индексер отклонил запрос {method}")
+                return payload
+            except httpx.HTTPStatusError as error:
+                raise TonError(f"Индексер ответил {error.response.status_code} на {method}") from None
+            except (httpx.HTTPError, ValueError):
+                failure = TonTemporaryError(f"Индексер недоступен при запросе {method}")
+            except TonTemporaryError as error:
+                failure = error
+            if attempt == 2:
+                raise failure from None
+            await asyncio.sleep(0.5 * (attempt + 1))
+    raise TonTemporaryError("Индексер недоступен")
 
 
 async def fetch_outgoing_transfers(limit: int | None = None) -> list[OutTransfer]:

@@ -1,0 +1,180 @@
+{
+  "date": "2026-11-01",
+  "comparison": "Local stage-2 working-tree archive, LF-normalized. Recheck actual server changes separately before deployment.",
+  "baseline_sha256": "32d50de25e993e1649d4ae37d5821ea7f8a29ec1d77bc0dc39f0bd57b0b64cd7",
+  "candidate_alembic_head": "a0032giveaways",
+  "files": [
+    {
+      "path": "acceptance/README.md",
+      "change": "modified",
+      "sha256_lf": "95e88b367bff3514e43a50a57b61e42f387f848a7a921830cb7cf70c4f1cd17e"
+    },
+    {
+      "path": "acceptance/stage3-ui-smoke.cjs",
+      "change": "added",
+      "sha256_lf": "98c60414e83da927901a33dcdf191552be421dbc8ed3735edfcff337e7ecb727"
+    },
+    {
+      "path": "admin/src/App.tsx",
+      "change": "modified",
+      "sha256_lf": "50927d44315595d1136ccf882f2f056e87ec0ba63439c90a7e1c80240f20ccd8"
+    },
+    {
+      "path": "admin/src/components/Sidebar.tsx",
+      "change": "modified",
+      "sha256_lf": "5d08e1f4270da3c280f15bda5375f4d5b652c23153b87b3f2b3e0cca5f70d725"
+    },
+    {
+      "path": "admin/src/pages/Growth.tsx",
+      "change": "added",
+      "sha256_lf": "2da8279db86a31a2547b7dd2197f79169e059a2179de04792a54b3d5c4ffef5d"
+    },
+    {
+      "path": "backend/alembic/versions/20261101_0030_market_ranking.py",
+      "change": "added",
+      "sha256_lf": "99b6212545277de7e48eb4707125dc221a5f09a80f6d9c573cf1951b9255b566"
+    },
+    {
+      "path": "backend/alembic/versions/20261101_0031_publication_outbox.py",
+      "change": "added",
+      "sha256_lf": "673635d200a127f883a102286e1e9effe45ba0e4933fa1ff2a84b0c4f2b78c28"
+    },
+    {
+      "path": "backend/alembic/versions/20261101_0032_giveaways.py",
+      "change": "added",
+      "sha256_lf": "25011a957b3ae584ddb711ba5f9135a9b3ea8882497ee198b697fada682b130e"
+    },
+    {
+      "path": "backend/main.py",
+      "change": "modified",
+      "sha256_lf": "5b5fea727992a397027da265794fb03bf513b54dcc22486eedf321eae51d1237"
+    },
+    {
+      "path": "backend/models/__init__.py",
+      "change": "modified",
+      "sha256_lf": "44716af7a7008e175d788dd16320ae8da15bd6e8f2366410172c7a7dc4cdb3ec"
+    },
+    {
+      "path": "backend/models/giveaway.py",
+      "change": "added",
+      "sha256_lf": "aaf1b431f935e7e860bcd24c3da31c3d760cec1f1bded7a4204e5f6976514b18"
+    },
+    {
+      "path": "backend/models/market_ranking.py",
+      "change": "added",
+      "sha256_lf": "f6a2f98bbe27d658e0dd52f04d658743104bde96720b951a4e1bb12404a2ab6c"
+    },
+    {
+      "path": "backend/models/p2p.py",
+      "change": "modified",
+      "sha256_lf": "0a83b726383694426daab5f7f1be966299dd98f12b2949e88f8d9b755430e339"
+    },
+    {
+      "path": "backend/models/subscription.py",
+      "change": "modified",
+      "sha256_lf": "19d00e7b91e3f92e1b8bbc5b249c9e4867c6a42e28aae5e390b804e8fbacc0af"
+    },
+    {
+      "path": "backend/models/telegram_publication.py",
+      "change": "added",
+      "sha256_lf": "da541c079754e7b9b6dec19f43d5766d2a252ec50715906eb69e8f74fef408e8"
+    },
+    {
+      "path": "backend/routes/admin_publications.py",
+      "change": "added",
+      "sha256_lf": "e0df434e7079fcb8937863dc44a919c5e9362deb8dd1e708570ca99eb33fe7b6"
+    },
+    {
+      "path": "backend/routes/giveaways.py",
+      "change": "added",
+      "sha256_lf": "ceb2544d58019290e93d8c98c4c4a1324a0011694b6f0d620f323d76bffee651"
+    },
+    {
+      "path": "backend/routes/market_rankings.py",
+      "change": "added",
+      "sha256_lf": "7bb8d11d497a9a92afe3e5582cce430d6943908a27646c0a00a234c787641ce2"
+    },
+    {
+      "path": "backend/routes/stores.py",
+      "change": "modified",
+      "sha256_lf": "0bffd198d1472a43e84340efb28f9ce6da47c4f5cfcb47116360c8383a7fb49b"
+    },
+    {
+      "path": "backend/services/deal_service.py",
+      "change": "modified",
+      "sha256_lf": "518c9a6f729825e98f4ed7aed8278722da9742fcdd1314b603307b11c966bb50"
+    },
+    {
+      "path": "backend/services/giveaway_service.py",
+      "change": "added",
+      "sha256_lf": "f2c4a011088a4918de756a28b7400c5054c060e7dfef1c3559a070a0504a6572"
+    },
+    {
+      "path": "backend/services/market_ranking_service.py",
+      "change": "added",
+      "sha256_lf": "e36cc91782e2b11a5d31ce3ec0610454be088b5bd4e64c65b6a7f3149409768e"
+    },
+    {
+      "path": "backend/services/scheduler.py",
+      "change": "modified",
+      "sha256_lf": "cb0e66a37df9bdb54b63e35d1ca483e07ff1acf560023b5af84fabe9c0faef85"
+    },
+    {
+      "path": "backend/services/telegram_publication_service.py",
+      "change": "added",
+      "sha256_lf": "336967c325f1a0b8c2ad304a1e22189573ca54cbf36728ee417af2b01d5d50d4"
+    },
+    {
+      "path": "backend/services/telegram_service.py",
+      "change": "modified",
+      "sha256_lf": "3d62850c57f6df9f46645199ddb452f91fe38c6d20dc8328d09759b5917fde31"
+    },
+    {
+      "path": "backend/tests/test_growth.py",
+      "change": "added",
+      "sha256_lf": "c8943520b4bf375439f1fdd7ed35f0b9161d1867f6f743a8bba88b76e6368cbb"
+    },
+    {
+      "path": "backend/tests/test_scheduler.py",
+      "change": "modified",
+      "sha256_lf": "93f079f3012e450fa199e12fcdaf79ac000804a0c5ac56022798706829bfa556"
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "change": "modified",
+      "sha256_lf": "ca0ea6a0a229ccc2e62d6a914c8cda91e3e25477278142d9a31b6a4ed720142a"
+    },
+    {
+      "path": "frontend/src/components/StoreStrip/StoreStrip.tsx",
+      "change": "modified",
+      "sha256_lf": "fc13eac934a988ccda4b4aaef3b1ebde5e8391183770300ea3dcf8a33ae62a42"
+    },
+    {
+      "path": "frontend/src/pages/Growth/Growth.css",
+      "change": "added",
+      "sha256_lf": "632be19e10005f351511a51a4cf7f0f1cd7d9bb24241649e070284d14ba5f6eb"
+    },
+    {
+      "path": "frontend/src/pages/Growth/Growth.tsx",
+      "change": "added",
+      "sha256_lf": "bbb231a1e93bbe7b53a76a808ea4a2b177c183dd838463bc763872b93bdaf2ff"
+    },
+    {
+      "path": "frontend/src/pages/Home/Home.tsx",
+      "change": "modified",
+      "sha256_lf": "2057e6bdefe40fc6d4bbc4a913808379a0b460de33fc4d580c77a537d48b031c"
+    },
+    {
+      "path": "frontend/src/pages/Store/Store.tsx",
+      "change": "modified",
+      "sha256_lf": "39176b8cc8aec52edf544c28b5a2b70e264ce921b54e7e34cec80726b97b62ab"
+    },
+    {
+      "path": "frontend/src/types/index.ts",
+      "change": "modified",
+      "sha256_lf": "238de4d8d489e6fba1530ae8e590722edb3247ab7f64c9a6c48207210c51f329"
+    }
+  ],
+  "snapshot_status": "Historical stage3 implementation snapshot before the project audit fixes; current files may differ.",
+  "superseded_by": "project-audit-manifest.json"
+}
